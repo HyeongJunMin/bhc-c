@@ -14,3 +14,13 @@ test('임계 반경 바깥 타격은 미스큐다', () => {
 
   assert.equal(isMiscue(outside, 0), true);
 });
+
+test('임계치 근방(0.89R/0.9R/0.91R)에서 판정 경계가 정확하다', () => {
+  const offset089 = 0.89 * CUE_BALL_RADIUS_M;
+  const offset090 = 0.9 * CUE_BALL_RADIUS_M;
+  const offset091 = 0.91 * CUE_BALL_RADIUS_M;
+
+  assert.equal(isMiscue(offset089, 0), false);
+  assert.equal(isMiscue(offset090, 0), false);
+  assert.equal(isMiscue(offset091, 0), true);
+});

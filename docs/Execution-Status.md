@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 43 |
+| Todo | 42 |
 | In Progress | 0 |
-| Done | 58 |
+| Done | 59 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:51 |
+| Last Updated | 2026-02-22 00:52 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:51 | PHY-002A 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:52 | PHY-002B 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -85,7 +85,7 @@
 | PHY-001B | Agent C | done | 2026-02-22 00:50 | `node --experimental-strip-types --test packages/physics-core/src/initial-angular-velocity.test.ts` 통과(2 pass) | - | PHY-001C | 초기 각속도 수식 함수 구현 완료 |
 | PHY-001C | Agent C | done | 2026-02-22 00:51 | `node --experimental-strip-types --test packages/physics-core/src/shot-init.test.ts` 통과(2 pass) | - | PHY-002A | 최소/최대 drag·offset 경계값 테스트 완료 |
 | PHY-002A | Agent C | done | 2026-02-22 00:51 | `node --experimental-strip-types --test packages/physics-core/src/miscue.test.ts` 통과(2 pass) | - | PHY-002B | 미스큐 판정 함수 구현 완료 |
-| PHY-002B | - | todo | - | - | - | - | - |
+| PHY-002B | Agent C | done | 2026-02-22 00:52 | `node --experimental-strip-types --test packages/physics-core/src/miscue.test.ts` 통과(3 pass) | - | PHY-002C | 0.89R/0.9R/0.91R 임계치 테스트 완료 |
 | PHY-002C | - | todo | - | - | - | - | - |
 | CHAT-001A | - | todo | - | - | - | - | - |
 | CHAT-001B | - | todo | - | - | - | - | - |
