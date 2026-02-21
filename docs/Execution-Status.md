@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 93 |
+| Todo | 92 |
 | In Progress | 0 |
-| Done | 8 |
+| Done | 9 |
 | Blocked | 1 |
-| Last Updated | 2026-02-21 23:33 |
+| Last Updated | 2026-02-21 23:35 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:33 | INF-003C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:35 | AUTH-001A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -35,7 +35,7 @@
 | INF-003A | Agent C | done | 2026-02-21 23:30 | `ls -la apps/web apps/game-server` 확인 | - | INF-003B | web/game-server package 골격 추가 완료 |
 | INF-003B | Agent C | done | 2026-02-21 23:32 | `ls -la packages/shared-types packages/physics-core` 확인 | - | INF-003C | packages 골격 추가 완료 |
 | INF-003C | Agent C | done | 2026-02-21 23:33 | `npx pnpm -r list --depth -1` 통과 | - | AUTH-001A | workspace 인식 확인 완료 |
-| AUTH-001A | - | todo | - | - | - | - | - |
+| AUTH-001A | Agent C | done | 2026-02-21 23:35 | `cat package.json`, `cat node-pg-migrate.config.js` 확인 | - | AUTH-001B | migration 설정 파일 추가 완료 |
 | AUTH-001B | - | todo | - | - | - | - | - |
 | AUTH-001C | - | todo | - | - | - | - | - |
 | AUTH-002A | - | todo | - | - | - | - | - |
