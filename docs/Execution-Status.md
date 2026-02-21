@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 99 |
+| Todo | 98 |
 | In Progress | 0 |
-| Done | 3 |
+| Done | 4 |
 | Blocked | 0 |
-| Last Updated | 2026-02-21 23:21 |
+| Last Updated | 2026-02-21 23:22 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:21 | INF-001C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:22 | INF-002A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -29,7 +29,7 @@
 | INF-001A | Agent C | done | 2026-02-21 23:17 | `cat package.json` 확인 | - | INF-001B | 루트 package.json 생성 완료 |
 | INF-001B | Agent C | done | 2026-02-21 23:18 | `cat pnpm-workspace.yaml` 확인 | - | INF-001C | pnpm workspace 패턴 추가 완료 |
 | INF-001C | Agent C | done | 2026-02-21 23:21 | `npx pnpm -v`, `npx pnpm install` 통과 | - | INF-002A | pnpm-lock.yaml 생성 확인 |
-| INF-002A | - | todo | - | - | - | - | - |
+| INF-002A | Agent C | done | 2026-02-21 23:22 | `cat turbo.json` 확인 | - | INF-002B | turbo 구성 파일 생성 완료 |
 | INF-002B | - | todo | - | - | - | - | - |
 | INF-002C | - | todo | - | - | - | - | - |
 | INF-003A | - | todo | - | - | - | - | - |
