@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 38 |
+| Todo | 37 |
 | In Progress | 0 |
-| Done | 63 |
+| Done | 64 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:56 |
+| Last Updated | 2026-02-22 00:57 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:56 | CHAT-001C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:57 | CHAT-002A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -90,7 +90,7 @@
 | CHAT-001A | Agent C | done | 2026-02-22 00:54 | `node --experimental-strip-types --test apps/game-server/src/chat/room-chat.test.ts` 통과(1 pass) | - | CHAT-001B | 룸 범위 채팅 broadcast 로직 구현 완료 |
 | CHAT-001B | Agent C | done | 2026-02-22 00:55 | `node --experimental-strip-types --test apps/game-server/src/chat/room-chat.test.ts` 통과(2 pass) | - | CHAT-001C | 룸별 메모리 채팅 버퍼 저장 로직 완료 |
 | CHAT-001C | Agent C | done | 2026-02-22 00:56 | `node --experimental-strip-types --test apps/game-server/src/chat/room-chat.test.ts` 통과(3 pass) | - | CHAT-002A | 룸 종료 시 채팅 버퍼 해제 처리 완료 |
-| CHAT-002A | - | todo | - | - | - | - | - |
+| CHAT-002A | Agent C | done | 2026-02-22 00:57 | `node --experimental-strip-types --test apps/game-server/src/chat/rate-limit.test.ts` 통과(2 pass) | - | CHAT-002B | 사용자별 마지막 전송 시각 저장 로직 완료 |
 | CHAT-002B | - | todo | - | - | - | - | - |
 | CHAT-002C | - | todo | - | - | - | - | - |
 | QA-001A | - | todo | - | - | - | - | - |
