@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 46 |
+| Todo | 45 |
 | In Progress | 0 |
-| Done | 55 |
+| Done | 56 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:49 |
+| Last Updated | 2026-02-22 00:50 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:49 | PHY-001A 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:50 | PHY-001B 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -82,7 +82,7 @@
 | INPUT-002C | Agent C | done | 2026-02-22 00:47 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(6 pass) | - | INPUT-002D | drag px -> m/s 선형 매핑 함수/테스트 완료 |
 | INPUT-002D | Agent C | done | 2026-02-22 00:48 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(9 pass) | - | PHY-001A | WASD 당점 이동 벡터 처리 로직/테스트 완료 |
 | PHY-001A | Agent C | done | 2026-02-22 00:49 | `node --experimental-strip-types --test packages/physics-core/src/initial-velocity.test.ts` 통과(2 pass) | - | PHY-001B | 초기 선속도 수식/역산 함수 구현 완료 |
-| PHY-001B | - | todo | - | - | - | - | - |
+| PHY-001B | Agent C | done | 2026-02-22 00:50 | `node --experimental-strip-types --test packages/physics-core/src/initial-angular-velocity.test.ts` 통과(2 pass) | - | PHY-001C | 초기 각속도 수식 함수 구현 완료 |
 | PHY-001C | - | todo | - | - | - | - | - |
 | PHY-002A | - | todo | - | - | - | - | - |
 | PHY-002B | - | todo | - | - | - | - | - |
