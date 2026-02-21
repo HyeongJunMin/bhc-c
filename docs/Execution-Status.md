@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 63 |
+| Todo | 62 |
 | In Progress | 0 |
-| Done | 38 |
+| Done | 39 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:31 |
+| Last Updated | 2026-02-22 00:36 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:31 | GAME-001C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:36 | GAME-002A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -65,7 +65,7 @@
 | GAME-001A | Agent C | done | 2026-02-22 00:28 | `node --experimental-strip-types -e ... startGameRequest` 확인 | - | GAME-001B | start 요청 핸들러 분리 완료 |
 | GAME-001B | Agent C | done | 2026-02-22 00:30 | `node --experimental-strip-types -e ... GAME_NOT_ENOUGH_PLAYERS` 확인 | - | GAME-001C | 최소 2인 시작 검증 추가 완료 |
 | GAME-001C | Agent C | done | 2026-02-22 00:31 | `node --experimental-strip-types --test start-policy.test.ts` 통과(3 pass) | - | GAME-002A | 시작 실패 코드 테스트 완료 |
-| GAME-002A | - | todo | - | - | - | - | - |
+| GAME-002A | Agent C | done | 2026-02-22 00:36 | `node --experimental-strip-types --test game/turn-policy.test.ts` 통과(3 pass) | - | GAME-002B | 입장순 턴 큐 초기화/순환 테스트 완료 |
 | GAME-002B | - | todo | - | - | - | - | - |
 | GAME-002C | - | todo | - | - | - | - | - |
 | GAME-003A | - | todo | - | - | - | - | - |
