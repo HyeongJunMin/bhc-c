@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 95 |
+| Todo | 94 |
 | In Progress | 0 |
-| Done | 6 |
+| Done | 7 |
 | Blocked | 1 |
-| Last Updated | 2026-02-21 23:30 |
+| Last Updated | 2026-02-21 23:32 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:30 | INF-003A 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-21 23:32 | INF-003B 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -33,7 +33,7 @@
 | INF-002B | Agent C | done | 2026-02-21 23:23 | `cat turbo.json` 확인 | - | INF-002C | turbo tasks 정의 완료 |
 | INF-002C | Agent C | blocked | 2026-02-21 23:27 | `npx turbo run lint` 대기 상태(출력 없음) | - | INF-003A | turbo 실행 환경 확인 필요 |
 | INF-003A | Agent C | done | 2026-02-21 23:30 | `ls -la apps/web apps/game-server` 확인 | - | INF-003B | web/game-server package 골격 추가 완료 |
-| INF-003B | - | todo | - | - | - | - | - |
+| INF-003B | Agent C | done | 2026-02-21 23:32 | `ls -la packages/shared-types packages/physics-core` 확인 | - | INF-003C | packages 골격 추가 완료 |
 | INF-003C | - | todo | - | - | - | - | - |
 | AUTH-001A | - | todo | - | - | - | - | - |
 | AUTH-001B | - | todo | - | - | - | - | - |

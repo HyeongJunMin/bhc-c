@@ -1,0 +1,12 @@
+{
+  "name": "@bhc/physics-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "echo 'physics-core build placeholder'",
+    "test": "echo 'physics-core test placeholder'",
+    "lint": "echo 'physics-core lint placeholder'"
+  }
+}
