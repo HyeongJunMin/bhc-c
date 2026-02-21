@@ -45,6 +45,7 @@ When any spec document changes, related documents must be updated in the same ta
 ## Implementation Handoff Rule (Mandatory)
 - For implementation tasks, read `docs/Execution-Backlog.md` first and pick the smallest executable task unit.
 - Follow `docs/Task-Workflow.md` for per-task commit/push policy and commit message format.
+- Commit messages must use Korean for human-readable descriptions (title/body), while keeping IDs/paths/commands as-is.
 - In session output, always report:
   1. selected task ID
   2. done/not done
