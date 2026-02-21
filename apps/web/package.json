@@ -1,0 +1,11 @@
+{
+  "name": "@bhc/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'web dev placeholder'",
+    "build": "echo 'web build placeholder'",
+    "test": "echo 'web test placeholder'",
+    "lint": "echo 'web lint placeholder'"
+  }
+}

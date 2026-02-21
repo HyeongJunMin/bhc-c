@@ -1,0 +1,11 @@
+{
+  "name": "@bhc/game-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'game-server dev placeholder'",
+    "build": "echo 'game-server build placeholder'",
+    "test": "echo 'game-server test placeholder'",
+    "lint": "echo 'game-server lint placeholder'"
+  }
+}
