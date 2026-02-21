@@ -41,3 +41,28 @@ test('진입점에서 스키마 위반 payload를 차단한다', () => {
     assert.ok(result.errors.some((error) => error.includes('cueElevationDeg must be <= 89')));
   }
 });
+
+test('invalid payload는 위반 유형과 무관하게 SHOT_INPUT_SCHEMA_INVALID를 반환한다', () => {
+  const invalidPayloads = [
+    {
+      ...validPayload,
+      schemaName: 'invalid_name',
+    },
+    {
+      ...validPayload,
+      extraField: true,
+    },
+    {
+      ...validPayload,
+      dragPx: 1001,
+    },
+  ];
+
+  for (const payload of invalidPayloads) {
+    const result = handleShotInputEntry(payload);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.errorCode, 'SHOT_INPUT_SCHEMA_INVALID');
+    }
+  }
+});

@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 52 |
+| Todo | 51 |
 | In Progress | 0 |
-| Done | 49 |
+| Done | 50 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:44 |
+| Last Updated | 2026-02-22 00:45 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:44 | INPUT-001B 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:45 | INPUT-001C 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -76,7 +76,7 @@
 | GAME-004C | Agent C | done | 2026-02-22 00:42 | `node --experimental-strip-types --test game/rematch-policy.test.ts` 통과(5 pass) | - | INPUT-001A | 재경기 직후 상태 스냅샷 검증 테스트 완료 |
 | INPUT-001A | Agent C | done | 2026-02-22 00:43 | `node --experimental-strip-types --test input/shot-schema-validator.test.ts` 통과(3 pass) | - | INPUT-001B | shot-input-v1 스키마 validator 연결 완료 |
 | INPUT-001B | Agent C | done | 2026-02-22 00:44 | `node --experimental-strip-types --test input/shot-input-entry.test.ts` 통과(2 pass) | - | INPUT-001C | 샷 입력 진입점 validator 적용 완료 |
-| INPUT-001C | - | todo | - | - | - | - | - |
+| INPUT-001C | Agent C | done | 2026-02-22 00:45 | `node --experimental-strip-types --test input/shot-input-entry.test.ts` 통과(3 pass) | - | INPUT-002A | invalid payload 에러 코드 일관성 테스트 완료 |
 | INPUT-002A | - | todo | - | - | - | - | - |
 | INPUT-002B | - | todo | - | - | - | - | - |
 | INPUT-002C | - | todo | - | - | - | - | - |
