@@ -28,3 +28,14 @@ export function addMemberToRoster(roster: RoomRoster, memberId: string): RoomRos
 
   return roster;
 }
+
+export function removeMemberFromRoster(roster: RoomRoster, memberId: string): RoomRoster {
+  roster.membersById.delete(memberId);
+  roster.joinOrder = roster.joinOrder.filter((id) => id !== memberId);
+
+  if (roster.hostMemberId === memberId) {
+    roster.hostMemberId = roster.joinOrder[0] ?? null;
+  }
+
+  return roster;
+}
