@@ -4,6 +4,7 @@ const PORT_MIN = 9211;
 const PORT_MAX = 9220;
 const DEFAULT_WEB_PORT = 9213;
 const DEFAULT_AUTH_SERVER_URL = `http://localhost:${PORT_MIN}`;
+const DEFAULT_LOBBY_SERVER_URL = `http://localhost:${PORT_MIN + 1}`;
 
 function parsePort(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -34,21 +35,22 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-async function proxyAuthRequest(
+async function proxyJsonRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  authServerUrl: string,
-  authPath: '/auth/signup' | '/auth/login' | '/auth/guest',
+  targetUrl: string,
+  method: 'GET' | 'POST',
+  upstreamUnavailableCode: 'AUTH_SERVER_UNAVAILABLE' | 'LOBBY_SERVER_UNAVAILABLE',
 ): Promise<void> {
-  const body = await readBody(req);
+  const body = method === 'POST' ? await readBody(req) : '';
 
   try {
-    const upstream = await fetch(`${authServerUrl}${authPath}`, {
-      method: 'POST',
+    const upstream = await fetch(targetUrl, {
+      method,
       headers: {
         'content-type': 'application/json; charset=utf-8',
       },
-      body: body || '{}',
+      body: method === 'POST' ? body || '{}' : undefined,
     });
 
     const text = await upstream.text();
@@ -56,7 +58,7 @@ async function proxyAuthRequest(
     res.setHeader('content-type', 'application/json; charset=utf-8');
     res.end(text);
   } catch {
-    writeJson(res, 502, { errorCode: 'AUTH_SERVER_UNAVAILABLE' });
+    writeJson(res, 502, { errorCode: upstreamUnavailableCode });
   }
 }
 
@@ -300,24 +302,28 @@ function renderLobbyPage(): string {
       font-family: "Pretendard", "Noto Sans KR", sans-serif;
       background: #f3f6fb;
       color: #111827;
-      display: grid;
-      place-items: center;
       padding: 24px;
     }
     main {
-      width: min(760px, 100%);
+      width: min(900px, 100%);
+      margin: 0 auto;
       background: #fff;
       border: 1px solid #d1d5db;
       border-radius: 14px;
       padding: 24px;
     }
-    pre {
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 10px;
-      padding: 12px;
-      overflow-x: auto;
-      white-space: pre-wrap;
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     button {
       border: 0;
@@ -326,22 +332,140 @@ function renderLobbyPage(): string {
       background: #0b5fff;
       color: #fff;
       cursor: pointer;
-      margin-right: 8px;
+    }
+    button.secondary {
+      background: #334155;
+    }
+    .create {
+      margin: 14px 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .create input {
+      flex: 1 1 220px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+    }
+    .room-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .room {
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 12px;
+      background: #f8fafc;
+    }
+    .room h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .empty {
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 16px;
+      color: #475569;
+    }
+    #lobby-message {
+      min-height: 22px;
+      margin-top: 8px;
+      color: #334155;
+    }
+    #lobby-message.error {
+      color: #b91c1c;
     }
   </style>
 </head>
 <body>
   <main>
-    <h1>로비</h1>
-    <p>인증 세션 확인이 완료되면 로비 화면으로 진입합니다.</p>
-    <pre id="session-view">세션을 확인하는 중...</pre>
-    <button id="logout-btn" type="button">로그아웃</button>
-    <a href="/login">로그인으로 이동</a>
+    <div class="topbar">
+      <div>
+        <h1>로비</h1>
+        <p id="session-summary">세션 확인 중...</p>
+      </div>
+      <div class="actions">
+        <button id="refresh-btn" class="secondary" type="button">새로고침</button>
+        <button id="logout-btn" type="button">로그아웃</button>
+      </div>
+    </div>
+    <form id="create-room-form" class="create">
+      <input id="room-title" name="title" maxlength="15" placeholder="방 제목 (최대 15자)" required>
+      <button type="submit">방 만들기</button>
+    </form>
+    <p id="lobby-message"></p>
+    <section id="room-list" class="room-list"></section>
   </main>
   <script>
     const sessionRaw = localStorage.getItem('bhc_auth');
-    const sessionView = document.getElementById('session-view');
+    const sessionSummary = document.getElementById('session-summary');
     const logoutBtn = document.getElementById('logout-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const createRoomForm = document.getElementById('create-room-form');
+    const roomList = document.getElementById('room-list');
+    const roomTitleInput = document.getElementById('room-title');
+    const lobbyMessage = document.getElementById('lobby-message');
+    const LOBBY_ERROR_MESSAGES = {
+      ROOM_TITLE_REQUIRED: '방 제목을 입력해 주세요.',
+      ROOM_TITLE_TOO_LONG: '방 제목은 15자 이하만 가능합니다.',
+      ROOM_INVALID_JSON: '요청 형식이 올바르지 않습니다.',
+      LOBBY_SERVER_UNAVAILABLE: '로비 서버에 연결할 수 없습니다.',
+      NETWORK_ERROR: '네트워크 오류가 발생했습니다.',
+      UNKNOWN_ERROR: '알 수 없는 오류가 발생했습니다.',
+    };
+
+    function setLobbyMessage(text, type) {
+      lobbyMessage.textContent = text;
+      lobbyMessage.className = type === 'error' ? 'error' : '';
+    }
+
+    function getLobbyErrorMessage(errorCode) {
+      return LOBBY_ERROR_MESSAGES[errorCode] || LOBBY_ERROR_MESSAGES.UNKNOWN_ERROR;
+    }
+
+    async function requestJson(url, options) {
+      try {
+        const response = await fetch(url, options);
+        const data = await response.json().catch(() => ({}));
+        return { ok: response.ok, status: response.status, data };
+      } catch {
+        return { ok: false, status: 0, data: { errorCode: 'NETWORK_ERROR' } };
+      }
+    }
+
+    function renderRooms(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        roomList.innerHTML = '<article class="empty">생성된 게임방이 없습니다. 첫 방을 만들어 주세요.</article>';
+        return;
+      }
+
+      roomList.innerHTML = items
+        .map((room) => (
+          '<article class="room">' +
+          '<h3>' + room.title + '</h3>' +
+          '<p>ID: ' + room.roomId + '</p>' +
+          '<p>상태: ' + room.state + '</p>' +
+          '<p>인원: ' + room.playerCount + '</p>' +
+          '</article>'
+        ))
+        .join('');
+    }
+
+    async function loadRooms() {
+      const result = await requestJson('/api/lobby/rooms?offset=0&limit=50', { method: 'GET' });
+      if (!result.ok) {
+        const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
+        setLobbyMessage('방 목록 조회 실패: ' + getLobbyErrorMessage(errorCode), 'error');
+        return;
+      }
+
+      renderRooms(result.data.items);
+      setLobbyMessage('방 목록을 갱신했습니다.', '');
+    }
 
     if (!sessionRaw) {
       window.location.href = '/login';
@@ -354,14 +478,41 @@ function renderLobbyPage(): string {
         window.location.href = '/login';
       }
       if (parsed) {
-        sessionView.textContent = JSON.stringify(parsed, null, 2);
+        const name = parsed.username || parsed.nickname || parsed.userId || parsed.guestId || 'unknown';
+        sessionSummary.textContent = '접속 사용자: ' + name;
       }
     }
+
+    createRoomForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const title = roomTitleInput.value;
+      const result = await requestJson('/api/lobby/rooms', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+
+      if (!result.ok) {
+        const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
+        setLobbyMessage('방 생성 실패: ' + getLobbyErrorMessage(errorCode), 'error');
+        return;
+      }
+
+      roomTitleInput.value = '';
+      setLobbyMessage('방을 생성했습니다: ' + result.data.room.title, '');
+      await loadRooms();
+    });
+
+    refreshBtn.addEventListener('click', async () => {
+      await loadRooms();
+    });
 
     logoutBtn.addEventListener('click', () => {
       localStorage.removeItem('bhc_auth');
       window.location.href = '/login';
     });
+
+    loadRooms();
   </script>
 </body>
 </html>`;
@@ -369,6 +520,7 @@ function renderLobbyPage(): string {
 
 const webPort = parsePort('WEB_PORT', DEFAULT_WEB_PORT);
 const authServerUrl = process.env.AUTH_SERVER_URL || DEFAULT_AUTH_SERVER_URL;
+const lobbyServerUrl = process.env.LOBBY_SERVER_URL || DEFAULT_LOBBY_SERVER_URL;
 
 const server = createServer(async (req, res) => {
   if (req.url === '/health') {
@@ -377,17 +529,30 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/api/auth/signup') {
-    await proxyAuthRequest(req, res, authServerUrl, '/auth/signup');
+    await proxyJsonRequest(req, res, `${authServerUrl}/auth/signup`, 'POST', 'AUTH_SERVER_UNAVAILABLE');
     return;
   }
 
   if (req.method === 'POST' && req.url === '/api/auth/login') {
-    await proxyAuthRequest(req, res, authServerUrl, '/auth/login');
+    await proxyJsonRequest(req, res, `${authServerUrl}/auth/login`, 'POST', 'AUTH_SERVER_UNAVAILABLE');
     return;
   }
 
   if (req.method === 'POST' && req.url === '/api/auth/guest') {
-    await proxyAuthRequest(req, res, authServerUrl, '/auth/guest');
+    await proxyJsonRequest(req, res, `${authServerUrl}/auth/guest`, 'POST', 'AUTH_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'GET' && req.url?.startsWith('/api/lobby/rooms')) {
+    const url = new URL(req.url, 'http://localhost');
+    const query = url.searchParams.toString();
+    const target = query.length > 0 ? `${lobbyServerUrl}/lobby/rooms?${query}` : `${lobbyServerUrl}/lobby/rooms`;
+    await proxyJsonRequest(req, res, target, 'GET', 'LOBBY_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/api/lobby/rooms') {
+    await proxyJsonRequest(req, res, `${lobbyServerUrl}/lobby/rooms`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
     return;
   }
 
@@ -413,6 +578,7 @@ const server = createServer(async (req, res) => {
 server.listen(webPort, () => {
   console.log(`[web] listening on http://localhost:${webPort}`);
   console.log(`[web] auth proxy -> ${authServerUrl}`);
+  console.log(`[web] lobby proxy -> ${lobbyServerUrl}`);
 });
 
 function shutdown(): void {

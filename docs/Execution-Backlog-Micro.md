@@ -217,6 +217,11 @@
 - `WEB-AUTH-001D`: 인증 성공 시 토큰 저장 + `/lobby` 이동
 - `WEB-AUTH-001E`: 에러코드 매핑 메시지 및 스모크 테스트
 
+### Phase K. Web 로비 UI
+
+#### WEB-LOBBY-001 로비 방 목록/생성 UI
+- `WEB-LOBBY-001`: `/lobby`에서 방 목록 조회/방 생성이 동작하도록 로비 API 연동
+
 ## 4. 추천 착수 순서 (마이크로)
 1. `INF-001A` -> `INF-001C`
 2. `INF-002A` -> `INF-002C`
@@ -229,3 +234,4 @@
 9. `QA-001A` -> `QA-002C`
 10. `RULE-001A` -> `RULE-010D`
 11. `WEB-AUTH-001A` -> `WEB-AUTH-001E`
+12. `WEB-LOBBY-001`

@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 113 |
+| Total Tasks | 114 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 112 |
+| Done | 113 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 17:32 |
+| Last Updated | 2026-02-22 17:39 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | WEB-AUTH-001E | done | 2026-02-22 17:32 | 에러코드 매핑 및 인증 스모크 완료 |
+| Agent A (web) | WEB-LOBBY-001 | done | 2026-02-22 17:39 | 로비 방 목록/방 생성 UI 연동 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:54 | INF-002C 재시도(출력 없음, 여전히 blocked) |
 
@@ -139,3 +139,4 @@
 | WEB-AUTH-001C | Agent A | done | 2026-02-22 17:25 | `pnpm --filter @bhc/game-server run dev`, `WEB_PORT=9217 pnpm --filter @bhc/web run dev`, `curl -sS -X POST http://localhost:9217/api/auth/*` 3종 확인 | - | WEB-AUTH-001D | 웹 서버 인증 프록시 및 폼 제출 API 연동 완료 |
 | WEB-AUTH-001D | Agent A | done | 2026-02-22 17:29 | `WEB_PORT=9217 pnpm --filter @bhc/web run dev`, `curl -sS http://localhost:9217/login \| rg \"bhc_auth\|/lobby\"`, `curl -sS http://localhost:9217/lobby` 확인 | - | WEB-AUTH-001E | 인증 성공 시 토큰 localStorage 저장 및 /lobby 페이지 라우트 구현 완료 |
 | WEB-AUTH-001E | Agent A | done | 2026-02-22 17:32 | `curl -sS -X POST http://localhost:9217/api/auth/signup` 성공/중복, `curl -sS -X POST http://localhost:9217/api/auth/login` 실패, `curl -sS http://localhost:9217/login \| rg \"ERROR_MESSAGES\"` 확인 | - | - | 인증 실패 코드 사용자 메시지 매핑 및 네트워크 오류 처리 스모크 완료 |
+| WEB-LOBBY-001 | Agent A | done | 2026-02-22 17:39 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts`, `curl -sS -X POST http://localhost:9213/api/lobby/rooms` + `curl -sS http://localhost:9213/api/lobby/rooms?offset=0&limit=50` 확인 | - | - | /lobby 방 목록 조회/방 생성 UI 및 /api/lobby/rooms 프록시/조회 API 구현 완료 |

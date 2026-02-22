@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { paginateRooms } from './pagination.ts';
+import { compareRoomsForLobby } from './sort-rooms.ts';
 import { validateRoomTitle } from './validate-room-title.ts';
 
 type LobbyRoom = {
@@ -18,6 +20,12 @@ type LobbyState = {
 type CreateRoomResult =
   | { ok: true; room: LobbyRoom }
   | { ok: false; statusCode: 400; errorCode: 'ROOM_TITLE_REQUIRED' | 'ROOM_TITLE_TOO_LONG' };
+
+type ListRoomsResult = {
+  items: LobbyRoom[];
+  hasMore: boolean;
+  nextOffset: number;
+};
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -77,6 +85,32 @@ async function handleCreateRoom(req: IncomingMessage, res: ServerResponse, state
   writeJson(res, 201, { room: result.room });
 }
 
+function parseNumber(value: string | null, fallback: number): number {
+  if (value === null || value.trim() === '') {
+    return fallback;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+export function listRooms(state: LobbyState, input: { offset?: number; limit?: number }): ListRoomsResult {
+  const safeOffset = Math.max(0, input.offset ?? 0);
+  const safeLimit = Math.max(1, input.limit ?? 20);
+  const sorted = [...state.rooms].sort(compareRoomsForLobby);
+  return paginateRooms(sorted, safeOffset, safeLimit);
+}
+
+function handleListRooms(req: IncomingMessage, res: ServerResponse, state: LobbyState): void {
+  const url = new URL(req.url ?? '/lobby/rooms', 'http://localhost');
+  const offset = parseNumber(url.searchParams.get('offset'), 0);
+  const limit = parseNumber(url.searchParams.get('limit'), 20);
+  const page = listRooms(state, { offset, limit });
+  writeJson(res, 200, page);
+}
+
 export function createLobbyHttpServer() {
   const state: LobbyState = {
     nextRoomId: 1,
@@ -84,6 +118,11 @@ export function createLobbyHttpServer() {
   };
 
   const server = createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms')) {
+      handleListRooms(req, res, state);
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/lobby/rooms') {
       await handleCreateRoom(req, res, state);
       return;
