@@ -225,6 +225,11 @@
 #### WEB-ROOM-001 로비 방 입장 연결
 - `WEB-ROOM-001`: `/lobby`에서 방 입장 버튼으로 `/room/:id` 진입이 동작하도록 join API 연동
 
+### Phase L. Room 상세 API/UI
+
+#### ROOM-API-001 방 상세 조회/멤버 데이터
+- `ROOM-API-001`: `GET /lobby/rooms/:roomId`와 host/members 정보를 제공하도록 로비 API 확장
+
 ## 4. 추천 착수 순서 (마이크로)
 1. `INF-001A` -> `INF-001C`
 2. `INF-002A` -> `INF-002C`
@@ -239,3 +244,4 @@
 11. `WEB-AUTH-001A` -> `WEB-AUTH-001E`
 12. `WEB-LOBBY-001`
 13. `WEB-ROOM-001`
+14. `ROOM-API-001`

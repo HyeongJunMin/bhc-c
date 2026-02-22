@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createLobbyHttpServer, createRoom, joinRoom, listRooms } from './http.ts';
+import { createLobbyHttpServer, createRoom, getRoomDetail, joinRoom, listRooms } from './http.ts';
 
 test('방 생성 성공: 유효 제목이면 생성된다', () => {
   const { state } = createLobbyHttpServer();
@@ -59,18 +59,39 @@ test('방 입장 성공: 대기방 정원 미만이면 입장된다', () => {
     return;
   }
 
-  const joined = joinRoom(state, created.room.roomId);
+  const joined = joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'user-1' });
   assert.equal(joined.ok, true);
   if (joined.ok) {
     assert.equal(joined.room.playerCount, 1);
+    assert.equal(joined.room.hostMemberId, 'u1');
+    assert.equal(joined.room.members.length, 1);
+    assert.equal(joined.room.members[0].displayName, 'user-1');
   }
 });
 
 test('방 입장 실패: 존재하지 않는 방이면 ROOM_NOT_FOUND', () => {
   const { state } = createLobbyHttpServer();
-  const joined = joinRoom(state, 'room-999');
+  const joined = joinRoom(state, 'room-999', { memberId: 'u1', displayName: 'user-1' });
   assert.equal(joined.ok, false);
   if (!joined.ok) {
     assert.equal(joined.errorCode, 'ROOM_NOT_FOUND');
+  }
+});
+
+test('방 상세 조회: 존재하는 roomId면 상세를 반환한다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'detail-room' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'user-1' });
+  const detail = getRoomDetail(state, created.room.roomId);
+  assert.equal(detail.ok, true);
+  if (detail.ok) {
+    assert.equal(detail.room.roomId, created.room.roomId);
+    assert.equal(detail.room.members.length, 1);
+    assert.equal(detail.room.hostMemberId, 'u1');
   }
 });

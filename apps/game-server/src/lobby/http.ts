@@ -11,6 +11,12 @@ type LobbyRoom = {
   state: 'WAITING' | 'IN_GAME' | 'FINISHED';
   playerCount: number;
   createdAt: string;
+  hostMemberId: string | null;
+  members: Array<{
+    memberId: string;
+    displayName: string;
+    joinedAt: string;
+  }>;
 };
 
 type LobbyState = {
@@ -25,6 +31,8 @@ type CreateRoomResult =
 type JoinRoomResult =
   | { ok: true; room: LobbyRoom }
   | { ok: false; statusCode: 404 | 409; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'ROOM_IN_GAME' };
+
+type RoomDetailResult = { ok: true; room: LobbyRoom } | { ok: false; statusCode: 404; errorCode: 'ROOM_NOT_FOUND' };
 
 type ListRoomsResult = {
   items: LobbyRoom[];
@@ -62,6 +70,8 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     state: 'WAITING',
     playerCount: 0,
     createdAt: new Date().toISOString(),
+    hostMemberId: null,
+    members: [],
   };
 
   state.nextRoomId += 1;
@@ -116,7 +126,7 @@ function handleListRooms(req: IncomingMessage, res: ServerResponse, state: Lobby
   writeJson(res, 200, page);
 }
 
-export function joinRoom(state: LobbyState, roomId: string): JoinRoomResult {
+export function joinRoom(state: LobbyState, roomId: string, member: { memberId: string; displayName: string }): JoinRoomResult {
   const room = state.rooms.find((item) => item.roomId === roomId);
   if (!room) {
     return { ok: false, statusCode: 404, errorCode: 'ROOM_NOT_FOUND' };
@@ -131,10 +141,19 @@ export function joinRoom(state: LobbyState, roomId: string): JoinRoomResult {
   }
 
   room.playerCount += 1;
+  room.members.push({
+    memberId: member.memberId,
+    displayName: member.displayName,
+    joinedAt: new Date().toISOString(),
+  });
+  if (!room.hostMemberId) {
+    room.hostMemberId = member.memberId;
+  }
+
   return { ok: true, room };
 }
 
-function handleJoinRoom(req: IncomingMessage, res: ServerResponse, state: LobbyState): void {
+async function handleJoinRoom(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
   const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/join$/);
   const roomId = match?.[1];
   if (!roomId) {
@@ -142,7 +161,50 @@ function handleJoinRoom(req: IncomingMessage, res: ServerResponse, state: LobbyS
     return;
   }
 
-  const result = joinRoom(state, roomId);
+  let parsedBody: unknown;
+  try {
+    const rawBody = await readBody(req);
+    parsedBody = JSON.parse(rawBody || '{}');
+  } catch {
+    writeJson(res, 400, { errorCode: 'ROOM_INVALID_JSON' });
+    return;
+  }
+
+  const body = parsedBody as Record<string, unknown>;
+  const memberIdRaw = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+  const displayNameRaw = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+  const room = state.rooms.find((item) => item.roomId === roomId);
+  const fallbackMemberNo = (room?.members.length ?? 0) + 1;
+  const memberId = memberIdRaw.length > 0 ? memberIdRaw : `member-${fallbackMemberNo}`;
+  const displayName = displayNameRaw.length > 0 ? displayNameRaw : memberId;
+
+  const result = joinRoom(state, roomId, { memberId, displayName });
+  if (!result.ok) {
+    writeJson(res, result.statusCode, { errorCode: result.errorCode });
+    return;
+  }
+
+  writeJson(res, 200, { room: result.room });
+}
+
+export function getRoomDetail(state: LobbyState, roomId: string): RoomDetailResult {
+  const room = state.rooms.find((item) => item.roomId === roomId);
+  if (!room) {
+    return { ok: false, statusCode: 404, errorCode: 'ROOM_NOT_FOUND' };
+  }
+
+  return { ok: true, room };
+}
+
+function handleGetRoomDetail(req: IncomingMessage, res: ServerResponse, state: LobbyState): void {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/?#]+)$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+
+  const result = getRoomDetail(state, roomId);
   if (!result.ok) {
     writeJson(res, result.statusCode, { errorCode: result.errorCode });
     return;
@@ -168,8 +230,13 @@ export function createLobbyHttpServer() {
       return;
     }
 
+    if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms/')) {
+      handleGetRoomDetail(req, res, state);
+      return;
+    }
+
     if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/join')) {
-      handleJoinRoom(req, res, state);
+      await handleJoinRoom(req, res, state);
       return;
     }
 
