@@ -220,6 +220,11 @@ export function createLobbyHttpServer() {
   };
 
   const server = createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms/')) {
+      handleGetRoomDetail(req, res, state);
+      return;
+    }
+
     if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms')) {
       handleListRooms(req, res, state);
       return;
@@ -227,11 +232,6 @@ export function createLobbyHttpServer() {
 
     if (req.method === 'POST' && req.url === '/lobby/rooms') {
       await handleCreateRoom(req, res, state);
-      return;
-    }
-
-    if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms/')) {
-      handleGetRoomDetail(req, res, state);
       return;
     }
 

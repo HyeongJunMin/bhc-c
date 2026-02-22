@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 116 |
+| Total Tasks | 117 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 115 |
+| Done | 116 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 17:57 |
+| Last Updated | 2026-02-22 17:59 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-API-001 | done | 2026-02-22 17:57 | 방 상세 조회/멤버 데이터 API 확장 완료 |
+| Agent A (web) | ROOM-UI-001 | done | 2026-02-22 17:59 | 방 상세 화면 데이터 렌더링 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:54 | INF-002C 재시도(출력 없음, 여전히 blocked) |
 
@@ -142,3 +142,4 @@
 | WEB-LOBBY-001 | Agent A | done | 2026-02-22 17:39 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts`, `curl -sS -X POST http://localhost:9213/api/lobby/rooms` + `curl -sS http://localhost:9213/api/lobby/rooms?offset=0&limit=50` 확인 | - | - | /lobby 방 목록 조회/방 생성 UI 및 /api/lobby/rooms 프록시/조회 API 구현 완료 |
 | WEB-ROOM-001 | Agent A | done | 2026-02-22 17:46 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts`, `curl -sS -X POST http://localhost:9217/api/lobby/rooms`, `curl -sS -X POST http://localhost:9217/api/lobby/rooms/room-1/join` 확인 | - | - | 로비 카드 입장 버튼, /api/lobby/rooms/:id/join 프록시, /room/:id 진입 페이지 구현 완료 |
 | ROOM-API-001 | Agent A | done | 2026-02-22 17:57 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 확인 | - | ROOM-UI-001 | GET /lobby/rooms/:roomId 및 host/members 응답, join payload(memberId/displayName) 지원 완료 |
+| ROOM-UI-001 | Agent A | done | 2026-02-22 17:59 | `AUTH_PORT=9214 LOBBY_PORT=9215 + WEB_PORT=9217` 임시 실행 후 `curl -X POST /api/lobby/rooms`, `curl -X POST /api/lobby/rooms/room-1/join`, `curl /room/room-1` 확인 | - | ROOM-RT-001 | /room/:id 방 정보/참가자/호스트/액션 패널 데이터 렌더링 및 room detail 프록시 연결 완료 |

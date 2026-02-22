@@ -409,6 +409,7 @@ function renderLobbyPage(): string {
     const roomList = document.getElementById('room-list');
     const roomTitleInput = document.getElementById('room-title');
     const lobbyMessage = document.getElementById('lobby-message');
+    let session = null;
     const LOBBY_ERROR_MESSAGES = {
       ROOM_TITLE_REQUIRED: '방 제목을 입력해 주세요.',
       ROOM_TITLE_TOO_LONG: '방 제목은 15자 이하만 가능합니다.',
@@ -474,15 +475,14 @@ function renderLobbyPage(): string {
     if (!sessionRaw) {
       window.location.href = '/login';
     } else {
-      let parsed = null;
       try {
-        parsed = JSON.parse(sessionRaw);
+        session = JSON.parse(sessionRaw);
       } catch {
         localStorage.removeItem('bhc_auth');
         window.location.href = '/login';
       }
-      if (parsed) {
-        const name = parsed.username || parsed.nickname || parsed.userId || parsed.guestId || 'unknown';
+      if (session) {
+        const name = session.username || session.nickname || session.userId || session.guestId || 'unknown';
         sessionSummary.textContent = '접속 사용자: ' + name;
       }
     }
@@ -522,10 +522,12 @@ function renderLobbyPage(): string {
         return;
       }
 
+      const memberId = session?.userId ? String(session.userId) : (session?.guestId || '');
+      const displayName = session?.username || session?.nickname || memberId || 'guest';
       const result = await requestJson('/api/lobby/rooms/' + roomId + '/join', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ memberId, displayName }),
       });
 
       if (!result.ok) {
@@ -566,16 +568,96 @@ function renderRoomPage(roomId: string): string {
       font-family: "Pretendard", "Noto Sans KR", sans-serif;
       background: #eef2ff;
       color: #111827;
-      display: grid;
-      place-items: center;
       padding: 24px;
     }
     main {
-      width: min(760px, 100%);
+      width: min(980px, 100%);
+      margin: 0 auto;
       background: #fff;
       border: 1px solid #d1d5db;
       border-radius: 14px;
       padding: 24px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+    }
+    .pill {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      font-weight: 700;
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      margin-left: 8px;
+    }
+    .members {
+      display: grid;
+      gap: 8px;
+    }
+    .member {
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #0b5fff;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: #334155;
+    }
+    button[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #room-message {
+      min-height: 22px;
+      margin-top: 10px;
+      color: #334155;
+    }
+    #room-message.error {
+      color: #b91c1c;
     }
     a {
       color: #0b5fff;
@@ -586,11 +668,119 @@ function renderRoomPage(roomId: string): string {
 </head>
 <body>
   <main>
-    <h1>게임방 입장 완료</h1>
-    <p>현재 방 ID: <strong>${roomId}</strong></p>
-    <p>실시간 룸 플레이 UI는 다음 단계에서 연결됩니다.</p>
-    <a href="/lobby">로비로 돌아가기</a>
+    <div class="top">
+      <div>
+        <h1>게임방</h1>
+        <p>방 ID: <strong id="room-id">${roomId}</strong></p>
+      </div>
+      <div class="actions">
+        <button id="refresh-room-btn" class="secondary" type="button">새로고침</button>
+        <a href="/lobby">로비로 돌아가기</a>
+      </div>
+    </div>
+    <section class="grid">
+      <article class="panel">
+        <h2>방 정보</h2>
+        <p>제목: <strong id="room-title">-</strong></p>
+        <p>상태: <strong id="room-state">-</strong></p>
+        <p>인원: <strong id="room-player-count">-</strong></p>
+        <p>방장: <strong id="room-host">-</strong></p>
+        <p>생성시각: <strong id="room-created-at">-</strong></p>
+      </article>
+      <article class="panel">
+        <h2>방 액션</h2>
+        <div class="actions">
+          <button id="start-btn" type="button" disabled>게임 시작</button>
+          <button id="rematch-btn" type="button" disabled>재경기</button>
+          <button id="leave-btn" class="secondary" type="button">나가기</button>
+        </div>
+        <p id="room-message">ROOM-UI-001: 방 상태 조회/표시 완료, 액션 API는 다음 단계에서 연결됩니다.</p>
+      </article>
+    </section>
+    <section class="panel" style="margin-top: 14px;">
+      <h2>참가자 목록</h2>
+      <div id="members" class="members"></div>
+    </section>
   </main>
+  <script>
+    const sessionRaw = localStorage.getItem('bhc_auth');
+    const refreshBtn = document.getElementById('refresh-room-btn');
+    const leaveBtn = document.getElementById('leave-btn');
+    const roomMessage = document.getElementById('room-message');
+
+    function setRoomMessage(text, type) {
+      roomMessage.textContent = text;
+      roomMessage.className = type === 'error' ? 'error' : '';
+    }
+
+    async function requestJson(url, options) {
+      try {
+        const response = await fetch(url, options);
+        const data = await response.json().catch(() => ({}));
+        return { ok: response.ok, status: response.status, data };
+      } catch {
+        return { ok: false, status: 0, data: { errorCode: 'NETWORK_ERROR' } };
+      }
+    }
+
+    function renderMembers(room, myMemberId) {
+      const members = Array.isArray(room.members) ? room.members : [];
+      const membersRoot = document.getElementById('members');
+      if (members.length === 0) {
+        membersRoot.innerHTML = '<p>참가자가 없습니다.</p>';
+        return;
+      }
+
+      membersRoot.innerHTML = members.map((member) => {
+        const hostBadge = member.memberId === room.hostMemberId ? '<span class="pill">HOST</span>' : '';
+        const meBadge = member.memberId === myMemberId ? '<span class="pill">ME</span>' : '';
+        return (
+          '<article class="member">' +
+          '<div><strong>' + member.displayName + '</strong><div>' + member.memberId + '</div></div>' +
+          '<div>' + hostBadge + meBadge + '</div>' +
+          '</article>'
+        );
+      }).join('');
+    }
+
+    async function loadRoom() {
+      const result = await requestJson('/api/lobby/rooms/${roomId}', { method: 'GET' });
+      if (!result.ok) {
+        setRoomMessage('방 정보 조회 실패: ' + (result.data.errorCode || 'UNKNOWN_ERROR'), 'error');
+        return;
+      }
+
+      const room = result.data.room;
+      let me = null;
+      try {
+        me = sessionRaw ? JSON.parse(sessionRaw) : null;
+      } catch {
+        me = null;
+      }
+      const myMemberId = me?.userId ? String(me.userId) : (me?.guestId || null);
+      const isHost = myMemberId && room.hostMemberId && String(room.hostMemberId) === String(myMemberId);
+
+      document.getElementById('room-title').textContent = room.title;
+      document.getElementById('room-state').textContent = room.state;
+      document.getElementById('room-player-count').textContent = String(room.playerCount);
+      document.getElementById('room-host').textContent = room.hostMemberId || '-';
+      document.getElementById('room-created-at').textContent = room.createdAt;
+      document.getElementById('start-btn').disabled = !isHost;
+      document.getElementById('rematch-btn').disabled = !isHost;
+      renderMembers(room, myMemberId);
+      setRoomMessage('방 상태를 갱신했습니다.', '');
+    }
+
+    refreshBtn.addEventListener('click', async () => {
+      await loadRoom();
+    });
+
+    leaveBtn.addEventListener('click', () => {
+      window.location.href = '/lobby';
+    });
+
+    loadRoom();
+  </script>
 </body>
 </html>`;
 }
@@ -621,9 +811,7 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url?.startsWith('/api/lobby/rooms')) {
-    const url = new URL(req.url, 'http://localhost');
-    const query = url.searchParams.toString();
-    const target = query.length > 0 ? `${lobbyServerUrl}/lobby/rooms?${query}` : `${lobbyServerUrl}/lobby/rooms`;
+    const target = `${lobbyServerUrl}${req.url.replace('/api', '')}`;
     await proxyJsonRequest(req, res, target, 'GET', 'LOBBY_SERVER_UNAVAILABLE');
     return;
   }
