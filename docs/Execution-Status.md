@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 125 |
+| Total Tasks | 126 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 124 |
+| Done | 125 |
 | Blocked | 1 |
-| Last Updated | 2026-02-23 08:41 |
+| Last Updated | 2026-02-23 08:43 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | PLAY-FLOW-001 | done | 2026-02-23 08:41 | 경기 상태 전환 UX 완료 |
+| Agent A (web) | LOBBY-SYNC-001 | done | 2026-02-23 08:43 | 로비 상태 연동 강화 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:54 | INF-002C 재시도(출력 없음, 여전히 blocked) |
 
@@ -151,3 +151,4 @@
 | PLAY-INPUT-001 | Agent A | done | 2026-02-23 08:27 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts`, 분리포트 실행 후 `curl -X POST /api/lobby/rooms/:id/shot` 성공/실패 확인, `curl /room/room-1` 샷 폼 확인 | - | PLAY-INPUT-002 | 룸 샷 입력 폼과 서버 샷 스키마 검증 API 연동 완료 |
 | PLAY-INPUT-002 | Agent A | done | 2026-02-23 08:29 | `curl -sS http://localhost:9217/room/room-1 \| rg \"shot-errors|result.data.errors\"` 확인 | - | PLAY-FLOW-001 | 샷 검증 실패 시 validation errors[] 상세 메시지 표시 UI 추가 완료 |
 | PLAY-FLOW-001 | Agent A | done | 2026-02-23 08:41 | `curl -sS http://localhost:9217/room/room-1 \| rg \"flow-banner|setFlowBanner|IN_GAME|FINISHED\"` 확인 | - | LOBBY-SYNC-001 | 경기 상태 배너 및 멤버 제외 시 로비 자동 복귀 흐름 구현 완료 |
+| LOBBY-SYNC-001 | Agent A | done | 2026-02-23 08:43 | `curl -sS http://localhost:9217/lobby \| rg \"joinLabel|IN_GAME|disabled\"` 확인 | - | QA-E2E-001 | 로비 카드에서 IN_GAME 상태 방 입장 버튼 비활성화 및 상태 라벨 반영 완료 |

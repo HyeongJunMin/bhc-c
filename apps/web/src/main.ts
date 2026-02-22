@@ -448,15 +448,22 @@ function renderLobbyPage(): string {
       }
 
       roomList.innerHTML = items
-        .map((room) => (
-          '<article class="room">' +
-          '<h3>' + room.title + '</h3>' +
-          '<p>ID: ' + room.roomId + '</p>' +
-          '<p>상태: ' + room.state + '</p>' +
-          '<p>인원: ' + room.playerCount + '</p>' +
-          '<button type="button" class="join-room-btn" data-room-id="' + room.roomId + '">입장</button>' +
-          '</article>'
-        ))
+        .map((room) => {
+          const isBlocked = room.state === 'IN_GAME';
+          const joinLabel = isBlocked ? '게임중' : '입장';
+          const disabledAttr = isBlocked ? ' disabled aria-disabled="true"' : '';
+          return (
+            '<article class="room">' +
+            '<h3>' + room.title + '</h3>' +
+            '<p>ID: ' + room.roomId + '</p>' +
+            '<p>상태: ' + room.state + '</p>' +
+            '<p>인원: ' + room.playerCount + '</p>' +
+            '<button type="button" class="join-room-btn" data-room-id="' + room.roomId + '"' + disabledAttr + '>' +
+            joinLabel +
+            '</button>' +
+            '</article>'
+          );
+        })
         .join('');
     }
 

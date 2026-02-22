@@ -257,6 +257,9 @@
 #### PLAY-FLOW-001 경기 상태 전환 UX
 - `PLAY-FLOW-001`: 룸 상태(IN_GAME/FINISHED/대기) 배너와 강퇴/퇴장 시 자동 로비 복귀 흐름 추가
 
+#### LOBBY-SYNC-001 로비 상태 연동 강화
+- `LOBBY-SYNC-001`: 로비 카드에서 IN_GAME 방 입장 버튼 잠금 및 상태 문구 반영
+
 ## 4. 추천 착수 순서 (마이크로)
 1. `INF-001A` -> `INF-001C`
 2. `INF-002A` -> `INF-002C`
@@ -281,3 +284,4 @@
 21. `PLAY-INPUT-001`
 22. `PLAY-INPUT-002`
 23. `PLAY-FLOW-001`
+24. `LOBBY-SYNC-001`
