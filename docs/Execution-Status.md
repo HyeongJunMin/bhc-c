@@ -14,14 +14,14 @@
 | In Progress | 0 |
 | Done | 107 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 10:51 |
+| Last Updated | 2026-02-22 10:54 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:51 | RULE-010D 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:54 | INF-002C 재시도(출력 없음, 여전히 blocked) |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -31,7 +31,7 @@
 | INF-001C | Agent C | done | 2026-02-21 23:21 | `npx pnpm -v`, `npx pnpm install` 통과 | - | INF-002A | pnpm-lock.yaml 생성 확인 |
 | INF-002A | Agent C | done | 2026-02-21 23:22 | `cat turbo.json` 확인 | - | INF-002B | turbo 구성 파일 생성 완료 |
 | INF-002B | Agent C | done | 2026-02-21 23:23 | `cat turbo.json` 확인 | - | INF-002C | turbo tasks 정의 완료 |
-| INF-002C | Agent C | blocked | 2026-02-21 23:27 | `npx turbo run lint` 대기 상태(출력 없음) | - | INF-003A | turbo 실행 환경 확인 필요 |
+| INF-002C | Agent C | blocked | 2026-02-22 10:54 | `npx turbo run lint` 재시도했으나 출력 없이 대기 | - | INF-003A | turbo 실행 환경 확인 필요 |
 | INF-003A | Agent C | done | 2026-02-21 23:30 | `ls -la apps/web apps/game-server` 확인 | - | INF-003B | web/game-server package 골격 추가 완료 |
 | INF-003B | Agent C | done | 2026-02-21 23:32 | `ls -la packages/shared-types packages/physics-core` 확인 | - | INF-003C | packages 골격 추가 완료 |
 | INF-003C | Agent C | done | 2026-02-21 23:33 | `npx pnpm -r list --depth -1` 통과 | - | AUTH-001A | workspace 인식 확인 완료 |
