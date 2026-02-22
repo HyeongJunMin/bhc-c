@@ -4,6 +4,9 @@ import assert from 'node:assert/strict';
 import { login, signup } from '../auth/http.ts';
 import { createRoom } from '../lobby/http.ts';
 import { evaluateRoomJoin } from '../room/join-policy.ts';
+import { startGameRequest } from '../game/start-policy.ts';
+import { createTurnState, getCurrentTurnPlayerId } from '../game/turn-policy.ts';
+import { createScoreBoard, increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
 
 test('QA-001A: 로그인 -> 로비 -> 방입장 핵심 시나리오', async () => {
   const authState = {
@@ -42,4 +45,30 @@ test('QA-001A: 로그인 -> 로비 -> 방입장 핵심 시나리오', async () =
     roomState: 'WAITING',
   });
   assert.deepEqual(joinDecision, { ok: true });
+});
+
+test('QA-001B: 시작 -> 플레이 -> 10점 종료 핵심 시나리오', () => {
+  const playerIds = ['host', 'p2'];
+
+  const startResult = startGameRequest({
+    roomState: 'WAITING',
+    hostMemberId: 'host',
+    actorMemberId: 'host',
+    playerIds,
+  });
+  assert.equal(startResult.ok, true);
+
+  const turnState = createTurnState(playerIds);
+  assert.equal(getCurrentTurnPlayerId(turnState), 'host');
+
+  const scoreBoard = createScoreBoard(playerIds);
+  scoreBoard.host = 9;
+
+  const scoreUpdateResult = increaseScoreAndCheckGameEnd(scoreBoard, 'host');
+  assert.equal(scoreUpdateResult.ok, true);
+  if (scoreUpdateResult.ok) {
+    assert.equal(scoreUpdateResult.nextScore, 10);
+    assert.equal(scoreUpdateResult.gameEnded, true);
+    assert.equal(scoreUpdateResult.winnerPlayerId, 'host');
+  }
 });
