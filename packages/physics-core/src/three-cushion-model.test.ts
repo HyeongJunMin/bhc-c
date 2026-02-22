@@ -123,3 +123,53 @@ test('둘 중 하나라도 불충족이면 득점 불성립이다', () => {
 
   assert.equal(result, false);
 });
+
+test('같은 목적구 반복 접촉만으로는 득점이 성립하지 않는다', () => {
+  const result = isValidThreeCushionScore({
+    cueBallId: 'cue',
+    objectBallIds: ['ob1', 'ob2'],
+    events: [
+      { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cue', targetBallId: 'ob1' },
+      { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cue', cushionId: 'top' },
+      { type: 'CUSHION_COLLISION', atMs: 30, sourceBallId: 'cue', cushionId: 'left' },
+      { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cue', cushionId: 'bottom' },
+      { type: 'BALL_COLLISION', atMs: 50, sourceBallId: 'cue', targetBallId: 'ob1' },
+    ],
+  });
+
+  assert.equal(result, false);
+});
+
+test('두 번째 목적구 접촉 이후 쿠션은 3쿠션 판정에 포함하지 않는다', () => {
+  const result = isValidThreeCushionScore({
+    cueBallId: 'cue',
+    objectBallIds: ['ob1', 'ob2'],
+    events: [
+      { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cue', targetBallId: 'ob1' },
+      { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cue', cushionId: 'top' },
+      { type: 'BALL_COLLISION', atMs: 30, sourceBallId: 'cue', targetBallId: 'ob2' },
+      { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cue', cushionId: 'left' },
+      { type: 'CUSHION_COLLISION', atMs: 50, sourceBallId: 'cue', cushionId: 'bottom' },
+    ],
+  });
+
+  assert.equal(result, false);
+});
+
+test('비-큐볼 충돌 이벤트는 판정에서 무시한다', () => {
+  const result = isValidThreeCushionScore({
+    cueBallId: 'cue',
+    objectBallIds: ['ob1', 'ob2'],
+    events: [
+      { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'ob1', targetBallId: 'ob2' },
+      { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'ob1', cushionId: 'top' },
+      { type: 'BALL_COLLISION', atMs: 30, sourceBallId: 'cue', targetBallId: 'ob1' },
+      { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cue', cushionId: 'left' },
+      { type: 'CUSHION_COLLISION', atMs: 50, sourceBallId: 'cue', cushionId: 'bottom' },
+      { type: 'CUSHION_COLLISION', atMs: 60, sourceBallId: 'cue', cushionId: 'right' },
+      { type: 'BALL_COLLISION', atMs: 70, sourceBallId: 'cue', targetBallId: 'ob2' },
+    ],
+  });
+
+  assert.equal(result, true);
+});
