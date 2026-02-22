@@ -9,6 +9,10 @@ export type TurnTimeoutResult = {
   nextPlayerId: string | null;
 };
 
+export type ShotInputGateDecision =
+  | { ok: true }
+  | { ok: false; errorCode: 'GAME_TURN_EXPIRED' | 'GAME_NOT_YOUR_TURN' };
+
 export function createTurnState(playerIds: string[]): TurnState {
   return {
     queue: [...playerIds],
@@ -50,4 +54,21 @@ export function handleTurnTimeout(turnState: TurnState): TurnTimeoutResult {
     skippedPlayerId,
     nextPlayerId: getCurrentTurnPlayerId(turnState),
   };
+}
+
+export function evaluateShotInputGate(
+  turnState: TurnState,
+  actorPlayerId: string,
+  hasTurnExpired: boolean,
+): ShotInputGateDecision {
+  if (hasTurnExpired) {
+    return { ok: false, errorCode: 'GAME_TURN_EXPIRED' };
+  }
+
+  const currentTurnPlayerId = getCurrentTurnPlayerId(turnState);
+  if (!currentTurnPlayerId || currentTurnPlayerId !== actorPlayerId) {
+    return { ok: false, errorCode: 'GAME_NOT_YOUR_TURN' };
+  }
+
+  return { ok: true };
 }
