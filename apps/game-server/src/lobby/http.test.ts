@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createLobbyHttpServer, createRoom, getRoomDetail, joinRoom, listRooms } from './http.ts';
+import {
+  createLobbyHttpServer,
+  createRoom,
+  getRoomDetail,
+  joinRoom,
+  kickRoomMember,
+  listRooms,
+  rematchRoomGame,
+  startRoomGame,
+} from './http.ts';
 
 test('방 생성 성공: 유효 제목이면 생성된다', () => {
   const { state } = createLobbyHttpServer();
@@ -93,5 +102,58 @@ test('방 상세 조회: 존재하는 roomId면 상세를 반환한다', () => {
     assert.equal(detail.room.roomId, created.room.roomId);
     assert.equal(detail.room.members.length, 1);
     assert.equal(detail.room.hostMemberId, 'u1');
+  }
+});
+
+test('게임 시작: 방장이고 2인 이상이면 IN_GAME으로 전환된다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'start-room' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (started.ok) {
+    assert.equal(started.room.state, 'IN_GAME');
+  }
+});
+
+test('강퇴: 방장이 타겟 멤버를 제거하면 인원이 감소한다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'kick-room' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const kicked = kickRoomMember(state, created.room.roomId, 'u1', 'u2');
+  assert.equal(kicked.ok, true);
+  if (kicked.ok) {
+    assert.equal(kicked.room.playerCount, 1);
+    assert.equal(kicked.room.members[0].memberId, 'u1');
+  }
+});
+
+test('재경기: 방장이고 2인 이상이면 IN_GAME으로 전환된다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'rematch-room' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  created.room.state = 'FINISHED';
+  const rematch = rematchRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(rematch.ok, true);
+  if (rematch.ok) {
+    assert.equal(rematch.room.state, 'IN_GAME');
   }
 });

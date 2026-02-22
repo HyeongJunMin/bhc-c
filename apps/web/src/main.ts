@@ -631,6 +631,11 @@ function renderRoomPage(roomId: string): string {
       align-items: center;
       gap: 8px;
     }
+    .member-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
     .actions {
       display: flex;
       gap: 8px;
@@ -695,7 +700,7 @@ function renderRoomPage(roomId: string): string {
           <button id="rematch-btn" type="button" disabled>재경기</button>
           <button id="leave-btn" class="secondary" type="button">나가기</button>
         </div>
-        <p id="room-message">ROOM-UI-001: 방 상태 조회/표시 완료, 액션 API는 다음 단계에서 연결됩니다.</p>
+        <p id="room-message">ROOM-ACTION-001: 방 액션 API 연결 중...</p>
       </article>
     </section>
     <section class="panel" style="margin-top: 14px;">
@@ -707,7 +712,10 @@ function renderRoomPage(roomId: string): string {
     const sessionRaw = localStorage.getItem('bhc_auth');
     const refreshBtn = document.getElementById('refresh-room-btn');
     const leaveBtn = document.getElementById('leave-btn');
+    const startBtn = document.getElementById('start-btn');
+    const rematchBtn = document.getElementById('rematch-btn');
     const roomMessage = document.getElementById('room-message');
+    let myMemberId = null;
 
     function setRoomMessage(text, type) {
       roomMessage.textContent = text;
@@ -724,7 +732,21 @@ function renderRoomPage(roomId: string): string {
       }
     }
 
-    function renderMembers(room, myMemberId) {
+    async function runRoomAction(path, payload, successMessage) {
+      const result = await requestJson(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!result.ok) {
+        setRoomMessage('요청 실패: ' + (result.data.errorCode || 'UNKNOWN_ERROR'), 'error');
+        return false;
+      }
+      setRoomMessage(successMessage, '');
+      return true;
+    }
+
+    function renderMembers(room, meId, isHost) {
       const members = Array.isArray(room.members) ? room.members : [];
       const membersRoot = document.getElementById('members');
       if (members.length === 0) {
@@ -734,11 +756,15 @@ function renderRoomPage(roomId: string): string {
 
       membersRoot.innerHTML = members.map((member) => {
         const hostBadge = member.memberId === room.hostMemberId ? '<span class="pill">HOST</span>' : '';
-        const meBadge = member.memberId === myMemberId ? '<span class="pill">ME</span>' : '';
+        const meBadge = member.memberId === meId ? '<span class="pill">ME</span>' : '';
+        const canKick = isHost && member.memberId !== meId;
+        const kickButton = canKick
+          ? '<button type="button" class="kick-btn secondary" data-member-id="' + member.memberId + '">강퇴</button>'
+          : '';
         return (
           '<article class="member">' +
           '<div><strong>' + member.displayName + '</strong><div>' + member.memberId + '</div></div>' +
-          '<div>' + hostBadge + meBadge + '</div>' +
+          '<div class="member-actions">' + hostBadge + meBadge + kickButton + '</div>' +
           '</article>'
         );
       }).join('');
@@ -758,7 +784,7 @@ function renderRoomPage(roomId: string): string {
       } catch {
         me = null;
       }
-      const myMemberId = me?.userId ? String(me.userId) : (me?.guestId || null);
+      myMemberId = me?.userId ? String(me.userId) : (me?.guestId || null);
       const isHost = myMemberId && room.hostMemberId && String(room.hostMemberId) === String(myMemberId);
 
       document.getElementById('room-title').textContent = room.title;
@@ -768,12 +794,64 @@ function renderRoomPage(roomId: string): string {
       document.getElementById('room-created-at').textContent = room.createdAt;
       document.getElementById('start-btn').disabled = !isHost;
       document.getElementById('rematch-btn').disabled = !isHost;
-      renderMembers(room, myMemberId);
+      renderMembers(room, myMemberId, Boolean(isHost));
       setRoomMessage('방 상태를 갱신했습니다.', '');
     }
 
     refreshBtn.addEventListener('click', async () => {
       await loadRoom();
+    });
+
+    startBtn.addEventListener('click', async () => {
+      if (!myMemberId) {
+        setRoomMessage('세션 정보가 없습니다. 다시 로그인해 주세요.', 'error');
+        return;
+      }
+      const ok = await runRoomAction('/api/lobby/rooms/${roomId}/start', { actorMemberId: myMemberId }, '게임을 시작했습니다.');
+      if (ok) {
+        await loadRoom();
+      }
+    });
+
+    rematchBtn.addEventListener('click', async () => {
+      if (!myMemberId) {
+        setRoomMessage('세션 정보가 없습니다. 다시 로그인해 주세요.', 'error');
+        return;
+      }
+      const ok = await runRoomAction(
+        '/api/lobby/rooms/${roomId}/rematch',
+        { actorMemberId: myMemberId },
+        '재경기를 시작했습니다.',
+      );
+      if (ok) {
+        await loadRoom();
+      }
+    });
+
+    document.getElementById('members').addEventListener('click', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLButtonElement)) {
+        return;
+      }
+      if (!target.classList.contains('kick-btn')) {
+        return;
+      }
+      if (!myMemberId) {
+        setRoomMessage('세션 정보가 없습니다. 다시 로그인해 주세요.', 'error');
+        return;
+      }
+      const targetMemberId = target.dataset.memberId;
+      if (!targetMemberId) {
+        return;
+      }
+      const ok = await runRoomAction(
+        '/api/lobby/rooms/${roomId}/kick',
+        { actorMemberId: myMemberId, targetMemberId },
+        '참가자를 강퇴했습니다.',
+      );
+      if (ok) {
+        await loadRoom();
+      }
     });
 
     leaveBtn.addEventListener('click', () => {
@@ -824,6 +902,21 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/join')) {
+    await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/start')) {
+    await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/rematch')) {
+    await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/kick')) {
     await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
     return;
   }
