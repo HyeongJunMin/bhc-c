@@ -40,3 +40,27 @@ test('재경기 재배치는 시작 좌표로 복원하고 속도/스핀을 0으
     objectBall2: { x: 0, y: 0 },
   });
 });
+
+test('이전 프레임의 위치/속도/스핀이 비정상이어도 재경기 초기화 결과에는 반영되지 않는다', () => {
+  const previousFrame = {
+    cueBall: { x: 1.2, y: 0.3 },
+    objectBall1: { x: 0.8, y: 0.4 },
+    objectBall2: { x: 1.5, y: 0.9 },
+    linearVelocityByBall: {
+      cueBall: { x: 1, y: -1 },
+      objectBall1: { x: 2, y: -2 },
+      objectBall2: { x: 3, y: -3 },
+    },
+    angularVelocityByBall: {
+      cueBall: { x: 4, y: -4 },
+      objectBall1: { x: 5, y: -5 },
+      objectBall2: { x: 6, y: -6 },
+    },
+  };
+
+  const rematchState = resetRackForRematch();
+
+  assert.notDeepEqual(rematchState.cueBall, previousFrame.cueBall);
+  assert.notDeepEqual(rematchState.linearVelocityByBall, previousFrame.linearVelocityByBall);
+  assert.notDeepEqual(rematchState.angularVelocityByBall, previousFrame.angularVelocityByBall);
+});
