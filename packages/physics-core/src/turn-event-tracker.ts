@@ -11,3 +11,8 @@ export function initTurnEventTracker(turnId: string): TurnEventTracker {
     events: [],
   };
 }
+
+export function appendTurnEvent(tracker: TurnEventTracker, event: TurnCollisionEvent): TurnEventTracker {
+  tracker.events.push(event);
+  return tracker;
+}
