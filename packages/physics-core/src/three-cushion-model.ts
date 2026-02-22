@@ -98,3 +98,7 @@ export function hasAtLeastThreeCushionContacts(input: ThreeCushionScoreInput): b
 
   return secondObjectBallHit && cushionCountBeforeSecondObject >= 3;
 }
+
+export function isValidThreeCushionScore(input: ThreeCushionScoreInput): boolean {
+  return hasBothObjectBallContacts(input) && hasAtLeastThreeCushionContacts(input);
+}
