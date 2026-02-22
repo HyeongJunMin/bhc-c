@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 35 |
+| Todo | 34 |
 | In Progress | 0 |
-| Done | 66 |
+| Done | 67 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 00:59 |
+| Last Updated | 2026-02-22 10:16 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 00:59 | CHAT-002C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:16 | QA-001A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -93,7 +93,7 @@
 | CHAT-002A | Agent C | done | 2026-02-22 00:57 | `node --experimental-strip-types --test apps/game-server/src/chat/rate-limit.test.ts` 통과(2 pass) | - | CHAT-002B | 사용자별 마지막 전송 시각 저장 로직 완료 |
 | CHAT-002B | Agent C | done | 2026-02-22 00:58 | `node --experimental-strip-types --test apps/game-server/src/chat/rate-limit.test.ts` 통과(4 pass) | - | CHAT-002C | 3초 이내 채팅 전송 거부 로직 구현 완료 |
 | CHAT-002C | Agent C | done | 2026-02-22 00:59 | `node --experimental-strip-types --test apps/game-server/src/chat/rate-limit.test.ts` 통과(5 pass) | - | QA-001A | 레이트리밋 위반 피드백 메시지 처리/테스트 완료 |
-| QA-001A | - | todo | - | - | - | - | - |
+| QA-001A | Agent C | done | 2026-02-22 10:16 | `node --experimental-strip-types --test apps/game-server/src/qa/core-scenarios.test.ts` 통과(1 pass) | - | QA-001B | 로그인->로비->방입장 핵심 시나리오 작성 완료 |
 | QA-001B | - | todo | - | - | - | - | - |
 | QA-001C | - | todo | - | - | - | - | - |
 | QA-002A | - | todo | - | - | - | - | - |
