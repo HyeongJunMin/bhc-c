@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 108 |
-| Todo | 4 |
+| Todo | 3 |
 | In Progress | 0 |
-| Done | 103 |
+| Done | 104 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 10:47 |
+| Last Updated | 2026-02-22 10:48 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:47 | RULE-009C 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:48 | RULE-010A 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -130,7 +130,7 @@
 | RULE-009A | Agent C | done | 2026-02-22 10:45 | `node --experimental-strip-types --test apps/game-server/src/game/rematch-policy.test.ts` 통과(6 pass) | - | RULE-009B | 재경기 직후 점수/턴 검증 케이스 추가 완료 |
 | RULE-009B | Agent C | done | 2026-02-22 10:46 | `node --experimental-strip-types --test packages/physics-core/src/rack-layout.test.ts` 통과(5 pass) | - | RULE-009C | 재경기 공 위치/속도/스핀 초기화 검증 강화 완료 |
 | RULE-009C | Agent C | done | 2026-02-22 10:47 | `node --experimental-strip-types --test packages/physics-core/src/turn-event-tracker.test.ts` 통과(5 pass) | - | RULE-010A | 재경기 이전 턴 이벤트 이력 초기화 구현 완료 |
-| RULE-010A | - | todo | - | - | - | - | - |
+| RULE-010A | Agent C | done | 2026-02-22 10:48 | `node --experimental-strip-types --test apps/game-server/src/game/start-policy.test.ts` 통과(4 pass) | - | RULE-010B | 시작 버튼 연타 멱등성 테스트 추가 완료 |
 | RULE-010B | - | todo | - | - | - | - | - |
 | RULE-010C | - | todo | - | - | - | - | - |
 | RULE-010D | - | todo | - | - | - | - | - |
