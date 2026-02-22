@@ -45,3 +45,21 @@ export function isTurnCollisionEventList(events: unknown): events is TurnCollisi
     return false;
   });
 }
+
+export function hasBothObjectBallContacts(input: ThreeCushionScoreInput): boolean {
+  const contactedObjectBallIds = new Set(
+    input.events.flatMap((event) => {
+      if (event.type !== 'BALL_COLLISION') {
+        return [];
+      }
+
+      if (event.sourceBallId !== input.cueBallId) {
+        return [];
+      }
+
+      return [event.targetBallId];
+    }),
+  );
+
+  return input.objectBallIds.every((objectBallId) => contactedObjectBallIds.has(objectBallId));
+}
