@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 113 |
-| Todo | 4 |
+| Todo | 3 |
 | In Progress | 0 |
-| Done | 108 |
+| Done | 109 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 17:20 |
+| Last Updated | 2026-02-22 17:22 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | WEB-AUTH-001A | done | 2026-02-22 17:20 | /login 라우트 기본 골격 반영 |
+| Agent A (web) | WEB-AUTH-001B | done | 2026-02-22 17:22 | 로그인/회원가입/게스트 폼 UI 구성 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:54 | INF-002C 재시도(출력 없음, 여전히 blocked) |
 
@@ -135,7 +135,7 @@
 | RULE-010C | Agent C | done | 2026-02-22 10:50 | `node --experimental-strip-types --test apps/game-server/src/game/turn-policy.test.ts` 통과(7 pass) | - | RULE-010D | 턴 만료 직전 샷 입력 경합 테스트/게이트 추가 완료 |
 | RULE-010D | Agent C | done | 2026-02-22 10:51 | `node --experimental-strip-types --test apps/game-server/src/game/state-transition.test.ts` 통과(2 pass) | - | - | 상태 전이 원자성 검증(assert) 추가 완료 |
 | WEB-AUTH-001A | Agent A | done | 2026-02-22 17:20 | `WEB_PORT=9217 pnpm --filter @bhc/web run dev`, `curl -sS http://localhost:9217/login \| head -n 5` 확인 | - | WEB-AUTH-001B | `/login` 라우트 및 기본 인증 페이지 골격 추가 완료 |
-| WEB-AUTH-001B | - | todo | - | - | - | - | - |
+| WEB-AUTH-001B | Agent A | done | 2026-02-22 17:22 | `WEB_PORT=9217 pnpm --filter @bhc/web run dev`, `curl -sS http://localhost:9217/login \| rg \"login-form\|signup-form\|guest-form\"` 확인 | - | WEB-AUTH-001C | 로그인/회원가입/게스트 폼 UI 및 메시지 영역 구성 완료 |
 | WEB-AUTH-001C | - | todo | - | - | - | - | - |
 | WEB-AUTH-001D | - | todo | - | - | - | - | - |
 | WEB-AUTH-001E | - | todo | - | - | - | - | - |
