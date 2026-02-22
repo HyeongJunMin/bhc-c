@@ -248,6 +248,9 @@
 #### GAME-UI-001 인게임 HUD 기본 표시
 - `GAME-UI-001`: `/room/:id`에 턴/타이머/점수판 HUD 패널 기본 표시를 추가
 
+#### PLAY-INPUT-001 샷 입력 UI/검증 연결
+- `PLAY-INPUT-001`: `/room/:id` 샷 입력 폼과 서버 샷 스키마 검증 API를 연동
+
 ## 4. 추천 착수 순서 (마이크로)
 1. `INF-001A` -> `INF-001C`
 2. `INF-002A` -> `INF-002C`
@@ -269,3 +272,4 @@
 18. `ROOM-ACTION-002`
 19. `ROOM-CHAT-001`
 20. `GAME-UI-001`
+21. `PLAY-INPUT-001`

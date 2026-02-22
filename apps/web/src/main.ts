@@ -714,6 +714,16 @@ function renderRoomPage(roomId: string): string {
       <div id="hud-scoreboard" class="members"></div>
     </section>
     <section class="panel" style="margin-top: 14px;">
+      <h2>샷 입력</h2>
+      <form id="shot-form" class="create">
+        <input id="shot-direction" type="number" min="0" max="359.99" step="0.01" value="120" required>
+        <input id="shot-elevation" type="number" min="0" max="89" step="0.01" value="10" required>
+        <input id="shot-drag" type="number" min="10" max="1000" step="1" value="300" required>
+        <button type="submit">샷 제출</button>
+      </form>
+      <p id="shot-message"></p>
+    </section>
+    <section class="panel" style="margin-top: 14px;">
       <h2>채팅</h2>
       <div id="chat-list" class="members"></div>
       <form id="chat-form" class="create" style="margin-top: 10px;">
@@ -735,6 +745,11 @@ function renderRoomPage(roomId: string): string {
     const hudTurn = document.getElementById('hud-turn');
     const hudTimer = document.getElementById('hud-timer');
     const hudScoreboard = document.getElementById('hud-scoreboard');
+    const shotForm = document.getElementById('shot-form');
+    const shotDirection = document.getElementById('shot-direction');
+    const shotElevation = document.getElementById('shot-elevation');
+    const shotDrag = document.getElementById('shot-drag');
+    const shotMessage = document.getElementById('shot-message');
     let myMemberId = null;
     let timerValue = 10;
     const ROOM_ERROR_MESSAGES = {
@@ -744,6 +759,7 @@ function renderRoomPage(roomId: string): string {
       GAME_ALREADY_STARTED: '이미 게임이 시작되었습니다.',
       GAME_NOT_ENOUGH_PLAYERS: '최소 2명 이상이 필요합니다.',
       CHAT_INVALID_INPUT: '채팅 메시지를 입력해 주세요.',
+      SHOT_INPUT_SCHEMA_INVALID: '샷 입력값이 스키마 규칙과 맞지 않습니다.',
       ROOM_NOT_FOUND: '방을 찾을 수 없습니다.',
       NETWORK_ERROR: '네트워크 오류가 발생했습니다.',
       UNKNOWN_ERROR: '알 수 없는 오류가 발생했습니다.',
@@ -752,6 +768,11 @@ function renderRoomPage(roomId: string): string {
     function setRoomMessage(text, type) {
       roomMessage.textContent = text;
       roomMessage.className = type === 'error' ? 'error' : '';
+    }
+
+    function setShotMessage(text, type) {
+      shotMessage.textContent = text;
+      shotMessage.style.color = type === 'error' ? '#b91c1c' : '#334155';
     }
 
     function getRoomErrorMessage(errorCode) {
@@ -931,6 +952,40 @@ function renderRoomPage(roomId: string): string {
       window.location.href = '/lobby';
     });
 
+    shotForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!myMemberId) {
+        setRoomMessage('세션 정보가 없습니다. 다시 로그인해 주세요.', 'error');
+        return;
+      }
+
+      const payload = {
+        schemaName: 'shot_input',
+        schemaVersion: '1.0.0',
+        roomId: '${roomId}',
+        matchId: 'match-1',
+        turnId: 'turn-1',
+        playerId: String(myMemberId),
+        clientTsMs: Date.now(),
+        shotDirectionDeg: Number(shotDirection.value),
+        cueElevationDeg: Number(shotElevation.value),
+        dragPx: Number(shotDrag.value),
+        impactOffsetX: 0,
+        impactOffsetY: 0,
+      };
+      const result = await requestJson('/api/lobby/rooms/${roomId}/shot', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actorMemberId: myMemberId, payload }),
+      });
+      if (!result.ok) {
+        const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
+        setShotMessage('샷 제출 실패: ' + getRoomErrorMessage(errorCode), 'error');
+        return;
+      }
+      setShotMessage('샷 입력이 서버에 접수되었습니다.', '');
+    });
+
     chatForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!myMemberId) {
@@ -1027,6 +1082,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/chat')) {
+    await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
+    return;
+  }
+
+  if (req.method === 'POST' && req.url?.startsWith('/api/lobby/rooms/') && req.url.endsWith('/shot')) {
     await proxyJsonRequest(req, res, `${lobbyServerUrl}${req.url.replace('/api', '')}`, 'POST', 'LOBBY_SERVER_UNAVAILABLE');
     return;
   }

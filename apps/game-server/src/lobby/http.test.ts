@@ -10,6 +10,7 @@ import {
   listRooms,
   rematchRoomGame,
   sendRoomChatMessage,
+  submitRoomShot,
   startRoomGame,
 } from './http.ts';
 
@@ -173,5 +174,51 @@ test('채팅 전송: 룸 멤버면 메시지가 저장된다', () => {
   if (sent.ok) {
     assert.equal(sent.room.chatMessages.length, 1);
     assert.equal(sent.room.chatMessages[0].message, 'hello');
+  }
+});
+
+test('샷 입력 제출: 스키마 유효 payload면 accepted 된다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'shot-room' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 120,
+    cueElevationDeg: 10,
+    dragPx: 300,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+  assert.equal(result.ok, true);
+});
+
+test('샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'shot-invalid' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.errorCode, 'SHOT_INPUT_SCHEMA_INVALID');
   }
 });

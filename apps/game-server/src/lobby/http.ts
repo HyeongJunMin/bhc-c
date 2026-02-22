@@ -5,6 +5,7 @@ import { compareRoomsForLobby } from './sort-rooms.ts';
 import { validateRoomTitle } from './validate-room-title.ts';
 import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
+import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 
 type LobbyRoom = {
   roomId: string;
@@ -55,6 +56,9 @@ type RoomActionResult =
 type RoomChatResult =
   | { ok: true; room: LobbyRoom }
   | { ok: false; statusCode: 400 | 404; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'CHAT_INVALID_INPUT' };
+type ShotSubmitResult =
+  | { ok: true; payload: Record<string, unknown> }
+  | { ok: false; statusCode: 400 | 404; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID'; errors?: string[] };
 
 type ListRoomsResult = {
   items: LobbyRoom[];
@@ -425,6 +429,49 @@ async function handleSendRoomChat(req: IncomingMessage, res: ServerResponse, sta
   writeJson(res, 201, { item: result.room.chatMessages[result.room.chatMessages.length - 1] });
 }
 
+export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId: string, payload: unknown): ShotSubmitResult {
+  const room = state.rooms.find((item) => item.roomId === roomId);
+  if (!room) {
+    return { ok: false, statusCode: 404, errorCode: 'ROOM_NOT_FOUND' };
+  }
+
+  const actorExists = room.members.some((member) => member.memberId === actorMemberId);
+  if (!actorExists) {
+    return { ok: false, statusCode: 404, errorCode: 'ROOM_MEMBER_NOT_FOUND' };
+  }
+
+  const validated = handleShotInputEntry(payload);
+  if (!validated.ok) {
+    return { ok: false, statusCode: validated.statusCode, errorCode: validated.errorCode, errors: validated.errors };
+  }
+
+  return { ok: true, payload: validated.payload };
+}
+
+async function handleSubmitRoomShot(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/shot$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+
+  const body = await parseJsonBody(req, res);
+  if (!body) {
+    return;
+  }
+
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const payload = body.payload;
+  const result = submitRoomShot(state, roomId, actorMemberId, payload);
+  if (!result.ok) {
+    writeJson(res, result.statusCode, { errorCode: result.errorCode, errors: result.errors ?? [] });
+    return;
+  }
+
+  writeJson(res, 200, { accepted: true, payload: result.payload });
+}
+
 export function getRoomDetail(state: LobbyState, roomId: string): RoomDetailResult {
   const room = state.rooms.find((item) => item.roomId === roomId);
   if (!room) {
@@ -500,6 +547,11 @@ export function createLobbyHttpServer() {
 
     if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/chat')) {
       await handleSendRoomChat(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/shot')) {
+      await handleSubmitRoomShot(req, res, state);
       return;
     }
 
