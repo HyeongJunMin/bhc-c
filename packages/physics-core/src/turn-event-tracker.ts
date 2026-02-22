@@ -5,6 +5,11 @@ export type TurnEventTracker = {
   events: TurnCollisionEvent[];
 };
 
+export type TurnEventSnapshot = {
+  turnId: string;
+  events: TurnCollisionEvent[];
+};
+
 export function initTurnEventTracker(turnId: string): TurnEventTracker {
   return {
     turnId,
@@ -15,4 +20,11 @@ export function initTurnEventTracker(turnId: string): TurnEventTracker {
 export function appendTurnEvent(tracker: TurnEventTracker, event: TurnCollisionEvent): TurnEventTracker {
   tracker.events.push(event);
   return tracker;
+}
+
+export function finalizeTurnEventTracker(tracker: TurnEventTracker): TurnEventSnapshot {
+  return {
+    turnId: tracker.turnId,
+    events: [...tracker.events],
+  };
 }
