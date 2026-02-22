@@ -5,6 +5,8 @@ import {
   SHOT_END_ANGULAR_SPEED_THRESHOLD_RADPS,
   SHOT_END_LINEAR_SPEED_THRESHOLD_MPS,
   SHOT_END_STABLE_FRAME_COUNT,
+  evaluateShotEndWithFrames,
+  initShotEndTracker,
   isBelowShotEndThreshold,
 } from './shot-end.ts';
 
@@ -30,4 +32,37 @@ test('임계값을 초과하면 종료 후보가 아니다', () => {
   });
 
   assert.equal(result, false);
+});
+
+test('연속 N프레임 안정 상태일 때만 샷 종료로 판정한다', () => {
+  const tracker = initShotEndTracker();
+  const stableSample = {
+    linearSpeedMps: SHOT_END_LINEAR_SPEED_THRESHOLD_MPS,
+    angularSpeedRadps: SHOT_END_ANGULAR_SPEED_THRESHOLD_RADPS,
+  };
+
+  for (let frame = 0; frame < SHOT_END_STABLE_FRAME_COUNT - 1; frame += 1) {
+    const evaluation = evaluateShotEndWithFrames(tracker, stableSample);
+    assert.equal(evaluation.isShotEnded, false);
+  }
+
+  const finalEvaluation = evaluateShotEndWithFrames(tracker, stableSample);
+  assert.equal(finalEvaluation.isShotEnded, true);
+});
+
+test('중간에 불안정 프레임이 오면 연속 카운트가 초기화된다', () => {
+  const tracker = initShotEndTracker();
+  const stableSample = {
+    linearSpeedMps: SHOT_END_LINEAR_SPEED_THRESHOLD_MPS,
+    angularSpeedRadps: SHOT_END_ANGULAR_SPEED_THRESHOLD_RADPS,
+  };
+  const unstableSample = {
+    linearSpeedMps: SHOT_END_LINEAR_SPEED_THRESHOLD_MPS + 1,
+    angularSpeedRadps: SHOT_END_ANGULAR_SPEED_THRESHOLD_RADPS,
+  };
+
+  evaluateShotEndWithFrames(tracker, stableSample);
+  evaluateShotEndWithFrames(tracker, unstableSample);
+
+  assert.equal(tracker.stableFrameCount, 0);
 });

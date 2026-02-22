@@ -10,18 +10,18 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 102 |
-| Todo | 19 |
+| Todo | 18 |
 | In Progress | 0 |
-| Done | 82 |
+| Done | 83 |
 | Blocked | 1 |
-| Last Updated | 2026-02-22 10:30 |
+| Last Updated | 2026-02-22 10:31 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
 | Agent A (web) | - | idle | - | - |
 | Agent B (game-server) | - | idle | - | - |
-| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:30 | RULE-003A 완료 |
+| Agent C (shared/physics/docs) | - | idle | 2026-02-22 10:31 | RULE-003B 완료 |
 
 ## 작업 보드
 | Task ID | Agent | Status | Updated At | Validation | PR/Commit | Next Task | Note |
@@ -109,7 +109,7 @@
 | RULE-002C | Agent C | done | 2026-02-22 10:29 | `node --experimental-strip-types --test packages/physics-core/src/turn-event-tracker.test.ts` 통과(3 pass) | - | RULE-002D | 턴 종료 이벤트 스냅샷 반환 구현 완료 |
 | RULE-002D | Agent C | done | 2026-02-22 10:29 | `node --experimental-strip-types --test packages/physics-core/src/turn-event-tracker.test.ts` 통과(4 pass) | - | RULE-003A | 턴 경계 상태 누수 테스트 완료 |
 | RULE-003A | Agent C | done | 2026-02-22 10:30 | `node --experimental-strip-types --test packages/physics-core/src/shot-end.test.ts` 통과(3 pass) | - | RULE-003B | 샷 종료 속도/각속도 임계값 상수 정의 완료 |
-| RULE-003B | - | todo | - | - | - | - | - |
+| RULE-003B | Agent C | done | 2026-02-22 10:31 | `node --experimental-strip-types --test packages/physics-core/src/shot-end.test.ts` 통과(5 pass) | - | RULE-003C | N프레임 연속 정지 판정 로직 구현 완료 |
 | RULE-003C | - | todo | - | - | - | - | - |
 | RULE-004A | - | todo | - | - | - | - | - |
 | RULE-004B | - | todo | - | - | - | - | - |
