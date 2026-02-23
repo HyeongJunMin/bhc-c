@@ -912,6 +912,7 @@ function renderRoomPage(roomId: string): string {
       GAME_NOT_ENOUGH_PLAYERS: '최소 2명 이상이 필요합니다.',
       CHAT_INVALID_INPUT: '채팅 메시지를 입력해 주세요.',
       SHOT_INPUT_SCHEMA_INVALID: '샷 입력값이 스키마 규칙과 맞지 않습니다.',
+      SHOT_STATE_CONFLICT: '이미 진행 중인 샷이 있어 현재 입력을 받을 수 없습니다.',
       ROOM_NOT_FOUND: '방을 찾을 수 없습니다.',
       NETWORK_ERROR: '네트워크 오류가 발생했습니다.',
       UNKNOWN_ERROR: '알 수 없는 오류가 발생했습니다.',
@@ -934,6 +935,28 @@ function renderRoomPage(roomId: string): string {
       if (type !== 'error') {
         shotErrors.textContent = '';
       }
+    }
+
+    function setShotValidationDetails(errorCode, details) {
+      const header = errorCode ? '[errorCode] ' + errorCode : '[errorCode] UNKNOWN_ERROR';
+      if (!Array.isArray(details) || details.length === 0) {
+        shotErrors.textContent = header;
+        return;
+      }
+      const lines = details.map((detail, index) => {
+        const text = String(detail);
+        if (text.includes('dragPx')) {
+          return (index + 1) + '. dragPx 범위를 확인해 주세요: ' + text;
+        }
+        if (text.includes('shotDirectionDeg')) {
+          return (index + 1) + '. 방향값 범위를 확인해 주세요: ' + text;
+        }
+        if (text.includes('cueElevationDeg')) {
+          return (index + 1) + '. 고각값 범위를 확인해 주세요: ' + text;
+        }
+        return (index + 1) + '. ' + text;
+      });
+      shotErrors.textContent = [header, ...lines].join('\\n');
     }
 
     function setStageMessage(text, isError) {
@@ -1486,6 +1509,7 @@ function renderRoomPage(roomId: string): string {
       }
       if (shotSubmitInFlight || shotInputLocked) {
         setShotMessage('이미 샷 요청이 진행 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
+        setShotValidationDetails('SHOT_STATE_CONFLICT', []);
         return false;
       }
 
@@ -1515,7 +1539,7 @@ function renderRoomPage(roomId: string): string {
           const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
           setShotMessage('샷 제출 실패: ' + getRoomErrorMessage(errorCode), 'error');
           const details = Array.isArray(result.data.errors) ? result.data.errors : [];
-          shotErrors.textContent = details.length > 0 ? details.join('\\n') : '';
+          setShotValidationDetails(errorCode, details);
           return false;
         }
         shotInputLocked = true;

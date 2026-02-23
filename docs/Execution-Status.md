@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 144 |
-| Todo | 4 |
+| Todo | 3 |
 | In Progress | 0 |
-| Done | 140 |
+| Done | 141 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 10:44 |
+| Last Updated | 2026-02-23 10:45 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-INPUT-003B | done | 2026-02-23 10:44 | 샷 중복 입력 잠금/피드백 UX 연동 완료 |
+| Agent A (web) | ROOM-INPUT-003C | done | 2026-02-23 10:45 | 샷 검증 실패(errorCode/errors[]) 룸 UI 통합 표시 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -166,7 +166,7 @@
 | ROOM-SIM-001C | Agent A | done | 2026-02-23 10:41 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts`, `curl --max-time 1.6 /lobby/rooms/:id/stream?memberId=u1`에서 shot_started/shot_resolved/turn_changed 확인 | - | ROOM-INPUT-003A | shot 종료/턴전환 이벤트 브로드캐스트 연계 완료 |
 | ROOM-INPUT-003A | Agent A | done | 2026-02-23 10:43 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"pointerdown|pointerup|submitShotInput|canvas-drag\"` 확인 | - | ROOM-INPUT-003B | 조준/드래그 샷 입력 UI 구성 완료 |
 | ROOM-INPUT-003B | Agent A | done | 2026-02-23 10:44 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"shotSubmitInFlight|shotInputLocked|updateShotInputLockUi|shot_started|turn_changed\"` 확인 | - | ROOM-INPUT-003C | 샷 진행 중 중복 입력 잠금 및 피드백 UX 연동 완료 |
-| ROOM-INPUT-003C | Agent A | todo | - | - | - | ROOM-QA-002A | 샷 검증 실패 메시지 룸 UI 통합 예정 |
+| ROOM-INPUT-003C | Agent A | done | 2026-02-23 10:45 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"setShotValidationDetails|SHOT_STATE_CONFLICT|dragPx 범위를 확인\"` 확인 | - | ROOM-QA-002A | 샷 검증 실패(errorCode/errors[]) 룸 UI 통합 표시 완료 |
 | ROOM-QA-002A | Agent C | todo | - | - | - | ROOM-QA-002B | 1클라 샷-턴전환 스모크 자동화 예정 |
 | ROOM-QA-002B | Agent C | todo | - | - | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 예정 |
 | ROOM-QA-002C | Agent C | todo | - | - | - | - | 스트림 단절 fallback/polling 복구 검증 예정 |
