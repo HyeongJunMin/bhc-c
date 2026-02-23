@@ -958,6 +958,7 @@ function renderRoomPage(roomId: string): string {
         <input id="shot-drag" type="number" min="10" max="400" step="1" value="300" required>
         <button type="submit">샷 제출</button>
       </form>
+      <p id="impact-indicator" style="margin: 6px 0 0; color: #475569;">당점: X 0.00R / Y 0.00R (W/A/S/D)</p>
       <p id="shot-message"></p>
       <pre id="shot-errors" style="white-space: pre-wrap;"></pre>
     </section>
@@ -990,6 +991,7 @@ function renderRoomPage(roomId: string): string {
     const shotDirection = document.getElementById('shot-direction');
     const shotElevation = document.getElementById('shot-elevation');
     const shotDrag = document.getElementById('shot-drag');
+    const impactIndicator = document.getElementById('impact-indicator');
     const shotMessage = document.getElementById('shot-message');
     const shotErrors = document.getElementById('shot-errors');
     let roomStream = null;
@@ -999,6 +1001,10 @@ function renderRoomPage(roomId: string): string {
     let currentRoomState = 'WAITING';
     let currentTurnMemberId = null;
     const cueBallAnchor = { x: 0.70, y: 0.71 };
+    const cueBallRadiusM = 0.0615 / 2;
+    const impactOffsetLimitR = 0.9;
+    const impactOffsetStepR = 0.05;
+    const impactOffsetState = { x: 0, y: 0 };
     const dragInputState = {
       active: false,
       pointerId: -1,
@@ -1091,6 +1097,28 @@ function renderRoomPage(roomId: string): string {
     function setStageMessage(text, isError) {
       stageMessage.textContent = text;
       stageMessage.style.color = isError ? '#b91c1c' : '#334155';
+    }
+
+    function updateImpactIndicator() {
+      if (!impactIndicator) {
+        return;
+      }
+      impactIndicator.textContent =
+        '당점: X ' + impactOffsetState.x.toFixed(2) + 'R / Y ' + impactOffsetState.y.toFixed(2) + 'R (W/A/S/D)';
+    }
+
+    function updateImpactOffset(nextX, nextY) {
+      const length = Math.sqrt(nextX * nextX + nextY * nextY);
+      if (length > impactOffsetLimitR) {
+        const scale = impactOffsetLimitR / length;
+        impactOffsetState.x = nextX * scale;
+        impactOffsetState.y = nextY * scale;
+      } else {
+        impactOffsetState.x = nextX;
+        impactOffsetState.y = nextY;
+      }
+      updateImpactIndicator();
+      renderStageFrame();
     }
 
     function updateShotInputLockUi() {
@@ -1204,6 +1232,37 @@ function renderRoomPage(roomId: string): string {
       }
     }
 
+    function drawImpactOverlay() {
+      const context = stageState.context;
+      if (!context) {
+        return;
+      }
+      const center = worldToCanvas(cueBallAnchor);
+      const overlayRadiusPx = (cueBallRadiusM / TABLE_WORLD_WIDTH_M) * stageState.viewport.width;
+      const offsetPoint = worldToCanvas({
+        x: cueBallAnchor.x + impactOffsetState.x * cueBallRadiusM,
+        y: cueBallAnchor.y + impactOffsetState.y * cueBallRadiusM,
+      });
+
+      context.save();
+      context.strokeStyle = 'rgba(148, 163, 184, 0.9)';
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(center.x, center.y, overlayRadiusPx, 0, Math.PI * 2);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(center.x - overlayRadiusPx, center.y);
+      context.lineTo(center.x + overlayRadiusPx, center.y);
+      context.moveTo(center.x, center.y - overlayRadiusPx);
+      context.lineTo(center.x, center.y + overlayRadiusPx);
+      context.stroke();
+      context.fillStyle = '#ef4444';
+      context.beginPath();
+      context.arc(offsetPoint.x, offsetPoint.y, 4, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+    }
+
     function createDefaultStageSnapshot(seq, timestampMs) {
       return {
         seq,
@@ -1271,6 +1330,7 @@ function renderRoomPage(roomId: string): string {
         stageState.viewport.height,
       );
       renderInterpolatedBalls();
+      drawImpactOverlay();
     }
 
     function runStageRenderLoop() {
@@ -1361,6 +1421,21 @@ function renderRoomPage(roomId: string): string {
         shotDrag.value = String(normalizedDrag);
         setStageMessage('캔버스 입력: 방향 ' + shotDirection.value + '도, drag ' + normalizedDrag + 'px', false);
       });
+      roomStage.addEventListener('mousemove', (event) => {
+        if (dragInputState.active) {
+          return;
+        }
+        const delta = Number(event.movementY) || 0;
+        if (delta === 0) {
+          return;
+        }
+        const nextElevation = clampNumber(
+          Number(shotElevation.value) - delta * 0.08,
+          Number(shotElevation.min || 0),
+          Number(shotElevation.max || 89),
+        );
+        shotElevation.value = nextElevation.toFixed(2);
+      });
       roomStage.addEventListener('pointerup', async (event) => {
         if (!dragInputState.active || dragInputState.pointerId !== event.pointerId) {
           return;
@@ -1385,6 +1460,7 @@ function renderRoomPage(roomId: string): string {
       if (!stageState.animationFrameId) {
         stageState.animationFrameId = window.requestAnimationFrame(runStageRenderLoop);
       }
+      updateImpactIndicator();
     }
 
     function getRoomErrorMessage(errorCode) {
@@ -1704,8 +1780,8 @@ function renderRoomPage(roomId: string): string {
         shotDirectionDeg: Number(shotDirection.value),
         cueElevationDeg: Number(shotElevation.value),
         dragPx: Number(shotDrag.value),
-        impactOffsetX: 0,
-        impactOffsetY: 0,
+        impactOffsetX: Number(impactOffsetState.x.toFixed(4)),
+        impactOffsetY: Number(impactOffsetState.y.toFixed(4)),
       };
       shotSubmitInFlight = true;
       updateShotInputLockUi();
@@ -1735,6 +1811,28 @@ function renderRoomPage(roomId: string): string {
     shotForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       await submitShotInput('form');
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.repeat) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      let nextX = impactOffsetState.x;
+      let nextY = impactOffsetState.y;
+      if (key === 'w') {
+        nextY -= impactOffsetStepR;
+      } else if (key === 's') {
+        nextY += impactOffsetStepR;
+      } else if (key === 'a') {
+        nextX -= impactOffsetStepR;
+      } else if (key === 'd') {
+        nextX += impactOffsetStepR;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      updateImpactOffset(nextX, nextY);
     });
 
     chatForm.addEventListener('submit', async (event) => {

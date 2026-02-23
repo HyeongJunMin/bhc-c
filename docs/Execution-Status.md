@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 176 |
-| Todo | 9 |
+| Todo | 5 |
 | In Progress | 0 |
-| Done | 167 |
+| Done | 171 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:28 |
+| Last Updated | 2026-02-23 11:31 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | HUD-REAL-001D | done | 2026-02-23 11:28 | 턴 전환 후 deadline/턴 인덱스 동기화 테스트 완료 |
+| Agent A (web) | INPUT-FULL-001D | done | 2026-02-23 11:31 | WASD/마우스 고각/당점 오버레이/payload 반영 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -193,10 +193,10 @@
 | CHAT-RL-001B | Agent A | done | 2026-02-23 11:27 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(25 pass) | - | CHAT-RL-001C | `CHAT_RATE_LIMITED`/`retryAfterMs` 응답 계약 고정 및 검증 완료 |
 | CHAT-RL-001C | Agent A | done | 2026-02-23 11:06 | `rg -n \"CHAT_RATE_LIMITED|getChatErrorMessage|retryAfterMs\" apps/web/src/main.ts` 확인 | - | CHAT-RL-001D | room UI 잔여 대기시간 메시지 반영 완료 |
 | CHAT-RL-001D | Agent A | done | 2026-02-23 11:27 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(25 pass) | - | INPUT-FULL-001A | 더블클릭/동시요청 회귀 테스트 추가 완료 |
-| INPUT-FULL-001A | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001B | WASD 당점 이동(`[-0.9R,+0.9R]`) 구현 예정 |
-| INPUT-FULL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001C | 마우스 상하 고각 제어 UX 추가 예정 |
-| INPUT-FULL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001D | 당점/고각 오버레이 시각화 예정 |
-| INPUT-FULL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001A | shot payload(impactOffset/elevation) 검증 보강 예정 |
+| INPUT-FULL-001A | Agent A | done | 2026-02-23 11:31 | `rg -n \"keydown|W/A/S/D|impactOffsetLimitR\" apps/web/src/main.ts` 확인 | - | INPUT-FULL-001B | WASD 당점 이동(`[-0.9R,+0.9R]`) 구현 완료 |
+| INPUT-FULL-001B | Agent A | done | 2026-02-23 11:31 | `rg -n \"movementY|shotElevation\" apps/web/src/main.ts` 확인 | - | INPUT-FULL-001C | 마우스 상하 고각 제어 UX 추가 완료 |
+| INPUT-FULL-001C | Agent A | done | 2026-02-23 11:31 | `rg -n \"impact-indicator|drawImpactOverlay\" apps/web/src/main.ts` 확인 | - | INPUT-FULL-001D | 당점/고각 오버레이 시각화 완료 |
+| INPUT-FULL-001D | Agent A | done | 2026-02-23 11:31 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(26 pass) | - | PHYS-RUNTIME-001A | shot payload(impactOffset/elevation) 반영 및 회귀 검증 완료 |
 | PHYS-RUNTIME-001A | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001B | room별 physics world/초기배치 생성 예정 |
 | PHYS-RUNTIME-001B | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001C | shot->초기속도/회전 변환 적용 예정 |
 | PHYS-RUNTIME-001C | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001D | 20Hz tick/snapshot/SSE 연동 예정 |
