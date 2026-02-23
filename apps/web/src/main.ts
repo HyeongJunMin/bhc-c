@@ -1343,6 +1343,49 @@ function renderRoomPage(roomId: string): string {
       };
     }
 
+    function computeFirstObjectBallIntersection(origin, direction, cueBallRadius) {
+      if (!Array.isArray(stageState.renderedBalls) || stageState.renderedBalls.length === 0) {
+        return null;
+      }
+      const epsilon = 1e-6;
+      let bestHit = null;
+      for (const ball of stageState.renderedBalls) {
+        if (!ball || ball.id === 'cueBall') {
+          continue;
+        }
+        const targetRadius = Number.isFinite(ball.radiusM) && ball.radiusM > 0 ? ball.radiusM : cueBallRadius;
+        const combinedRadius = cueBallRadius + targetRadius;
+        const relX = origin.x - ball.x;
+        const relY = origin.y - ball.y;
+        const dot = relX * direction.x + relY * direction.y;
+        const c = relX * relX + relY * relY - combinedRadius * combinedRadius;
+        const discriminant = dot * dot - c;
+        if (discriminant < 0) {
+          continue;
+        }
+        const sqrtD = Math.sqrt(discriminant);
+        let t = -dot - sqrtD;
+        if (t <= epsilon) {
+          t = -dot + sqrtD;
+        }
+        if (t <= epsilon) {
+          continue;
+        }
+        if (!bestHit || t < bestHit.distanceM) {
+          bestHit = {
+            hitType: 'object-ball',
+            distanceM: t,
+            point: {
+              x: origin.x + direction.x * t,
+              y: origin.y + direction.y * t,
+            },
+            targetBallId: ball.id,
+          };
+        }
+      }
+      return bestHit;
+    }
+
     function drawCueStickOverlay() {
       if (aimInputState.mode !== 'aiming') {
         return;
@@ -1373,6 +1416,12 @@ function renderRoomPage(roomId: string): string {
       const stickLengthPx = 120 + dragRatio * 100;
       const backDistancePx = tipDistancePx + stickLengthPx;
       const firstCushionHit = computeFirstCushionIntersection(cueBall, { x: unitX, y: unitY });
+      const firstObjectBallHit = computeFirstObjectBallIntersection(cueBall, { x: unitX, y: unitY }, cueBallRadiusM);
+      const firstHit = !firstCushionHit
+        ? firstObjectBallHit
+        : !firstObjectBallHit
+          ? firstCushionHit
+          : (firstObjectBallHit.distanceM <= firstCushionHit.distanceM ? firstObjectBallHit : firstCushionHit);
 
       const tipX = cueBallCanvas.x - unitX * tipDistancePx;
       const tipY = cueBallCanvas.y - unitY * tipDistancePx;
@@ -1401,8 +1450,8 @@ function renderRoomPage(roomId: string): string {
       context.strokeStyle = 'rgba(248, 250, 252, 0.8)';
       context.beginPath();
       context.moveTo(cueBallCanvas.x, cueBallCanvas.y);
-      if (firstCushionHit) {
-        const hitCanvas = worldToCanvas(firstCushionHit.point);
+      if (firstHit) {
+        const hitCanvas = worldToCanvas(firstHit.point);
         context.lineTo(hitCanvas.x, hitCanvas.y);
       } else {
         context.lineTo(cueBallCanvas.x + unitX * 220, cueBallCanvas.y + unitY * 220);

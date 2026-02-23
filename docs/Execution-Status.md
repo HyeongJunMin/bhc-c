@@ -206,8 +206,8 @@
 | ROOM-UI-003B | Agent A | done | 2026-02-23 15:39 | `pnpm --filter @bhc/web run lint` 통과 | - | ROOM-UI-003C | 캔버스 큐 스틱/조준 가이드 렌더링 완료 |
 | ROOM-UI-003C | Agent A | done | 2026-02-23 15:40 | `pnpm --filter @bhc/web run lint` 통과 | - | ROOM-UI-004 | 스트로크 거리 매핑 상수화(`10~400px`)와 payload/입력 클램프 일원화 완료 |
 | ROOM-UI-004A | Agent A | done | 2026-02-23 15:47 | `pnpm --filter @bhc/web run lint` 통과 | - | ROOM-UI-004B | 큐볼 기준 Ray-쿠션 1차 교차 계산 유틸 적용 완료 |
-| ROOM-UI-004B | Agent A | in_progress | 2026-02-23 15:47 | - | - | ROOM-UI-004C | 목적구 1차 충돌 후보 계산 진행 중 |
-| ROOM-UI-004C | Agent A | todo | 2026-02-23 15:45 | - | - | PHYS-COLL-001A | aiming 상태 예측선 표시/숨김 처리 대기 |
+| ROOM-UI-004B | Agent A | done | 2026-02-23 15:49 | `pnpm --filter @bhc/web run lint` 통과 | - | ROOM-UI-004C | 목적구 1차 충돌 후보 계산 및 최단 충돌 선택 완료 |
+| ROOM-UI-004C | Agent A | in_progress | 2026-02-23 15:49 | - | - | PHYS-COLL-001A | aiming 상태 예측선 표시/숨김 처리 진행 중 |
 | PHYS-COLL-001A | Agent A | todo | 2026-02-23 15:45 | - | - | PHYS-COLL-001B | 공-공 충돌 쌍 검사 대기 |
 | PHYS-COLL-001B | Agent A | todo | 2026-02-23 15:45 | - | - | PHYS-COLL-001C | 탄성 충돌 임펄스 적용 대기 |
 | PHYS-COLL-001C | Agent A | todo | 2026-02-23 15:45 | - | - | PHYS-COLL-001D | 겹침 보정/안정화 대기 |
