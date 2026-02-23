@@ -1022,7 +1022,7 @@ function renderRoomPage(roomId: string): string {
         const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
         setShotMessage('샷 제출 실패: ' + getRoomErrorMessage(errorCode), 'error');
         const details = Array.isArray(result.data.errors) ? result.data.errors : [];
-        shotErrors.textContent = details.length > 0 ? details.join('\n') : '';
+        shotErrors.textContent = details.length > 0 ? details.join('\\n') : '';
         return;
       }
       setShotMessage('샷 입력이 서버에 접수되었습니다.', '');
