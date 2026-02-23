@@ -310,3 +310,50 @@ test('룸 스트림 snapshot seq는 같은 room에서 단조 증가한다', () =
     assert.ok(second.snapshot.seq > first.snapshot.seq);
   }
 });
+
+test('샷 제출 후 shot_started -> shot_resolved -> turn_changed 이벤트 순서로 브로드캐스트된다', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'shot-broadcast' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const writes: string[] = [];
+  const fakeSubscriber = {
+    writableEnded: false,
+    destroyed: false,
+    write(chunk: string) {
+      writes.push(chunk);
+      return true;
+    },
+  } as unknown as import('node:http').ServerResponse;
+  state.roomStreamSubscribers[created.room.roomId].add(fakeSubscriber);
+
+  const payload = {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 120,
+    cueElevationDeg: 10,
+    dragPx: 300,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  };
+  const result = submitRoomShot(state, created.room.roomId, 'u1', payload);
+  assert.equal(result.ok, true);
+  await new Promise((resolve) => setTimeout(resolve, 900));
+
+  const output = writes.join('');
+  const startedIndex = output.indexOf('event: shot_started');
+  const resolvedIndex = output.indexOf('event: shot_resolved');
+  const turnChangedIndex = output.indexOf('event: turn_changed');
+  assert.ok(startedIndex >= 0);
+  assert.ok(resolvedIndex > startedIndex);
+  assert.ok(turnChangedIndex > resolvedIndex);
+});

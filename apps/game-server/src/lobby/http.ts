@@ -35,6 +35,7 @@ type LobbyState = {
   nextRoomId: number;
   rooms: LobbyRoom[];
   roomStreamSeqByRoomId: Record<string, number>;
+  roomStreamSubscribers: Record<string, Set<ServerResponse>>;
   shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
 };
 
@@ -151,6 +152,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
   state.nextRoomId += 1;
   state.rooms.push(room);
   state.roomStreamSeqByRoomId[room.roomId] = 0;
+  state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
   state.shotStateResetTimers[room.roomId] = null;
 
   return { ok: true, room };
@@ -489,6 +491,11 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
   }
   room.shotState = nextOnSubmit;
+  broadcastRoomEvent(state, room.roomId, 'shot_started', {
+    roomId: room.roomId,
+    playerId: actorMemberId,
+    serverTimeMs: Date.now(),
+  });
   const previousTimer = state.shotStateResetTimers[room.roomId];
   if (previousTimer) {
     clearTimeout(previousTimer);
@@ -497,10 +504,20 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
     if (resolved) {
       room.shotState = resolved;
+      broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
+        roomId: room.roomId,
+        shotState: room.shotState,
+        serverTimeMs: Date.now(),
+      });
     }
     const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
     if (turnChanged) {
       room.shotState = turnChanged;
+      broadcastRoomEvent(state, room.roomId, 'turn_changed', {
+        roomId: room.roomId,
+        currentMemberId: room.members[0]?.memberId ?? null,
+        serverTimeMs: Date.now(),
+      });
     }
     state.shotStateResetTimers[room.roomId] = null;
   }, 800);
@@ -546,6 +563,21 @@ function nextRoomSnapshotSeq(state: LobbyState, roomId: string): number {
   const next = previous + 1;
   state.roomStreamSeqByRoomId[roomId] = next;
   return next;
+}
+
+function broadcastRoomEvent(state: LobbyState, roomId: string, eventName: string, payload: unknown): void {
+  const subscribers = state.roomStreamSubscribers[roomId];
+  if (!subscribers || subscribers.size === 0) {
+    return;
+  }
+  for (const subscriber of [...subscribers]) {
+    if (subscriber.writableEnded || subscriber.destroyed) {
+      subscribers.delete(subscriber);
+      continue;
+    }
+    subscriber.write(`event: ${eventName}\n`);
+    subscriber.write(`data: ${JSON.stringify(payload)}\n\n`);
+  }
 }
 
 function buildRoomSnapshot(state: LobbyState, room: LobbyRoom) {
@@ -606,20 +638,21 @@ function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, sta
   res.setHeader('content-type', 'text/event-stream; charset=utf-8');
   res.setHeader('cache-control', 'no-cache, no-transform');
   res.setHeader('connection', 'keep-alive');
-  res.write(`event: room_snapshot\n`);
-  res.write(`data: ${JSON.stringify(opened.snapshot)}\n\n`);
+  state.roomStreamSubscribers[roomId] = state.roomStreamSubscribers[roomId] ?? new Set<ServerResponse>();
+  state.roomStreamSubscribers[roomId].add(res);
+  broadcastRoomEvent(state, roomId, 'room_snapshot', opened.snapshot);
 
   const heartbeat = setInterval(() => {
     if (res.writableEnded) {
       return;
     }
     const heartbeatSnapshot = buildRoomSnapshot(state, opened.room);
-    res.write(`event: room_snapshot\n`);
-    res.write(`data: ${JSON.stringify(heartbeatSnapshot)}\n\n`);
+    broadcastRoomEvent(state, roomId, 'room_snapshot', heartbeatSnapshot);
   }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
 
   const cleanup = () => {
     clearInterval(heartbeat);
+    state.roomStreamSubscribers[roomId]?.delete(res);
   };
   req.on('close', cleanup);
   res.on('close', cleanup);
@@ -647,6 +680,7 @@ export function createLobbyHttpServer() {
     nextRoomId: 1,
     rooms: [],
     roomStreamSeqByRoomId: {},
+    roomStreamSubscribers: {},
     shotStateResetTimers: {},
   };
 
