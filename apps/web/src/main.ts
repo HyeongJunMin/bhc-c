@@ -505,6 +505,8 @@ function renderLobbyPage(): string {
     </form>
     <p id="lobby-message"></p>
     <section id="room-list" class="room-list"></section>
+    <p id="room-list-more" style="margin-top: 8px; color: #64748b;"></p>
+    <div id="room-list-sentinel" aria-hidden="true" style="height: 1px;"></div>
   </main>
   <script>
     const sessionRaw = localStorage.getItem('bhc_auth');
@@ -513,9 +515,20 @@ function renderLobbyPage(): string {
     const refreshBtn = document.getElementById('refresh-btn');
     const createRoomForm = document.getElementById('create-room-form');
     const roomList = document.getElementById('room-list');
+    const roomListMore = document.getElementById('room-list-more');
+    const roomListSentinel = document.getElementById('room-list-sentinel');
     const roomTitleInput = document.getElementById('room-title');
     const lobbyMessage = document.getElementById('lobby-message');
     let session = null;
+    const LOBBY_PAGE_SIZE = 9;
+    const lobbyRoomsState = {
+      items: [],
+      nextOffset: 0,
+      hasMore: true,
+      isLoading: false,
+      lastRequestedOffset: -1,
+    };
+    let roomListObserver = null;
     const LOBBY_ERROR_MESSAGES = {
       ROOM_TITLE_REQUIRED: '방 제목을 입력해 주세요.',
       ROOM_TITLE_TOO_LONG: '방 제목은 15자 이하만 가능합니다.',
@@ -573,16 +586,120 @@ function renderLobbyPage(): string {
         .join('');
     }
 
-    async function loadRooms() {
-      const result = await requestJson('/api/lobby/rooms?offset=0&limit=9', { method: 'GET' });
+    function updateRoomListMoreText() {
+      if (!roomListMore) {
+        return;
+      }
+      if (lobbyRoomsState.isLoading) {
+        roomListMore.textContent = '방 목록을 불러오는 중입니다...';
+        return;
+      }
+      if (lobbyRoomsState.items.length === 0) {
+        roomListMore.textContent = '';
+        return;
+      }
+      roomListMore.textContent = lobbyRoomsState.hasMore ? '아래로 스크롤하면 더 불러옵니다.' : '모든 방을 불러왔습니다.';
+    }
+
+    async function loadRoomsPage(options) {
+      const reset = options?.reset === true;
+      const showMessage = options?.showMessage === true;
+      if (lobbyRoomsState.isLoading) {
+        return;
+      }
+
+      const offset = reset ? 0 : lobbyRoomsState.nextOffset;
+      if (!reset && !lobbyRoomsState.hasMore) {
+        return;
+      }
+      if (!reset && lobbyRoomsState.lastRequestedOffset === offset) {
+        return;
+      }
+
+      lobbyRoomsState.isLoading = true;
+      updateRoomListMoreText();
+      lobbyRoomsState.lastRequestedOffset = offset;
+      const result = await requestJson('/api/lobby/rooms?offset=' + offset + '&limit=' + LOBBY_PAGE_SIZE, { method: 'GET' });
+      lobbyRoomsState.isLoading = false;
+      updateRoomListMoreText();
       if (!result.ok) {
+        lobbyRoomsState.lastRequestedOffset = -1;
         const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
         setLobbyMessage('방 목록 조회 실패: ' + getLobbyErrorMessage(errorCode), 'error');
         return;
       }
 
-      renderRooms(result.data.items);
-      setLobbyMessage('방 목록을 갱신했습니다.', '');
+      const pageItems = Array.isArray(result.data.items) ? result.data.items : [];
+      if (reset) {
+        lobbyRoomsState.items = pageItems;
+      } else if (pageItems.length > 0) {
+        const seenRoomIds = new Set(lobbyRoomsState.items.map((item) => item.roomId));
+        const deduped = pageItems.filter((item) => !seenRoomIds.has(item.roomId));
+        lobbyRoomsState.items = lobbyRoomsState.items.concat(deduped);
+      }
+
+      const hasMore = Boolean(result.data.hasMore);
+      const nextOffset = Number(result.data.nextOffset);
+      lobbyRoomsState.hasMore = hasMore;
+      lobbyRoomsState.nextOffset = Number.isFinite(nextOffset)
+        ? Math.max(0, Math.floor(nextOffset))
+        : lobbyRoomsState.items.length;
+      if (lobbyRoomsState.hasMore) {
+        lobbyRoomsState.lastRequestedOffset = -1;
+      }
+
+      renderRooms(lobbyRoomsState.items);
+      updateRoomListMoreText();
+      if (showMessage) {
+        setLobbyMessage('방 목록을 갱신했습니다.', '');
+      }
+    }
+
+    function setupRoomListInfiniteScroll() {
+      if (!roomListSentinel) {
+        return;
+      }
+      if (roomListObserver) {
+        roomListObserver.disconnect();
+      }
+      roomListObserver = new IntersectionObserver((entries) => {
+        const first = entries[0];
+        if (!first || !first.isIntersecting) {
+          return;
+        }
+        loadRoomsPage({ reset: false, showMessage: false });
+      }, {
+        root: null,
+        rootMargin: '320px 0px',
+        threshold: 0,
+      });
+      roomListObserver.observe(roomListSentinel);
+    }
+
+    async function refreshLoadedRooms() {
+      const loadedCount = Math.max(LOBBY_PAGE_SIZE, lobbyRoomsState.items.length || 0);
+      if (lobbyRoomsState.isLoading) {
+        return;
+      }
+      lobbyRoomsState.isLoading = true;
+      updateRoomListMoreText();
+      const result = await requestJson('/api/lobby/rooms?offset=0&limit=' + loadedCount, { method: 'GET' });
+      lobbyRoomsState.isLoading = false;
+      updateRoomListMoreText();
+      if (!result.ok) {
+        return;
+      }
+      const pageItems = Array.isArray(result.data.items) ? result.data.items : [];
+      lobbyRoomsState.items = pageItems;
+      const hasMore = Boolean(result.data.hasMore);
+      const nextOffset = Number(result.data.nextOffset);
+      lobbyRoomsState.hasMore = hasMore;
+      lobbyRoomsState.nextOffset = Number.isFinite(nextOffset)
+        ? Math.max(0, Math.floor(nextOffset))
+        : pageItems.length;
+      lobbyRoomsState.lastRequestedOffset = -1;
+      renderRooms(lobbyRoomsState.items);
+      updateRoomListMoreText();
     }
 
     if (!sessionRaw) {
@@ -617,7 +734,7 @@ function renderLobbyPage(): string {
 
       roomTitleInput.value = '';
       setLobbyMessage('방을 생성했습니다: ' + result.data.room.title, '');
-      await loadRooms();
+      await loadRoomsPage({ reset: true, showMessage: false });
     });
 
     roomList.addEventListener('click', async (event) => {
@@ -653,7 +770,7 @@ function renderLobbyPage(): string {
     });
 
     refreshBtn.addEventListener('click', async () => {
-      await loadRooms();
+      await loadRoomsPage({ reset: true, showMessage: true });
     });
 
     logoutBtn.addEventListener('click', () => {
@@ -661,8 +778,9 @@ function renderLobbyPage(): string {
       window.location.href = '/login';
     });
 
-    loadRooms();
-    setInterval(loadRooms, 3000);
+    setupRoomListInfiniteScroll();
+    loadRoomsPage({ reset: true, showMessage: true });
+    setInterval(refreshLoadedRooms, 3000);
   </script>
 </body>
 </html>`;
