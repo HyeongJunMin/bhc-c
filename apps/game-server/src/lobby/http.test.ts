@@ -258,3 +258,21 @@ test('룸 스트림 오픈: 비멤버는 ROOM_STREAM_FORBIDDEN(403)', () => {
     assert.equal(opened.errorCode, 'ROOM_STREAM_FORBIDDEN');
   }
 });
+
+test('룸 스트림 snapshot seq는 같은 room에서 단조 증가한다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'stream-seq' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const first = openRoomSnapshotStream(state, created.room.roomId, 'u1');
+  const second = openRoomSnapshotStream(state, created.room.roomId, 'u1');
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  if (first.ok && second.ok) {
+    assert.ok(second.snapshot.seq > first.snapshot.seq);
+  }
+});

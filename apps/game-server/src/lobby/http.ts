@@ -7,6 +7,8 @@ import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 
+const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
+
 type LobbyRoom = {
   roomId: string;
   title: string;
@@ -582,7 +584,7 @@ function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, sta
     const heartbeatSnapshot = buildRoomSnapshot(state, opened.room);
     res.write(`event: room_snapshot\n`);
     res.write(`data: ${JSON.stringify(heartbeatSnapshot)}\n\n`);
-  }, 1000);
+  }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
 
   const cleanup = () => {
     clearInterval(heartbeat);
