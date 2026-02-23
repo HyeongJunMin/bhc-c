@@ -224,6 +224,40 @@ test('샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID',
   }
 });
 
+test('샷 입력 제출: running 상태에서 중복 제출하면 SHOT_STATE_CONFLICT', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'shot-conflict' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const payload = {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 120,
+    cueElevationDeg: 10,
+    dragPx: 300,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  };
+
+  const first = submitRoomShot(state, created.room.roomId, 'u1', payload);
+  const second = submitRoomShot(state, created.room.roomId, 'u1', payload);
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, false);
+  if (!second.ok) {
+    assert.equal(second.statusCode, 409);
+    assert.equal(second.errorCode, 'SHOT_STATE_CONFLICT');
+  }
+});
+
 test('룸 스트림 오픈: 룸 멤버면 snapshot을 반환한다', () => {
   const { state } = createLobbyHttpServer();
   const created = createRoom(state, { title: 'stream-room' });

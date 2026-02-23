@@ -5,6 +5,7 @@ import { compareRoomsForLobby } from './sort-rooms.ts';
 import { validateRoomTitle } from './validate-room-title.ts';
 import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
+import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
@@ -26,12 +27,14 @@ type LobbyRoom = {
     message: string;
     sentAt: string;
   }>;
+  shotState: ShotLifecycleState;
 };
 
 type LobbyState = {
   nextRoomId: number;
   rooms: LobbyRoom[];
   roomStreamSeqByRoomId: Record<string, number>;
+  shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
 };
 
 type CreateRoomResult =
@@ -61,7 +64,12 @@ type RoomChatResult =
   | { ok: false; statusCode: 400 | 404; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'CHAT_INVALID_INPUT' };
 type ShotSubmitResult =
   | { ok: true; payload: Record<string, unknown> }
-  | { ok: false; statusCode: 400 | 404; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID'; errors?: string[] };
+  | {
+      ok: false;
+      statusCode: 400 | 404 | 409;
+      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID' | 'SHOT_STATE_CONFLICT';
+      errors?: string[];
+    };
 type RoomStreamOpenResult =
   | {
       ok: true;
@@ -136,11 +144,13 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     hostMemberId: null,
     members: [],
     chatMessages: [],
+    shotState: 'idle',
   };
 
   state.nextRoomId += 1;
   state.rooms.push(room);
   state.roomStreamSeqByRoomId[room.roomId] = 0;
+  state.shotStateResetTimers[room.roomId] = null;
 
   return { ok: true, room };
 }
@@ -473,6 +483,27 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     return { ok: false, statusCode: validated.statusCode, errorCode: validated.errorCode, errors: validated.errors };
   }
 
+  const nextOnSubmit = transitionShotLifecycleState(room.shotState, 'SHOT_SUBMITTED');
+  if (!nextOnSubmit) {
+    return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
+  }
+  room.shotState = nextOnSubmit;
+  const previousTimer = state.shotStateResetTimers[room.roomId];
+  if (previousTimer) {
+    clearTimeout(previousTimer);
+  }
+  state.shotStateResetTimers[room.roomId] = setTimeout(() => {
+    const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
+    if (resolved) {
+      room.shotState = resolved;
+    }
+    const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+    if (turnChanged) {
+      room.shotState = turnChanged;
+    }
+    state.shotStateResetTimers[room.roomId] = null;
+  }, 800);
+
   return { ok: true, payload: validated.payload };
 }
 
@@ -615,6 +646,7 @@ export function createLobbyHttpServer() {
     nextRoomId: 1,
     rooms: [],
     roomStreamSeqByRoomId: {},
+    shotStateResetTimers: {},
   };
 
   const server = createServer(async (req, res) => {
