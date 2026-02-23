@@ -1387,7 +1387,7 @@ function renderRoomPage(roomId: string): string {
     }
 
     function drawCueStickOverlay() {
-      if (aimInputState.mode !== 'aiming') {
+      if (aimInputState.mode !== 'aiming' || !canStartAiming()) {
         return;
       }
       const context = stageState.context;
@@ -1457,6 +1457,18 @@ function renderRoomPage(roomId: string): string {
         context.lineTo(cueBallCanvas.x + unitX * 220, cueBallCanvas.y + unitY * 220);
       }
       context.stroke();
+
+      if (firstHit) {
+        const hitCanvas = worldToCanvas(firstHit.point);
+        context.setLineDash([]);
+        context.fillStyle = firstHit.hitType === 'object-ball' ? '#facc15' : '#e2e8f0';
+        context.strokeStyle = '#0f172a';
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.arc(hitCanvas.x, hitCanvas.y, 5, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+      }
       context.restore();
     }
 
