@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 127 |
-| Todo | 0 |
+| Total Tasks | 143 |
+| Todo | 15 |
 | In Progress | 0 |
-| Done | 127 |
+| Done | 128 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 09:18 |
+| Last Updated | 2026-02-23 09:54 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | QA-E2E-001 | done | 2026-02-23 09:18 | 로컬 통합 흐름 E2E 스모크 통과 |
+| Agent A (web) | ROOM-ARCH-001 | done | 2026-02-23 09:54 | ROOM-UI-001 이후 실시간 플레이 상세 계획 문서화 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -153,3 +153,19 @@
 | PLAY-FLOW-001 | Agent A | done | 2026-02-23 08:41 | `curl -sS http://localhost:9217/room/room-1 \| rg \"flow-banner|setFlowBanner|IN_GAME|FINISHED\"` 확인 | - | LOBBY-SYNC-001 | 경기 상태 배너 및 멤버 제외 시 로비 자동 복귀 흐름 구현 완료 |
 | LOBBY-SYNC-001 | Agent A | done | 2026-02-23 08:43 | `curl -sS http://localhost:9217/lobby \| rg \"joinLabel|IN_GAME|disabled\"` 확인 | - | QA-E2E-001 | 로비 카드에서 IN_GAME 상태 방 입장 버튼 비활성화 및 상태 라벨 반영 완료 |
 | QA-E2E-001 | Agent A | done | 2026-02-23 09:18 | `node --experimental-strip-types scripts/qa/e2e-room-flow.ts` 통과 | - | - | 게스트 로그인→방생성/입장→시작→채팅→샷→강퇴 통합 흐름 스모크 자동화 완료 |
+| ROOM-ARCH-001 | Agent A | done | 2026-02-23 09:54 | `cat docs/Room-Play-Plan.md`, `cat docs/Execution-Backlog-Micro.md` 확인 | - | ROOM-UI-002A | ROOM-UI-001 이후 A안(20Hz)/B안(TODO) 상세 실행계획 문서화 완료 |
+| ROOM-UI-002A | Agent A | todo | - | - | - | ROOM-UI-002B | Canvas 2D 스테이지/테이블 이미지 렌더 골격 구현 예정 |
+| ROOM-UI-002B | Agent A | todo | - | - | - | ROOM-UI-002C | 월드좌표<->캔버스 좌표 변환/반응형 스케일 적용 예정 |
+| ROOM-UI-002C | Agent A | todo | - | - | - | ROOM-NET-001A | 공 렌더/보간 루프 구현 예정 |
+| ROOM-NET-001A | Agent B | todo | - | - | - | ROOM-NET-001B | 룸 snapshot 스트림 엔드포인트 추가 예정 |
+| ROOM-NET-001B | Agent B | todo | - | - | - | ROOM-NET-001C | 20Hz broadcaster/seq 전송 구현 예정 |
+| ROOM-NET-001C | Agent A | todo | - | - | - | ROOM-SIM-001A | web 프록시/연결 경로 연동 예정 |
+| ROOM-SIM-001A | Agent B | todo | - | - | - | ROOM-SIM-001B | shot 상태머신 구현 예정 |
+| ROOM-SIM-001B | Agent C | todo | - | - | - | ROOM-SIM-001C | 물리 tick -> snapshot 직렬화 구현 예정 |
+| ROOM-SIM-001C | Agent B | todo | - | - | - | ROOM-INPUT-003A | shot 종료/턴전환/득점 이벤트 브로드캐스트 연계 예정 |
+| ROOM-INPUT-003A | Agent A | todo | - | - | - | ROOM-INPUT-003B | 조준/드래그 샷 입력 UI 구현 예정 |
+| ROOM-INPUT-003B | Agent A | todo | - | - | - | ROOM-INPUT-003C | 샷 중복 입력 잠금/피드백 UX 구현 예정 |
+| ROOM-INPUT-003C | Agent A | todo | - | - | - | ROOM-QA-002A | 샷 검증 실패 메시지 룸 UI 통합 예정 |
+| ROOM-QA-002A | Agent C | todo | - | - | - | ROOM-QA-002B | 1클라 샷-턴전환 스모크 자동화 예정 |
+| ROOM-QA-002B | Agent C | todo | - | - | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 예정 |
+| ROOM-QA-002C | Agent C | todo | - | - | - | - | 스트림 단절 fallback/polling 복구 검증 예정 |

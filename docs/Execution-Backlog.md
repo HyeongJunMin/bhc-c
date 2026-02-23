@@ -351,6 +351,21 @@
   - 원자적 상태 전이 보장
   - 중복 이벤트 처리 방지(멱등성 확인)
 
+### Phase I. Room 실시간 플레이 확장
+
+#### ROOM-ARCH-001 ROOM-UI-001 이후 상세 계획 문서화
+- 목적: 다음 세션에서 바로 구현 가능한 수준으로 Room 플레이 설계를 고정한다.
+- 작업:
+  - 결정사항 기록(탑뷰/이미지1장/Canvas2D/20Hz)
+  - A안(서버 authoritative + 20Hz 브로드캐스트) 상세 단계화
+  - B안(delta/prediction) TODO 분리
+  - 에셋 경로 규약 명시(`apps/web/public/assets/table/table-top.png`)
+- 산출물:
+  - `docs/Room-Play-Plan.md`
+- DoD:
+  - 구현 순서(마이크로 태스크)와 각 단계 DoD/검증명령 포함
+  - 다음 세션에서 질문 없이 착수 가능한 수준
+
 ## 6. 작업 단위 템플릿 (새 Task 추가 시 사용)
 아래 형식을 복사해 새 작업을 추가한다.
 

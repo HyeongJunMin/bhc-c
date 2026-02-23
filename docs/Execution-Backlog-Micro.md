@@ -265,6 +265,36 @@
 #### QA-E2E-001 통합 흐름 스모크
 - `QA-E2E-001`: 로그인(게스트)→로비→방생성→입장→시작→채팅→샷→강퇴까지 API/화면 흐름 스모크 자동화
 
+### Phase N. Room 실시간 플레이(Canvas 2D + 20Hz)
+
+#### ROOM-ARCH-001 구현 계획 문서화
+- `ROOM-ARCH-001`: `docs/Room-Play-Plan.md`에 A안(20Hz) 기준 상세 설계/구현순서/DoD/B안 TODO를 문서화
+
+#### ROOM-UI-002 캔버스 테이블 렌더
+- `ROOM-UI-002A`: `/room/:id`에 Canvas 2D 스테이지와 테이블 이미지(`/assets/table/table-top.png`) 렌더 골격 추가
+- `ROOM-UI-002B`: 월드좌표<->캔버스 좌표 변환/반응형 스케일 규칙 적용
+- `ROOM-UI-002C`: 공 렌더(원/스프라이트) + snapshot 보간 루프 추가
+
+#### ROOM-NET-001 룸 실시간 스냅샷 전송
+- `ROOM-NET-001A`: game-server 룸 snapshot 스트림 엔드포인트 추가
+- `ROOM-NET-001B`: 20Hz broadcaster와 `seq` 기반 full snapshot 전송 구현
+- `ROOM-NET-001C`: web 서버 프록시/연결 경로(`/api/room-stream/*`) 연동
+
+#### ROOM-SIM-001 샷 라이프사이클 동기화
+- `ROOM-SIM-001A`: shot 상태머신(`idle/running/resolved`) 구현
+- `ROOM-SIM-001B`: 물리 tick 결과 -> snapshot 직렬화 파이프라인 구현
+- `ROOM-SIM-001C`: shot 종료/턴전환/득점 이벤트 브로드캐스트 연계
+
+#### ROOM-INPUT-003 룸 캔버스 입력
+- `ROOM-INPUT-003A`: 조준/드래그 기반 샷 입력 UI 구성
+- `ROOM-INPUT-003B`: 샷 진행 중 중복 입력 잠금 및 사용자 피드백 추가
+- `ROOM-INPUT-003C`: 샷 검증 실패(errorCode/errors[]) 룸 UI 통합 표시
+
+#### ROOM-QA-002 실시간 룸 QA
+- `ROOM-QA-002A`: 1클라 샷->정지->턴전환 스모크 자동화
+- `ROOM-QA-002B`: 2클라 동시 시청 시 snapshot drift/역행(`seq`) 검증
+- `ROOM-QA-002C`: 스트림 끊김 시 fallback/polling 복구 검증
+
 ## 4. 추천 착수 순서 (마이크로)
 1. `INF-001A` -> `INF-001C`
 2. `INF-002A` -> `INF-002C`
@@ -291,3 +321,9 @@
 23. `PLAY-FLOW-001`
 24. `LOBBY-SYNC-001`
 25. `QA-E2E-001`
+26. `ROOM-ARCH-001`
+27. `ROOM-UI-002A` -> `ROOM-UI-002C`
+28. `ROOM-NET-001A` -> `ROOM-NET-001C`
+29. `ROOM-SIM-001A` -> `ROOM-SIM-001C`
+30. `ROOM-INPUT-003A` -> `ROOM-INPUT-003C`
+31. `ROOM-QA-002A` -> `ROOM-QA-002C`
