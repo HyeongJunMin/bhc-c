@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 144 |
-| Todo | 3 |
+| Todo | 0 |
 | In Progress | 0 |
-| Done | 141 |
+| Done | 144 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 10:45 |
+| Last Updated | 2026-02-23 10:49 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-INPUT-003C | done | 2026-02-23 10:45 | 샷 검증 실패(errorCode/errors[]) 룸 UI 통합 표시 완료 |
+| Agent A (web) | ROOM-QA-002C | done | 2026-02-23 10:49 | 실시간 룸 QA 3종(단일/드리프트/복구) 스크립트 통과 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -167,6 +167,6 @@
 | ROOM-INPUT-003A | Agent A | done | 2026-02-23 10:43 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"pointerdown|pointerup|submitShotInput|canvas-drag\"` 확인 | - | ROOM-INPUT-003B | 조준/드래그 샷 입력 UI 구성 완료 |
 | ROOM-INPUT-003B | Agent A | done | 2026-02-23 10:44 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"shotSubmitInFlight|shotInputLocked|updateShotInputLockUi|shot_started|turn_changed\"` 확인 | - | ROOM-INPUT-003C | 샷 진행 중 중복 입력 잠금 및 피드백 UX 연동 완료 |
 | ROOM-INPUT-003C | Agent A | done | 2026-02-23 10:45 | `WEB_PORT=9217 ... @bhc/web run dev`, `curl /room/room-1 | rg \"setShotValidationDetails|SHOT_STATE_CONFLICT|dragPx 범위를 확인\"` 확인 | - | ROOM-QA-002A | 샷 검증 실패(errorCode/errors[]) 룸 UI 통합 표시 완료 |
-| ROOM-QA-002A | Agent C | todo | - | - | - | ROOM-QA-002B | 1클라 샷-턴전환 스모크 자동화 예정 |
-| ROOM-QA-002B | Agent C | todo | - | - | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 예정 |
-| ROOM-QA-002C | Agent C | todo | - | - | - | - | 스트림 단절 fallback/polling 복구 검증 예정 |
+| ROOM-QA-002A | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-single-client-shot.ts` 통과 | - | ROOM-QA-002B | 1클라 샷->정지->턴전환 스모크 자동화 완료 |
+| ROOM-QA-002B | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-two-client-drift.ts` 통과(overlap=47,maxDrift=0.000000) | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 자동화 완료 |
+| ROOM-QA-002C | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-stream-recovery.ts` 통과(first=2ms,recovery=2ms) | - | - | 스트림 단절 가정 fallback/polling + 재연결 복구 검증 완료 |
