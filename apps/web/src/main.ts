@@ -885,6 +885,8 @@ function renderRoomPage(roomId: string): string {
       startX: 0,
       startY: 0,
     };
+    let shotSubmitInFlight = false;
+    let shotInputLocked = false;
     const TABLE_WORLD_WIDTH_M = 2.84;
     const TABLE_WORLD_HEIGHT_M = 1.42;
     const stageState = {
@@ -937,6 +939,17 @@ function renderRoomPage(roomId: string): string {
     function setStageMessage(text, isError) {
       stageMessage.textContent = text;
       stageMessage.style.color = isError ? '#b91c1c' : '#334155';
+    }
+
+    function updateShotInputLockUi() {
+      const disabled = shotSubmitInFlight || shotInputLocked;
+      shotDirection.disabled = disabled;
+      shotElevation.disabled = disabled;
+      shotDrag.disabled = disabled;
+      const submitButton = shotForm.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = disabled;
+      }
     }
 
     function updateStageViewport() {
@@ -1259,6 +1272,19 @@ function renderRoomPage(roomId: string): string {
           setStageMessage('snapshot 파싱에 실패했습니다.', true);
         }
       });
+      roomStream.addEventListener('shot_started', () => {
+        shotInputLocked = true;
+        updateShotInputLockUi();
+        setShotMessage('샷 진행 중입니다. 다음 입력은 턴 전환 후 가능합니다.', '');
+      });
+      roomStream.addEventListener('shot_resolved', () => {
+        setShotMessage('샷이 종료되었습니다. 턴 전환을 기다리는 중입니다.', '');
+      });
+      roomStream.addEventListener('turn_changed', () => {
+        shotInputLocked = false;
+        updateShotInputLockUi();
+        setShotMessage('턴이 전환되었습니다. 샷 입력 잠금이 해제되었습니다.', '');
+      });
       roomStream.onerror = () => {
         setStageMessage('스트림 연결이 일시 중단되었습니다. 재연결을 시도합니다.', true);
       };
@@ -1458,6 +1484,10 @@ function renderRoomPage(roomId: string): string {
         setRoomMessage('세션 정보가 없습니다. 다시 로그인해 주세요.', 'error');
         return false;
       }
+      if (shotSubmitInFlight || shotInputLocked) {
+        setShotMessage('이미 샷 요청이 진행 중입니다. 잠시 후 다시 시도해 주세요.', 'error');
+        return false;
+      }
 
       const payload = {
         schemaName: 'shot_input',
@@ -1473,20 +1503,29 @@ function renderRoomPage(roomId: string): string {
         impactOffsetX: 0,
         impactOffsetY: 0,
       };
-      const result = await requestJson('/api/lobby/rooms/${roomId}/shot', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ actorMemberId: myMemberId, payload }),
-      });
-      if (!result.ok) {
-        const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
-        setShotMessage('샷 제출 실패: ' + getRoomErrorMessage(errorCode), 'error');
-        const details = Array.isArray(result.data.errors) ? result.data.errors : [];
-        shotErrors.textContent = details.length > 0 ? details.join('\\n') : '';
-        return false;
+      shotSubmitInFlight = true;
+      updateShotInputLockUi();
+      try {
+        const result = await requestJson('/api/lobby/rooms/${roomId}/shot', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ actorMemberId: myMemberId, payload }),
+        });
+        if (!result.ok) {
+          const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
+          setShotMessage('샷 제출 실패: ' + getRoomErrorMessage(errorCode), 'error');
+          const details = Array.isArray(result.data.errors) ? result.data.errors : [];
+          shotErrors.textContent = details.length > 0 ? details.join('\\n') : '';
+          return false;
+        }
+        shotInputLocked = true;
+        updateShotInputLockUi();
+        setShotMessage('샷 입력이 서버에 접수되었습니다. (' + source + ')', '');
+        return true;
+      } finally {
+        shotSubmitInFlight = false;
+        updateShotInputLockUi();
       }
-      setShotMessage('샷 입력이 서버에 접수되었습니다. (' + source + ')', '');
-      return true;
     }
 
     shotForm.addEventListener('submit', async (event) => {
@@ -1516,6 +1555,7 @@ function renderRoomPage(roomId: string): string {
     });
 
     initRoomStage();
+    updateShotInputLockUi();
     loadRoom();
     loadChat();
     setInterval(loadRoom, 3000);
