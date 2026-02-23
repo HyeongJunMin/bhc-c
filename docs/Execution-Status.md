@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 176 |
-| Todo | 31 |
+| Todo | 30 |
 | In Progress | 0 |
-| Done | 145 |
+| Done | 146 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:03 |
+| Last Updated | 2026-02-23 11:06 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | CHAT-RL-001A | done | 2026-02-23 11:03 | room chat API에 3초 레이트리밋 모듈 연결 및 테스트 통과 |
+| Agent A (web) | CHAT-RL-001C | done | 2026-02-23 11:06 | room UI에 retryAfterMs 기반 채팅 대기시간 메시지 반영 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -191,7 +191,7 @@
 | HOST-DELEGATE-001C | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001A | 위임 이벤트 수신 기반 권한 UI 갱신 예정 |
 | CHAT-RL-001A | Agent A | done | 2026-02-23 11:03 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(19 pass) | - | CHAT-RL-001B | room chat API에 3초 레이트리밋 연결 및 429/retryAfterMs 테스트 추가 완료 |
 | CHAT-RL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001C | `CHAT_RATE_LIMITED`/`retryAfterMs` 응답 계약 고정 및 검증 예정 |
-| CHAT-RL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001D | room UI 잔여 대기시간 메시지 반영 예정 |
+| CHAT-RL-001C | Agent A | done | 2026-02-23 11:06 | `rg -n \"CHAT_RATE_LIMITED|getChatErrorMessage|retryAfterMs\" apps/web/src/main.ts` 확인 | - | CHAT-RL-001D | room UI 잔여 대기시간 메시지 반영 완료 |
 | CHAT-RL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001A | 더블클릭/동시요청 회귀 테스트 추가 예정 |
 | INPUT-FULL-001A | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001B | WASD 당점 이동(`[-0.9R,+0.9R]`) 구현 예정 |
 | INPUT-FULL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001C | 마우스 상하 고각 제어 UX 추가 예정 |

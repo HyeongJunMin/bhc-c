@@ -911,6 +911,7 @@ function renderRoomPage(roomId: string): string {
       GAME_ALREADY_STARTED: '이미 게임이 시작되었습니다.',
       GAME_NOT_ENOUGH_PLAYERS: '최소 2명 이상이 필요합니다.',
       CHAT_INVALID_INPUT: '채팅 메시지를 입력해 주세요.',
+      CHAT_RATE_LIMITED: '채팅 전송이 너무 빠릅니다.',
       SHOT_INPUT_SCHEMA_INVALID: '샷 입력값이 스키마 규칙과 맞지 않습니다.',
       SHOT_STATE_CONFLICT: '이미 진행 중인 샷이 있어 현재 입력을 받을 수 없습니다.',
       ROOM_NOT_FOUND: '방을 찾을 수 없습니다.',
@@ -1262,6 +1263,14 @@ function renderRoomPage(roomId: string): string {
       return ROOM_ERROR_MESSAGES[errorCode] || ROOM_ERROR_MESSAGES.UNKNOWN_ERROR;
     }
 
+    function getChatErrorMessage(errorCode, retryAfterMs) {
+      if (errorCode === 'CHAT_RATE_LIMITED' && Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+        const seconds = Math.ceil(retryAfterMs / 1000);
+        return seconds + '초 후에 다시 메시지를 보낼 수 있습니다.';
+      }
+      return getRoomErrorMessage(errorCode);
+    }
+
     async function requestJson(url, options) {
       try {
         const response = await fetch(url, options);
@@ -1571,7 +1580,8 @@ function renderRoomPage(roomId: string): string {
       });
       if (!result.ok) {
         const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
-        setRoomMessage('채팅 전송 실패: ' + getRoomErrorMessage(errorCode), 'error');
+        const retryAfterMs = Number(result.data.retryAfterMs);
+        setRoomMessage('채팅 전송 실패: ' + getChatErrorMessage(errorCode, retryAfterMs), 'error');
         return;
       }
       chatInput.value = '';
