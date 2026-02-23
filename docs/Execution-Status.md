@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 176 |
-| Todo | 30 |
+| Todo | 29 |
 | In Progress | 0 |
-| Done | 146 |
+| Done | 147 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:06 |
+| Last Updated | 2026-02-23 11:07 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | CHAT-RL-001C | done | 2026-02-23 11:06 | room UI에 retryAfterMs 기반 채팅 대기시간 메시지 반영 완료 |
+| Agent A (web) | LOBBY-PAGE-001A | done | 2026-02-23 11:07 | 로비 기본 조회를 9개 단위(limit=9)로 고정 적용 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -170,7 +170,7 @@
 | ROOM-QA-002A | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-single-client-shot.ts` 통과 | - | ROOM-QA-002B | 1클라 샷->정지->턴전환 스모크 자동화 완료 |
 | ROOM-QA-002B | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-two-client-drift.ts` 통과(overlap=47,maxDrift=0.000000) | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 자동화 완료 |
 | ROOM-QA-002C | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-stream-recovery.ts` 통과(first=2ms,recovery=2ms) | - | - | 스트림 단절 가정 fallback/polling + 재연결 복구 검증 완료 |
-| LOBBY-PAGE-001A | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001B | 로비 기본 조회 `limit=9` 고정 적용 예정 |
+| LOBBY-PAGE-001A | Agent A | done | 2026-02-23 11:07 | `rg -n \"offset=0&limit=9\" apps/web/src/main.ts` 확인 | - | LOBBY-PAGE-001B | 로비 기본 조회 `limit=9` 고정 적용 완료 |
 | LOBBY-PAGE-001B | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001C | offset/hasMore/isLoading 상태머신 추가 예정 |
 | LOBBY-PAGE-001C | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001D | IntersectionObserver 무한스크롤 추가 예정 |
 | LOBBY-PAGE-001D | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001A | 로비 페이지네이션 경계 테스트 추가 예정 |

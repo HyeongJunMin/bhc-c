@@ -574,7 +574,7 @@ function renderLobbyPage(): string {
     }
 
     async function loadRooms() {
-      const result = await requestJson('/api/lobby/rooms?offset=0&limit=50', { method: 'GET' });
+      const result = await requestJson('/api/lobby/rooms?offset=0&limit=9', { method: 'GET' });
       if (!result.ok) {
         const errorCode = result.data.errorCode || 'UNKNOWN_ERROR';
         setLobbyMessage('방 목록 조회 실패: ' + getLobbyErrorMessage(errorCode), 'error');
