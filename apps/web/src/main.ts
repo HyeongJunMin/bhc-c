@@ -1030,6 +1030,7 @@ function renderRoomPage(roomId: string): string {
       animationFrameId: 0,
       lastSnapshotSeq: 0,
       snapshotBuffer: [],
+      renderedBalls: [],
       viewport: {
         offsetX: 0,
         offsetY: 0,
@@ -1288,6 +1289,78 @@ function renderRoomPage(roomId: string): string {
       context.restore();
     }
 
+    function getCueBallWorldPosition() {
+      if (Array.isArray(stageState.renderedBalls) && stageState.renderedBalls.length > 0) {
+        const cueBall = stageState.renderedBalls.find((ball) => ball.id === 'cueBall');
+        if (cueBall && Number.isFinite(cueBall.x) && Number.isFinite(cueBall.y)) {
+          return { x: cueBall.x, y: cueBall.y };
+        }
+      }
+      return cueBallAnchor;
+    }
+
+    function drawCueStickOverlay() {
+      if (aimInputState.mode !== 'aiming') {
+        return;
+      }
+      const context = stageState.context;
+      if (!context) {
+        return;
+      }
+      const cueBall = getCueBallWorldPosition();
+      const directionDeg = Number(shotDirection.value);
+      if (!Number.isFinite(directionDeg)) {
+        return;
+      }
+      const directionRad = (directionDeg * Math.PI) / 180;
+      const unitX = Math.cos(directionRad);
+      const unitY = Math.sin(directionRad);
+      const cueBallCanvas = worldToCanvas(cueBall);
+      const pixelsPerMeter = stageState.viewport.width / TABLE_WORLD_WIDTH_M;
+      const cueBallRadiusPx = cueBallRadiusM * pixelsPerMeter;
+      const dragPx = Number(shotDrag.value);
+      const dragRatio = clampNumber(
+        (Number.isFinite(dragPx) ? dragPx : MIN_STROKE_PX) / MAX_STROKE_PX,
+        MIN_STROKE_PX / MAX_STROKE_PX,
+        1,
+      );
+
+      const tipDistancePx = cueBallRadiusPx + 10;
+      const stickLengthPx = 120 + dragRatio * 100;
+      const backDistancePx = tipDistancePx + stickLengthPx;
+
+      const tipX = cueBallCanvas.x - unitX * tipDistancePx;
+      const tipY = cueBallCanvas.y - unitY * tipDistancePx;
+      const buttX = cueBallCanvas.x - unitX * backDistancePx;
+      const buttY = cueBallCanvas.y - unitY * backDistancePx;
+
+      context.save();
+      context.setLineDash([]);
+      context.lineCap = 'round';
+      context.lineWidth = 10;
+      context.strokeStyle = '#8b5a2b';
+      context.beginPath();
+      context.moveTo(buttX, buttY);
+      context.lineTo(tipX, tipY);
+      context.stroke();
+
+      context.lineWidth = 3;
+      context.strokeStyle = '#f8fafc';
+      context.beginPath();
+      context.moveTo(tipX, tipY);
+      context.lineTo(cueBallCanvas.x - unitX * (cueBallRadiusPx + 2), cueBallCanvas.y - unitY * (cueBallRadiusPx + 2));
+      context.stroke();
+
+      context.setLineDash([8, 6]);
+      context.lineWidth = 2;
+      context.strokeStyle = 'rgba(248, 250, 252, 0.8)';
+      context.beginPath();
+      context.moveTo(cueBallCanvas.x, cueBallCanvas.y);
+      context.lineTo(cueBallCanvas.x + unitX * 220, cueBallCanvas.y + unitY * 220);
+      context.stroke();
+      context.restore();
+    }
+
     function createDefaultStageSnapshot(seq, timestampMs) {
       return {
         seq,
@@ -1346,10 +1419,12 @@ function renderRoomPage(roomId: string): string {
 
     function renderInterpolatedBalls() {
       if (stageState.snapshotBuffer.length === 0) {
+        stageState.renderedBalls = [];
         return;
       }
       if (stageState.snapshotBuffer.length === 1) {
-        drawBalls(stageState.snapshotBuffer[0].balls);
+        stageState.renderedBalls = stageState.snapshotBuffer[0].balls;
+        drawBalls(stageState.renderedBalls);
         return;
       }
       const interpolationDelayMs = 100;
@@ -1364,7 +1439,8 @@ function renderRoomPage(roomId: string): string {
       const next = stageState.snapshotBuffer[1] || previous;
       const span = Math.max(1, next.serverTimeMs - previous.serverTimeMs);
       const alpha = Math.max(0, Math.min(1, (renderTimeMs - previous.serverTimeMs) / span));
-      drawBalls(interpolateSnapshots(previous, next, alpha));
+      stageState.renderedBalls = interpolateSnapshots(previous, next, alpha);
+      drawBalls(stageState.renderedBalls);
     }
 
     function renderStageFrame() {
@@ -1385,6 +1461,7 @@ function renderRoomPage(roomId: string): string {
         stageState.viewport.height,
       );
       renderInterpolatedBalls();
+      drawCueStickOverlay();
       drawImpactOverlay();
     }
 
