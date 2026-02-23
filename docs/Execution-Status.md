@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 176 |
-| Todo | 26 |
+| Todo | 23 |
 | In Progress | 0 |
-| Done | 150 |
+| Done | 153 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:15 |
+| Last Updated | 2026-02-23 11:18 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | LOBBY-PAGE-001D | done | 2026-02-23 11:15 | 로비 무한스크롤 상태머신/옵저버/경계 검증까지 완료 |
+| Agent A (web) | HUD-REAL-001C | done | 2026-02-23 11:18 | HUD score/turn/timer를 서버 authoritative 데이터로 연동 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -174,9 +174,9 @@
 | LOBBY-PAGE-001B | Agent A | done | 2026-02-23 11:15 | `rg -n \"nextOffset|hasMore|isLoading|lastRequestedOffset\" apps/web/src/main.ts` 확인 | - | LOBBY-PAGE-001C | offset/hasMore/isLoading 상태머신 추가 완료 |
 | LOBBY-PAGE-001C | Agent A | done | 2026-02-23 11:15 | `rg -n \"IntersectionObserver|room-list-sentinel|loadRoomsPage\\(\\{ reset: false\" apps/web/src/main.ts` 확인 | - | LOBBY-PAGE-001D | IntersectionObserver 기반 무한스크롤 추가 완료 |
 | LOBBY-PAGE-001D | Agent A | done | 2026-02-23 11:15 | `node --experimental-strip-types --test apps/game-server/src/lobby/pagination.test.ts` 통과(5 pass) | - | HUD-REAL-001A | 중복요청/끝페이지 경계 검증 통과 |
-| HUD-REAL-001A | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001B | HUD 필수 필드(score/turn/deadline) payload 확장 예정 |
-| HUD-REAL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001C | shot lifecycle에 점수/턴 상태 연동 예정 |
-| HUD-REAL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001D | 웹 HUD 서버 authoritative 렌더 전환 예정 |
+| HUD-REAL-001A | Agent A | done | 2026-02-23 11:18 | `node --experimental-strip-types --test apps/game-server/src/game/snapshot-serializer.test.ts` 통과(2 pass) | - | HUD-REAL-001B | room snapshot/detail payload에 scoreBoard/currentTurn/deadline 필드 확장 완료 |
+| HUD-REAL-001B | Agent A | done | 2026-02-23 11:18 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(19 pass) | - | HUD-REAL-001C | shot lifecycle에 turn 인덱스/turnDeadline 갱신 로직 연동 완료 |
+| HUD-REAL-001C | Agent A | done | 2026-02-23 11:18 | `rg -n \"renderHud\\(|scoreBoard|turnDeadlineMs|getRemainingTurnSeconds\" apps/web/src/main.ts` 확인 | - | HUD-REAL-001D | 웹 HUD 서버 authoritative 렌더 전환 완료 |
 | HUD-REAL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001A | 재접속/백그라운드 HUD 동기화 테스트 예정 |
 | GAME-END-001A | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001B | shot_resolved 시 score-policy 런타임 연결 예정 |
 | GAME-END-001B | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001C | 10점 즉시 FINISHED 전이 구현 예정 |

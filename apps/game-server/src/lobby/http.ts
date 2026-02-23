@@ -11,6 +11,7 @@ import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
+const TURN_DURATION_MS = 10_000;
 
 type LobbyRoom = {
   roomId: string;
@@ -30,6 +31,9 @@ type LobbyRoom = {
     sentAt: string;
   }>;
   shotState: ShotLifecycleState;
+  scoreBoard: Record<string, number>;
+  currentTurnIndex: number;
+  turnDeadlineMs: number | null;
 };
 
 type LobbyState = {
@@ -88,7 +92,8 @@ type RoomStreamOpenResult =
         seq: number;
         serverTimeMs: number;
         state: LobbyRoom['state'];
-        turn: { currentMemberId: string | null };
+        turn: { currentMemberId: string | null; turnDeadlineMs: number | null };
+        scoreBoard: Record<string, number>;
         balls: Array<{
           id: 'cueBall' | 'objectBall1' | 'objectBall2';
           x: number;
@@ -120,6 +125,25 @@ function readBody(req: IncomingMessage): Promise<string> {
     req.on('end', () => resolve(data));
     req.on('error', reject);
   });
+}
+
+function getCurrentTurnMemberId(room: LobbyRoom): string | null {
+  if (room.members.length === 0) {
+    return null;
+  }
+  if (room.currentTurnIndex < 0 || room.currentTurnIndex >= room.members.length) {
+    room.currentTurnIndex = 0;
+  }
+  return room.members[room.currentTurnIndex]?.memberId ?? null;
+}
+
+function initializeRoomGameRuntime(room: LobbyRoom): void {
+  room.scoreBoard = room.members.reduce<Record<string, number>>((acc, member) => {
+    acc[member.memberId] = 0;
+    return acc;
+  }, {});
+  room.currentTurnIndex = 0;
+  room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
 }
 
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -154,6 +178,9 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     members: [],
     chatMessages: [],
     shotState: 'idle',
+    scoreBoard: {},
+    currentTurnIndex: 0,
+    turnDeadlineMs: null,
   };
 
   state.nextRoomId += 1;
@@ -226,6 +253,7 @@ export function joinRoom(state: LobbyState, roomId: string, member: { memberId: 
     displayName: member.displayName,
     joinedAt: new Date().toISOString(),
   });
+  room.scoreBoard[member.memberId] = room.scoreBoard[member.memberId] ?? 0;
   if (!room.hostMemberId) {
     room.hostMemberId = member.memberId;
   }
@@ -286,6 +314,7 @@ export function startRoomGame(state: LobbyState, roomId: string, actorMemberId: 
   }
 
   room.state = startResult.nextRoomState;
+  initializeRoomGameRuntime(room);
   return { ok: true, room };
 }
 
@@ -305,6 +334,7 @@ export function rematchRoomGame(state: LobbyState, roomId: string, actorMemberId
   }
 
   room.state = 'IN_GAME';
+  initializeRoomGameRuntime(room);
   return { ok: true, room };
 }
 
@@ -335,6 +365,16 @@ export function kickRoomMember(
 
   room.members.splice(targetIndex, 1);
   room.playerCount = room.members.length;
+  delete room.scoreBoard[targetMemberId];
+  if (room.members.length === 0) {
+    room.currentTurnIndex = 0;
+    room.turnDeadlineMs = null;
+  } else {
+    room.currentTurnIndex = Math.min(room.currentTurnIndex, room.members.length - 1);
+    if (room.state === 'IN_GAME') {
+      room.turnDeadlineMs = Date.now() + TURN_DURATION_MS;
+    }
+  }
   return { ok: true, room };
 }
 
@@ -533,9 +573,17 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
     if (turnChanged) {
       room.shotState = turnChanged;
+      if (room.members.length > 0) {
+        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+      } else {
+        room.currentTurnIndex = 0;
+      }
+      room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
       broadcastRoomEvent(state, room.roomId, 'turn_changed', {
         roomId: room.roomId,
-        currentMemberId: room.members[0]?.memberId ?? null,
+        currentMemberId: getCurrentTurnMemberId(room),
+        turnDeadlineMs: room.turnDeadlineMs,
+        scoreBoard: room.scoreBoard,
         serverTimeMs: Date.now(),
       });
     }
@@ -606,7 +654,9 @@ function buildRoomSnapshot(state: LobbyState, room: LobbyRoom) {
     seq: nextRoomSnapshotSeq(state, room.roomId),
     serverTimeMs: Date.now(),
     state: room.state,
-    currentMemberId: room.members[0]?.memberId ?? null,
+    currentMemberId: getCurrentTurnMemberId(room),
+    turnDeadlineMs: room.turnDeadlineMs,
+    scoreBoard: room.scoreBoard,
     balls: [
       { id: 'cueBall', x: 0.70, y: 0.71, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
       { id: 'objectBall1', x: 2.10, y: 0.62, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },

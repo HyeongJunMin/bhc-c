@@ -18,6 +18,8 @@ export type SerializeRoomSnapshotInput = {
   serverTimeMs: number;
   state: 'WAITING' | 'IN_GAME' | 'FINISHED';
   currentMemberId: string | null;
+  turnDeadlineMs: number | null;
+  scoreBoard: Record<string, number>;
   balls: SnapshotBallFrame[];
 };
 
@@ -29,12 +31,18 @@ function toFiniteNumber(value: number): number {
 }
 
 export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
+  const scoreBoard = Object.entries(input.scoreBoard).reduce<Record<string, number>>((acc, [memberId, score]) => {
+    acc[memberId] = toFiniteNumber(score);
+    return acc;
+  }, {});
+
   return {
     roomId: input.roomId,
     seq: input.seq,
     serverTimeMs: input.serverTimeMs,
     state: input.state,
-    turn: { currentMemberId: input.currentMemberId },
+    turn: { currentMemberId: input.currentMemberId, turnDeadlineMs: input.turnDeadlineMs },
+    scoreBoard,
     balls: input.balls.map((ball) => ({
       id: ball.id,
       x: toFiniteNumber(ball.x),
@@ -48,4 +56,3 @@ export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
     })),
   };
 }
-

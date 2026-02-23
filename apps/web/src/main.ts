@@ -995,7 +995,7 @@ function renderRoomPage(roomId: string): string {
     let roomStream = null;
     let streamMemberId = null;
     let myMemberId = null;
-    let timerValue = 10;
+    let currentTurnDeadlineMs = null;
     const cueBallAnchor = { x: 0.70, y: 0.71 };
     const dragInputState = {
       active: false,
@@ -1076,6 +1076,14 @@ function renderRoomPage(roomId: string): string {
         return (index + 1) + '. ' + text;
       });
       shotErrors.textContent = [header, ...lines].join('\\n');
+    }
+
+    function getRemainingTurnSeconds(turnDeadlineMs) {
+      if (!Number.isFinite(turnDeadlineMs)) {
+        return 10;
+      }
+      const remainingMs = Math.max(0, turnDeadlineMs - Date.now());
+      return Math.ceil(remainingMs / 1000);
     }
 
     function setStageMessage(text, isError) {
@@ -1434,6 +1442,7 @@ function renderRoomPage(roomId: string): string {
         shotInputLocked = false;
         updateShotInputLockUi();
         setShotMessage('턴이 전환되었습니다. 샷 입력 잠금이 해제되었습니다.', '');
+        loadRoom();
       });
       roomStream.onerror = () => {
         setStageMessage('스트림 연결이 일시 중단되었습니다. 재연결을 시도합니다.', true);
@@ -1473,13 +1482,20 @@ function renderRoomPage(roomId: string): string {
 
     function renderHud(room) {
       const members = Array.isArray(room.members) ? room.members : [];
-      hudTurn.textContent = members.length > 0 ? members[0].displayName : '-';
+      const scoreBoard = room && typeof room.scoreBoard === 'object' && room.scoreBoard ? room.scoreBoard : {};
+      const currentTurnIndex = Number.isInteger(room.currentTurnIndex) ? room.currentTurnIndex : 0;
+      const currentTurnMember = members[currentTurnIndex] || null;
+      hudTurn.textContent = currentTurnMember ? currentTurnMember.displayName : '-';
+      currentTurnDeadlineMs = Number.isFinite(room.turnDeadlineMs) ? Number(room.turnDeadlineMs) : null;
+      hudTimer.textContent = String(getRemainingTurnSeconds(currentTurnDeadlineMs));
       if (members.length === 0) {
         hudScoreboard.innerHTML = '<p>점수판 데이터가 없습니다.</p>';
         return;
       }
       hudScoreboard.innerHTML = members.map((member) => (
-        '<article class="member"><div><strong>' + member.displayName + '</strong></div><div>0점</div></article>'
+        '<article class="member"><div><strong>' + member.displayName + '</strong></div><div>' +
+          String(Number(scoreBoard[member.memberId] ?? 0)) +
+          '점</div></article>'
       )).join('');
     }
 
@@ -1713,8 +1729,7 @@ function renderRoomPage(roomId: string): string {
     setInterval(loadRoom, 3000);
     setInterval(loadChat, 3000);
     setInterval(() => {
-      timerValue = timerValue <= 0 ? 10 : timerValue - 1;
-      hudTimer.textContent = String(timerValue);
+      hudTimer.textContent = String(getRemainingTurnSeconds(currentTurnDeadlineMs));
     }, 1000);
     window.addEventListener('beforeunload', () => {
       if (roomStream) {
