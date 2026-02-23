@@ -215,6 +215,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
   const linearDamping = Math.pow(0.985, 1 / PHYSICS_SUBSTEPS);
   const spinDamping = Math.pow(0.97, 1 / PHYSICS_SUBSTEPS);
   for (let step = 0; step < PHYSICS_SUBSTEPS; step += 1) {
+    const prevPositions = room.balls.map((ball) => ({ x: ball.x, y: ball.y }));
     for (const ball of room.balls) {
       if (ball.isPocketed) {
         continue;
@@ -232,7 +233,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
       }
     }
 
-    resolveBallBallCollisions(room.balls);
+    resolveBallBallCollisions(room.balls, prevPositions, substepDtSec);
 
     for (const ball of room.balls) {
       if (ball.isPocketed) {
@@ -264,49 +265,117 @@ function stepRoomPhysics(room: LobbyRoom): void {
   }
 }
 
-function resolveBallBallCollisions(balls: SnapshotBallFrame[]): void {
+function resolveBallBallCollisions(
+  balls: SnapshotBallFrame[],
+  prevPositions: Array<{ x: number; y: number }>,
+  substepDtSec: number,
+): void {
   const minDistance = BALL_RADIUS_M * 2;
   const minDistanceSq = minDistance * minDistance;
   const epsilon = 1e-8;
+
+  function applyImpulse(first: SnapshotBallFrame, second: SnapshotBallFrame, normalX: number, normalY: number): boolean {
+    const relativeVx = second.vx - first.vx;
+    const relativeVy = second.vy - first.vy;
+    const velocityAlongNormal = relativeVx * normalX + relativeVy * normalY;
+    if (velocityAlongNormal >= 0) {
+      return false;
+    }
+    const impulse = -((1 + BALL_BALL_RESTITUTION) * velocityAlongNormal) / 2;
+    first.vx -= impulse * normalX;
+    first.vy -= impulse * normalY;
+    second.vx += impulse * normalX;
+    second.vy += impulse * normalY;
+    return true;
+  }
+
+  function sweepHitTime(
+    firstPrev: { x: number; y: number },
+    firstCurr: SnapshotBallFrame,
+    secondPrev: { x: number; y: number },
+    secondCurr: SnapshotBallFrame,
+  ): number | null {
+    const startX = secondPrev.x - firstPrev.x;
+    const startY = secondPrev.y - firstPrev.y;
+    const endX = secondCurr.x - firstCurr.x;
+    const endY = secondCurr.y - firstCurr.y;
+    const moveX = endX - startX;
+    const moveY = endY - startY;
+    const moveLenSq = moveX * moveX + moveY * moveY;
+    let t = 0;
+    if (moveLenSq > epsilon) {
+      t = -((startX * moveX) + (startY * moveY)) / moveLenSq;
+      t = clampNumber(t, 0, 1);
+    }
+    const closestX = startX + moveX * t;
+    const closestY = startY + moveY * t;
+    const closestDistSq = closestX * closestX + closestY * closestY;
+    if (!Number.isFinite(closestDistSq) || closestDistSq > minDistanceSq) {
+      return null;
+    }
+    return t;
+  }
+
   for (let i = 0; i < balls.length; i += 1) {
     const first = balls[i];
+    const firstPrev = prevPositions[i];
     if (!first || first.isPocketed) {
       continue;
     }
     for (let j = i + 1; j < balls.length; j += 1) {
       const second = balls[j];
+      const secondPrev = prevPositions[j];
       if (!second || second.isPocketed) {
         continue;
       }
       const deltaX = second.x - first.x;
       const deltaY = second.y - first.y;
       const distanceSq = deltaX * deltaX + deltaY * deltaY;
-      if (!Number.isFinite(distanceSq) || distanceSq > minDistanceSq) {
+      if (Number.isFinite(distanceSq) && distanceSq <= minDistanceSq) {
+        const distance = Math.sqrt(Math.max(distanceSq, epsilon));
+        const normalX = distance > epsilon ? deltaX / distance : 1;
+        const normalY = distance > epsilon ? deltaY / distance : 0;
+        applyImpulse(first, second, normalX, normalY);
+        const penetration = minDistance - distance;
+        if (penetration > 0) {
+          const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 0.8;
+          first.x -= normalX * correction;
+          first.y -= normalY * correction;
+          second.x += normalX * correction;
+          second.y += normalY * correction;
+        }
         continue;
       }
-      const distance = Math.sqrt(Math.max(distanceSq, epsilon));
-      const normalX = distance > epsilon ? deltaX / distance : 1;
-      const normalY = distance > epsilon ? deltaY / distance : 0;
 
-      const relativeVx = second.vx - first.vx;
-      const relativeVy = second.vy - first.vy;
-      const velocityAlongNormal = relativeVx * normalX + relativeVy * normalY;
-      if (velocityAlongNormal < 0) {
-        const impulse = -((1 + BALL_BALL_RESTITUTION) * velocityAlongNormal) / 2;
-        first.vx -= impulse * normalX;
-        first.vy -= impulse * normalY;
-        second.vx += impulse * normalX;
-        second.vy += impulse * normalY;
+      if (!firstPrev || !secondPrev) {
+        continue;
       }
-
-      const penetration = minDistance - distance;
-      if (penetration > 0) {
-        const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 0.8;
-        first.x -= normalX * correction;
-        first.y -= normalY * correction;
-        second.x += normalX * correction;
-        second.y += normalY * correction;
+      const hitTime = sweepHitTime(firstPrev, first, secondPrev, second);
+      if (hitTime === null) {
+        continue;
       }
+      const firstHitX = firstPrev.x + (first.x - firstPrev.x) * hitTime;
+      const firstHitY = firstPrev.y + (first.y - firstPrev.y) * hitTime;
+      const secondHitX = secondPrev.x + (second.x - secondPrev.x) * hitTime;
+      const secondHitY = secondPrev.y + (second.y - secondPrev.y) * hitTime;
+      const hitDeltaX = secondHitX - firstHitX;
+      const hitDeltaY = secondHitY - firstHitY;
+      const hitDistance = Math.hypot(hitDeltaX, hitDeltaY);
+      const normalX = hitDistance > epsilon ? hitDeltaX / hitDistance : 1;
+      const normalY = hitDistance > epsilon ? hitDeltaY / hitDistance : 0;
+      const collided = applyImpulse(first, second, normalX, normalY);
+      if (!collided) {
+        continue;
+      }
+      first.x = firstHitX;
+      first.y = firstHitY;
+      second.x = secondHitX;
+      second.y = secondHitY;
+      const remainDtSec = substepDtSec * (1 - hitTime);
+      first.x += first.vx * remainDtSec;
+      first.y += first.vy * remainDtSec;
+      second.x += second.vx * remainDtSec;
+      second.y += second.vy * remainDtSec;
     }
   }
 }

@@ -21,6 +21,11 @@ test('QA-001A: 로그인 -> 로비 -> 방입장 핵심 시나리오', async () =
   const lobbyState = {
     nextRoomId: 1,
     rooms: [],
+    roomStreamSeqByRoomId: {},
+    roomStreamSubscribers: {},
+    shotStateResetTimers: {},
+    disconnectGraceTimers: {},
+    userLastChatSentAtByRoomAndMember: {},
   };
 
   const signupResult = await signup(authState, {
