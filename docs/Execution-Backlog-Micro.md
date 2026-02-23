@@ -403,3 +403,53 @@
 29. `ROOM-SIM-001A` -> `ROOM-SIM-001C`
 30. `ROOM-INPUT-003A` -> `ROOM-INPUT-003C`
 31. `ROOM-QA-002A` -> `ROOM-QA-002C`
+
+### Phase O. GDD 갭 보완 (2026-02-23)
+
+#### LOBBY-PAGE-001 로비 9개 단위 + 무한스크롤
+- `LOBBY-PAGE-001A`: `/api/lobby/rooms` 기본 조회를 `limit=9`로 고정
+- `LOBBY-PAGE-001B`: `offset/hasMore/isLoading` 클라이언트 상태머신 추가
+- `LOBBY-PAGE-001C`: IntersectionObserver 기반 다음 페이지 자동 로드
+- `LOBBY-PAGE-001D`: 중복요청/끝페이지 경계 테스트 추가
+
+#### HUD-REAL-001 HUD 실데이터 연동
+- `HUD-REAL-001A`: room detail/stream payload에 `scoreBoard/currentTurn/turnDeadlineMs` 필드 추가
+- `HUD-REAL-001B`: 서버 턴/점수 상태를 shot lifecycle에 연결
+- `HUD-REAL-001C`: 웹 HUD를 서버 authoritative 값으로 렌더 전환
+- `HUD-REAL-001D`: 재접속/백그라운드 복귀 시 HUD 동기화 테스트
+
+#### GAME-END-001 10점 즉시 종료 런타임 연결
+- `GAME-END-001A`: `shot_resolved` 시점에 score-policy 적용 경로 연결
+- `GAME-END-001B`: 10점 달성 즉시 `IN_GAME -> FINISHED` 전이
+- `GAME-END-001C`: winner/loser 상태를 이벤트/API 응답에 포함
+- `GAME-END-001D`: FINISHED 상태 입력 잠금/재경기 조건 회귀 테스트
+
+#### LEAVE-001 이탈/연결해제 패배 처리
+- `LEAVE-001A`: `POST /lobby/rooms/:roomId/leave` API 추가
+- `LEAVE-001B`: disconnect 감지 시 10초 유예 타이머(`pending_disconnect`) 시작
+- `LEAVE-001C`: 10초 내 미복귀 시 LOSE 확정 + 멤버 제거
+- `LEAVE-001D`: 유예중 복귀 시 패배 취소/세션 복원 테스트
+
+#### HOST-DELEGATE-001 방장 위임 경로 일원화
+- `HOST-DELEGATE-001A`: kick/leave/disconnect 공통 멤버제거 유즈케이스화
+- `HOST-DELEGATE-001B`: host 이탈 시 입장순 다음 플레이어 자동 위임
+- `HOST-DELEGATE-001C`: 위임 이벤트 수신 시 웹 권한 UI 즉시 갱신
+
+#### CHAT-RL-001 채팅 레이트리밋 실연동
+- `CHAT-RL-001A`: game-server room chat API에 3초 레이트리밋 모듈 연결
+- `CHAT-RL-001B`: rate limit 위반 시 `CHAT_RATE_LIMITED` + `retryAfterMs` 응답 계약 고정
+- `CHAT-RL-001C`: room UI에 잔여 대기시간 메시지 반영
+- `CHAT-RL-001D`: 더블클릭/동시요청 회귀 테스트 추가
+
+#### INPUT-FULL-001 조작 스펙 완성
+- `INPUT-FULL-001A`: WASD 당점 이동 입력(`[-0.9R,+0.9R]` clamp) 구현
+- `INPUT-FULL-001B`: 마우스 상하 기반 고각 제어 UX 추가
+- `INPUT-FULL-001C`: 당점/고각 오버레이 시각화
+- `INPUT-FULL-001D`: payload(`impactOffsetX/Y`, `cueElevationDeg`) 검증 테스트 보강
+
+#### PHYS-RUNTIME-001 물리 월드 런타임 연동 (20Hz)
+- `PHYS-RUNTIME-001A`: room별 physics world 생성/초기 배치
+- `PHYS-RUNTIME-001B`: shot 입력 -> 초기 속도/회전 변환 -> world apply
+- `PHYS-RUNTIME-001C`: 20Hz tick -> snapshot serialize -> SSE broadcast
+- `PHYS-RUNTIME-001D`: 정지 판정 -> 점수/턴 전환/종료 이벤트 연계
+- `PHYS-RUNTIME-001E`: drift/역행/NaN 방어 soak 테스트

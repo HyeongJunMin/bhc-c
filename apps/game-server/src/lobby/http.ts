@@ -8,6 +8,7 @@ import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import { serializeRoomSnapshot } from '../game/snapshot-serializer.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
+import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 
@@ -37,6 +38,7 @@ type LobbyState = {
   roomStreamSeqByRoomId: Record<string, number>;
   roomStreamSubscribers: Record<string, Set<ServerResponse>>;
   shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
+  userLastChatSentAtByRoomAndMember: UserLastSentAtStore;
 };
 
 type CreateRoomResult =
@@ -63,7 +65,12 @@ type RoomActionResult =
     };
 type RoomChatResult =
   | { ok: true; room: LobbyRoom }
-  | { ok: false; statusCode: 400 | 404; errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'CHAT_INVALID_INPUT' };
+  | {
+      ok: false;
+      statusCode: 400 | 404 | 429;
+      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'CHAT_INVALID_INPUT' | 'CHAT_RATE_LIMITED';
+      retryAfterMs?: number;
+    };
 type ShotSubmitResult =
   | { ok: true; payload: Record<string, unknown> }
   | {
@@ -352,6 +359,19 @@ export function sendRoomChatMessage(
     return { ok: false, statusCode: 400, errorCode: 'CHAT_INVALID_INPUT' };
   }
 
+  const rateLimitKey = `${roomId}:${senderMemberId}`;
+  const nowMs = Date.now();
+  const rateLimited = evaluateChatRateLimit(state.userLastChatSentAtByRoomAndMember, rateLimitKey, nowMs);
+  if (!rateLimited.ok) {
+    return {
+      ok: false,
+      statusCode: 429,
+      errorCode: rateLimited.errorCode,
+      retryAfterMs: rateLimited.retryAfterMs,
+    };
+  }
+
+  recordLastChatSentAt(state.userLastChatSentAtByRoomAndMember, rateLimitKey, nowMs);
   room.chatMessages.push({
     senderMemberId,
     message: normalizedMessage,
@@ -464,7 +484,7 @@ async function handleSendRoomChat(req: IncomingMessage, res: ServerResponse, sta
   const message = typeof body.message === 'string' ? body.message : '';
   const result = sendRoomChatMessage(state, roomId, senderMemberId, message);
   if (!result.ok) {
-    writeJson(res, result.statusCode, { errorCode: result.errorCode });
+    writeJson(res, result.statusCode, { errorCode: result.errorCode, retryAfterMs: result.retryAfterMs ?? null });
     return;
   }
   writeJson(res, 201, { item: result.room.chatMessages[result.room.chatMessages.length - 1] });
@@ -682,6 +702,7 @@ export function createLobbyHttpServer() {
     roomStreamSeqByRoomId: {},
     roomStreamSubscribers: {},
     shotStateResetTimers: {},
+    userLastChatSentAtByRoomAndMember: new Map(),
   };
 
   const server = createServer(async (req, res) => {

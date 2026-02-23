@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 144 |
-| Todo | 0 |
+| Total Tasks | 176 |
+| Todo | 31 |
 | In Progress | 0 |
-| Done | 144 |
+| Done | 145 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 10:49 |
+| Last Updated | 2026-02-23 11:03 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-QA-002C | done | 2026-02-23 10:49 | 실시간 룸 QA 3종(단일/드리프트/복구) 스크립트 통과 완료 |
+| Agent A (web) | CHAT-RL-001A | done | 2026-02-23 11:03 | room chat API에 3초 레이트리밋 모듈 연결 및 테스트 통과 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -170,3 +170,35 @@
 | ROOM-QA-002A | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-single-client-shot.ts` 통과 | - | ROOM-QA-002B | 1클라 샷->정지->턴전환 스모크 자동화 완료 |
 | ROOM-QA-002B | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-two-client-drift.ts` 통과(overlap=47,maxDrift=0.000000) | - | ROOM-QA-002C | 2클라 snapshot drift/seq 검증 자동화 완료 |
 | ROOM-QA-002C | Agent A | done | 2026-02-23 10:49 | `QA_BASE_URL=http://localhost:9217 node --experimental-strip-types scripts/qa/room-stream-recovery.ts` 통과(first=2ms,recovery=2ms) | - | - | 스트림 단절 가정 fallback/polling + 재연결 복구 검증 완료 |
+| LOBBY-PAGE-001A | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001B | 로비 기본 조회 `limit=9` 고정 적용 예정 |
+| LOBBY-PAGE-001B | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001C | offset/hasMore/isLoading 상태머신 추가 예정 |
+| LOBBY-PAGE-001C | Agent A | todo | 2026-02-23 11:03 | - | - | LOBBY-PAGE-001D | IntersectionObserver 무한스크롤 추가 예정 |
+| LOBBY-PAGE-001D | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001A | 로비 페이지네이션 경계 테스트 추가 예정 |
+| HUD-REAL-001A | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001B | HUD 필수 필드(score/turn/deadline) payload 확장 예정 |
+| HUD-REAL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001C | shot lifecycle에 점수/턴 상태 연동 예정 |
+| HUD-REAL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | HUD-REAL-001D | 웹 HUD 서버 authoritative 렌더 전환 예정 |
+| HUD-REAL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001A | 재접속/백그라운드 HUD 동기화 테스트 예정 |
+| GAME-END-001A | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001B | shot_resolved 시 score-policy 런타임 연결 예정 |
+| GAME-END-001B | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001C | 10점 즉시 FINISHED 전이 구현 예정 |
+| GAME-END-001C | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001D | winner/loser 상태 이벤트/API 반영 예정 |
+| GAME-END-001D | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001A | FINISHED 입력 잠금/재경기 조건 회귀 테스트 예정 |
+| LEAVE-001A | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001B | `POST /lobby/rooms/:roomId/leave` API 추가 예정 |
+| LEAVE-001B | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001C | disconnect 10초 유예 타이머 구현 예정 |
+| LEAVE-001C | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001D | 미복귀 LOSE 확정/멤버 제거 구현 예정 |
+| LEAVE-001D | Agent A | todo | 2026-02-23 11:03 | - | - | HOST-DELEGATE-001A | 유예중 복귀 취소/세션 복원 테스트 예정 |
+| HOST-DELEGATE-001A | Agent A | todo | 2026-02-23 11:03 | - | - | HOST-DELEGATE-001B | kick/leave/disconnect 제거 경로 공통화 예정 |
+| HOST-DELEGATE-001B | Agent A | todo | 2026-02-23 11:03 | - | - | HOST-DELEGATE-001C | host 이탈 자동 위임 실경로 연동 예정 |
+| HOST-DELEGATE-001C | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001A | 위임 이벤트 수신 기반 권한 UI 갱신 예정 |
+| CHAT-RL-001A | Agent A | done | 2026-02-23 11:03 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(19 pass) | - | CHAT-RL-001B | room chat API에 3초 레이트리밋 연결 및 429/retryAfterMs 테스트 추가 완료 |
+| CHAT-RL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001C | `CHAT_RATE_LIMITED`/`retryAfterMs` 응답 계약 고정 및 검증 예정 |
+| CHAT-RL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | CHAT-RL-001D | room UI 잔여 대기시간 메시지 반영 예정 |
+| CHAT-RL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001A | 더블클릭/동시요청 회귀 테스트 추가 예정 |
+| INPUT-FULL-001A | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001B | WASD 당점 이동(`[-0.9R,+0.9R]`) 구현 예정 |
+| INPUT-FULL-001B | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001C | 마우스 상하 고각 제어 UX 추가 예정 |
+| INPUT-FULL-001C | Agent A | todo | 2026-02-23 11:03 | - | - | INPUT-FULL-001D | 당점/고각 오버레이 시각화 예정 |
+| INPUT-FULL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001A | shot payload(impactOffset/elevation) 검증 보강 예정 |
+| PHYS-RUNTIME-001A | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001B | room별 physics world/초기배치 생성 예정 |
+| PHYS-RUNTIME-001B | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001C | shot->초기속도/회전 변환 적용 예정 |
+| PHYS-RUNTIME-001C | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001D | 20Hz tick/snapshot/SSE 연동 예정 |
+| PHYS-RUNTIME-001D | Agent A | todo | 2026-02-23 11:03 | - | - | PHYS-RUNTIME-001E | 정지판정->점수/턴/종료 이벤트 연계 예정 |
+| PHYS-RUNTIME-001E | Agent A | todo | 2026-02-23 11:03 | - | - | - | drift/seq/NaN 방어 soak 테스트 예정 |

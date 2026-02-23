@@ -178,6 +178,29 @@ test('채팅 전송: 룸 멤버면 메시지가 저장된다', () => {
   }
 });
 
+test('채팅 전송: 3초 이내 연속 전송이면 CHAT_RATE_LIMITED를 반환한다', () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'chat-rate-limit' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  const first = sendRoomChatMessage(state, created.room.roomId, 'u1', 'first');
+  assert.equal(first.ok, true);
+
+  const second = sendRoomChatMessage(state, created.room.roomId, 'u1', 'second');
+  assert.equal(second.ok, false);
+  if (!second.ok) {
+    assert.equal(second.errorCode, 'CHAT_RATE_LIMITED');
+    assert.equal(second.statusCode, 429);
+    assert.equal(typeof second.retryAfterMs, 'number');
+    assert.ok((second.retryAfterMs ?? 0) > 0);
+    assert.equal(created.room.chatMessages.length, 1);
+  }
+});
+
 test('샷 입력 제출: 스키마 유효 payload면 accepted 된다', () => {
   const { state } = createLobbyHttpServer();
   const created = createRoom(state, { title: 'shot-room' });
