@@ -9,6 +9,7 @@ import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/s
 import { serializeRoomSnapshot } from '../game/snapshot-serializer.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
+import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
 
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 const TURN_DURATION_MS = 10_000;
@@ -34,6 +35,8 @@ type LobbyRoom = {
   scoreBoard: Record<string, number>;
   currentTurnIndex: number;
   turnDeadlineMs: number | null;
+  winnerMemberId: string | null;
+  memberGameStates: Record<string, 'IN_ROOM' | 'PLAYING' | 'WIN' | 'LOSE' | 'KICKED'>;
 };
 
 type LobbyState = {
@@ -144,6 +147,11 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
   }, {});
   room.currentTurnIndex = 0;
   room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+  room.winnerMemberId = null;
+  room.memberGameStates = room.members.reduce<Record<string, 'PLAYING'>>((acc, member) => {
+    acc[member.memberId] = 'PLAYING';
+    return acc;
+  }, {});
 }
 
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -181,6 +189,8 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     scoreBoard: {},
     currentTurnIndex: 0,
     turnDeadlineMs: null,
+    winnerMemberId: null,
+    memberGameStates: {},
   };
 
   state.nextRoomId += 1;
@@ -254,6 +264,7 @@ export function joinRoom(state: LobbyState, roomId: string, member: { memberId: 
     joinedAt: new Date().toISOString(),
   });
   room.scoreBoard[member.memberId] = room.scoreBoard[member.memberId] ?? 0;
+  room.memberGameStates[member.memberId] = room.memberGameStates[member.memberId] ?? 'IN_ROOM';
   if (!room.hostMemberId) {
     room.hostMemberId = member.memberId;
   }
@@ -366,6 +377,7 @@ export function kickRoomMember(
   room.members.splice(targetIndex, 1);
   room.playerCount = room.members.length;
   delete room.scoreBoard[targetMemberId];
+  delete room.memberGameStates[targetMemberId];
   if (room.members.length === 0) {
     room.currentTurnIndex = 0;
     room.turnDeadlineMs = null;
@@ -564,11 +576,41 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
     if (resolved) {
       room.shotState = resolved;
+      const scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId);
+      let isGameFinished = false;
+      if (scoreResult.ok && scoreResult.gameEnded) {
+        room.state = 'FINISHED';
+        room.winnerMemberId = scoreResult.winnerPlayerId;
+        const winnerMemberId = scoreResult.winnerPlayerId;
+        room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
+          acc[member.memberId] = member.memberId === winnerMemberId ? 'WIN' : 'LOSE';
+          return acc;
+        }, {});
+        isGameFinished = true;
+      }
       broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
         roomId: room.roomId,
         shotState: room.shotState,
+        state: room.state,
+        scoreBoard: room.scoreBoard,
+        winnerMemberId: room.winnerMemberId,
         serverTimeMs: Date.now(),
       });
+      if (isGameFinished) {
+        const resetAfterResolve = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+        if (resetAfterResolve) {
+          room.shotState = resetAfterResolve;
+        }
+        broadcastRoomEvent(state, room.roomId, 'game_finished', {
+          roomId: room.roomId,
+          winnerMemberId: room.winnerMemberId,
+          memberGameStates: room.memberGameStates,
+          scoreBoard: room.scoreBoard,
+          serverTimeMs: Date.now(),
+        });
+        state.shotStateResetTimers[room.roomId] = null;
+        return;
+      }
     }
     const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
     if (turnChanged) {

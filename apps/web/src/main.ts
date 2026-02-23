@@ -1444,6 +1444,12 @@ function renderRoomPage(roomId: string): string {
         setShotMessage('턴이 전환되었습니다. 샷 입력 잠금이 해제되었습니다.', '');
         loadRoom();
       });
+      roomStream.addEventListener('game_finished', () => {
+        shotInputLocked = true;
+        updateShotInputLockUi();
+        setFlowBanner('경기가 종료되었습니다. 결과를 반영합니다.', 'warn');
+        loadRoom();
+      });
       roomStream.onerror = () => {
         setStageMessage('스트림 연결이 일시 중단되었습니다. 재연결을 시도합니다.', true);
       };

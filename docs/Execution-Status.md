@@ -10,16 +10,16 @@
 | Metric | Value |
 |---|---|
 | Total Tasks | 176 |
-| Todo | 23 |
+| Todo | 20 |
 | In Progress | 0 |
-| Done | 153 |
+| Done | 156 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:18 |
+| Last Updated | 2026-02-23 11:20 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | HUD-REAL-001C | done | 2026-02-23 11:18 | HUD score/turn/timer를 서버 authoritative 데이터로 연동 완료 |
+| Agent A (web) | GAME-END-001C | done | 2026-02-23 11:20 | 샷 종료 점수반영/10점 종료/winner 이벤트 연동 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -178,9 +178,9 @@
 | HUD-REAL-001B | Agent A | done | 2026-02-23 11:18 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(19 pass) | - | HUD-REAL-001C | shot lifecycle에 turn 인덱스/turnDeadline 갱신 로직 연동 완료 |
 | HUD-REAL-001C | Agent A | done | 2026-02-23 11:18 | `rg -n \"renderHud\\(|scoreBoard|turnDeadlineMs|getRemainingTurnSeconds\" apps/web/src/main.ts` 확인 | - | HUD-REAL-001D | 웹 HUD 서버 authoritative 렌더 전환 완료 |
 | HUD-REAL-001D | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001A | 재접속/백그라운드 HUD 동기화 테스트 예정 |
-| GAME-END-001A | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001B | shot_resolved 시 score-policy 런타임 연결 예정 |
-| GAME-END-001B | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001C | 10점 즉시 FINISHED 전이 구현 예정 |
-| GAME-END-001C | Agent A | todo | 2026-02-23 11:03 | - | - | GAME-END-001D | winner/loser 상태 이벤트/API 반영 예정 |
+| GAME-END-001A | Agent A | done | 2026-02-23 11:20 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(20 pass) | - | GAME-END-001B | shot_resolved 시 score-policy 런타임 연결 완료 |
+| GAME-END-001B | Agent A | done | 2026-02-23 11:20 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(20 pass) | - | GAME-END-001C | 10점 즉시 FINISHED 전이 구현 완료 |
+| GAME-END-001C | Agent A | done | 2026-02-23 11:20 | `rg -n \"game_finished|winnerMemberId|memberGameStates\" apps/game-server/src/lobby/http.ts apps/web/src/main.ts` 확인 | - | GAME-END-001D | winner/loser 상태 이벤트/API 반영 완료 |
 | GAME-END-001D | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001A | FINISHED 입력 잠금/재경기 조건 회귀 테스트 예정 |
 | LEAVE-001A | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001B | `POST /lobby/rooms/:roomId/leave` API 추가 예정 |
 | LEAVE-001B | Agent A | todo | 2026-02-23 11:03 | - | - | LEAVE-001C | disconnect 10초 유예 타이머 구현 예정 |

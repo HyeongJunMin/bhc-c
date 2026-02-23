@@ -281,6 +281,60 @@ test('샷 입력 제출: running 상태에서 중복 제출하면 SHOT_STATE_CON
   }
 });
 
+test('샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finished 이벤트가 발행된다', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'shot-finish' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) {
+    return;
+  }
+  started.room.scoreBoard.u1 = 9;
+
+  const writes: string[] = [];
+  const fakeSubscriber = {
+    writableEnded: false,
+    destroyed: false,
+    write(chunk: string) {
+      writes.push(chunk);
+      return true;
+    },
+  } as unknown as import('node:http').ServerResponse;
+  state.roomStreamSubscribers[created.room.roomId].add(fakeSubscriber);
+
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 120,
+    cueElevationDeg: 10,
+    dragPx: 300,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+  assert.equal(result.ok, true);
+  await new Promise((resolve) => setTimeout(resolve, 900));
+
+  assert.equal(created.room.state, 'FINISHED');
+  assert.equal(created.room.winnerMemberId, 'u1');
+  assert.equal(created.room.memberGameStates.u1, 'WIN');
+  assert.equal(created.room.memberGameStates.u2, 'LOSE');
+  assert.equal(created.room.scoreBoard.u1, 10);
+  const output = writes.join('');
+  assert.ok(output.includes('event: game_finished'));
+});
+
 test('룸 스트림 오픈: 룸 멤버면 snapshot을 반환한다', () => {
   const { state } = createLobbyHttpServer();
   const created = createRoom(state, { title: 'stream-room' });
