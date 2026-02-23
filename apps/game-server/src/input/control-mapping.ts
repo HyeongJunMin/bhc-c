@@ -24,7 +24,7 @@ export function mapVerticalRotation(currentCueElevationDeg: number, deltaDeg: nu
 }
 
 const MIN_DRAG_PX = 10;
-const MAX_DRAG_PX = 1000;
+const MAX_DRAG_PX = 400;
 const MIN_SPEED_MPS = 1;
 const MAX_SPEED_MPS = 13.89;
 

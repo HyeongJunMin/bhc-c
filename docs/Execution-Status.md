@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 143 |
+| Total Tasks | 144 |
 | Todo | 15 |
 | In Progress | 0 |
-| Done | 128 |
+| Done | 129 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 09:54 |
+| Last Updated | 2026-02-23 10:01 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-ARCH-001 | done | 2026-02-23 09:54 | ROOM-UI-001 이후 실시간 플레이 상세 계획 문서화 완료 |
+| Agent A (web) | INPUT-002E | done | 2026-02-23 10:01 | 최대 스트로크 400px로 스펙/스키마/코드 동기화 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -80,7 +80,8 @@
 | INPUT-002A | Agent C | done | 2026-02-22 00:45 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(2 pass) | - | INPUT-002B | 수평 360도 회전 매핑 함수/테스트 완료 |
 | INPUT-002B | Agent C | done | 2026-02-22 00:46 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(4 pass) | - | INPUT-002C | 수직 각도 0~89 클램프 매핑 완료 |
 | INPUT-002C | Agent C | done | 2026-02-22 00:47 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(6 pass) | - | INPUT-002D | drag px -> m/s 선형 매핑 함수/테스트 완료 |
-| INPUT-002D | Agent C | done | 2026-02-22 00:48 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(9 pass) | - | PHY-001A | WASD 당점 이동 벡터 처리 로직/테스트 완료 |
+| INPUT-002D | Agent C | done | 2026-02-22 00:48 | `node --experimental-strip-types --test input/control-mapping.test.ts` 통과(9 pass) | - | INPUT-002E | WASD 당점 이동 벡터 처리 로직/테스트 완료 |
+| INPUT-002E | Agent A | done | 2026-02-23 10:01 | `python3 scripts/ci/spec_guard.py ...`, `pnpm --filter @bhc/game-server test`, `pnpm --filter @bhc/physics-core test` 통과 | - | ROOM-UI-002A | 최대 스트로크를 1000px→400px로 문서/스키마/코드/테스트 동기화 완료 |
 | PHY-001A | Agent C | done | 2026-02-22 00:49 | `node --experimental-strip-types --test packages/physics-core/src/initial-velocity.test.ts` 통과(2 pass) | - | PHY-001B | 초기 선속도 수식/역산 함수 구현 완료 |
 | PHY-001B | Agent C | done | 2026-02-22 00:50 | `node --experimental-strip-types --test packages/physics-core/src/initial-angular-velocity.test.ts` 통과(2 pass) | - | PHY-001C | 초기 각속도 수식 함수 구현 완료 |
 | PHY-001C | Agent C | done | 2026-02-22 00:51 | `node --experimental-strip-types --test packages/physics-core/src/shot-init.test.ts` 통과(2 pass) | - | PHY-002A | 최소/최대 drag·offset 경계값 테스트 완료 |

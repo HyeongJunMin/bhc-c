@@ -726,7 +726,7 @@ function renderRoomPage(roomId: string): string {
       <form id="shot-form" class="create">
         <input id="shot-direction" type="number" min="0" max="359.99" step="0.01" value="120" required>
         <input id="shot-elevation" type="number" min="0" max="89" step="0.01" value="10" required>
-        <input id="shot-drag" type="number" min="10" max="1000" step="1" value="300" required>
+        <input id="shot-drag" type="number" min="10" max="400" step="1" value="300" required>
         <button type="submit">샷 제출</button>
       </form>
       <p id="shot-message"></p>

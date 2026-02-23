@@ -78,10 +78,10 @@
   - Hold left-click to prepare stroke.
   - Drag downward.
   - Release left-click to execute stroke.
-  - Drag range: `10 px` to `1000 px`.
+  - Drag range: `10 px` to `400 px`.
   - `10 px` maps to minimum shot speed `1 m/s`.
-  - `1000 px` maps to maximum shot speed `50 km/h` (`13.89 m/s`).
-  - Values outside range are clamped to `[10, 1000]`.
+  - `400 px` maps to maximum shot speed `50 km/h` (`13.89 m/s`).
+  - Values outside range are clamped to `[10, 400]`.
   - Recommended mapping: linear interpolation from drag distance to initial shot speed.
 
 #### Spin Control (Keyboard)

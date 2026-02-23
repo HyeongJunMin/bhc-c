@@ -13,7 +13,7 @@ const validPayload = {
   clientTsMs: 1000,
   shotDirectionDeg: 120,
   cueElevationDeg: 10,
-  dragPx: 500,
+  dragPx: 300,
   impactOffsetX: 0,
   impactOffsetY: 0,
   inputSeq: 1,
@@ -54,7 +54,7 @@ test('invalid payload는 위반 유형과 무관하게 SHOT_INPUT_SCHEMA_INVALID
     },
     {
       ...validPayload,
-      dragPx: 1001,
+      dragPx: 401,
     },
   ];
 

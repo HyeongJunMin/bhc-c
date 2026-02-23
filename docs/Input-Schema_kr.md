@@ -79,7 +79,7 @@
     "dragPx": {
       "type": "number",
       "minimum": 10,
-      "maximum": 1000
+      "maximum": 400
     },
     "impactOffsetX": {
       "type": "number",
@@ -102,7 +102,7 @@
 ## 4. 필드 의미
 - `shotDirectionDeg`: 큐의 수평 각도. 필요 시 `[0, 360)`으로 래핑한다.
 - `cueElevationDeg`: 큐의 수직 고각. `[0, 89]`로 클램프한다.
-- `dragPx`: 스트로크 파워를 위한 마우스 드래그 거리. `[10, 1000]`로 클램프한다.
+- `dragPx`: 스트로크 파워를 위한 마우스 드래그 거리. `[10, 400]`로 클램프한다.
 - `impactOffsetX`: 수구 중심 기준 좌우 당점 오프셋(미터 단위).
 - `impactOffsetY`: 수구 중심 기준 상하 당점 오프셋(미터 단위).
 - `inputSeq`: 중복 입력 제거를 위한 선택형 단조 증가 시퀀스 번호.
@@ -111,7 +111,7 @@
 입력 검증 통과 후:
 
 1. 클램프:
-- `d = clamp(dragPx, 10, 1000)`
+- `d = clamp(dragPx, 10, 400)`
 - `theta = wrap360(shotDirectionDeg)`
 - `phi = clamp(cueElevationDeg, 0, 89)`
 
@@ -124,7 +124,7 @@
 3. 목표 초기 속도 계산:
 - `V0_min = 1.0 m/s`
 - `V0_max = 13.89 m/s`
-- `V0_target = V0_min + (d - 10) / 990 * (V0_max - V0_min)`
+- `V0_target = V0_min + (d - 10) / 390 * (V0_max - V0_min)`
 
 4. 물리식용 큐 타격 속도 환산:
 - `m_c = 0.50`
@@ -145,7 +145,7 @@
   "clientTsMs": 1771545605123,
   "shotDirectionDeg": 215.4,
   "cueElevationDeg": 18.0,
-  "dragPx": 420,
+  "dragPx": 320,
   "impactOffsetX": -0.008,
   "impactOffsetY": 0.010,
   "inputSeq": 331

@@ -79,7 +79,7 @@ This document defines a canonical JSON payload for shot input so client, server,
     "dragPx": {
       "type": "number",
       "minimum": 10,
-      "maximum": 1000
+      "maximum": 400
     },
     "impactOffsetX": {
       "type": "number",
@@ -102,7 +102,7 @@ This document defines a canonical JSON payload for shot input so client, server,
 ## 4. Field Semantics
 - `shotDirectionDeg`: Horizontal cue angle. Wrapped to `[0, 360)` if needed.
 - `cueElevationDeg`: Vertical cue angle. Clamp to `[0, 89]`.
-- `dragPx`: Mouse drag distance for stroke power. Clamp to `[10, 1000]`.
+- `dragPx`: Mouse drag distance for stroke power. Clamp to `[10, 400]`.
 - `impactOffsetX`: Left/right hit-point offset from cue-ball center, meters.
 - `impactOffsetY`: Up/down hit-point offset from cue-ball center, meters.
 - `inputSeq`: Optional monotonic client sequence number for de-duplication.
@@ -111,7 +111,7 @@ This document defines a canonical JSON payload for shot input so client, server,
 Given accepted input:
 
 1. Clamp values:
-- `d = clamp(dragPx, 10, 1000)`
+- `d = clamp(dragPx, 10, 400)`
 - `theta = wrap360(shotDirectionDeg)`
 - `phi = clamp(cueElevationDeg, 0, 89)`
 
@@ -124,7 +124,7 @@ Given accepted input:
 3. Compute target initial speed:
 - `V0_min = 1.0 m/s`
 - `V0_max = 13.89 m/s`
-- `V0_target = V0_min + (d - 10) / 990 * (V0_max - V0_min)`
+- `V0_target = V0_min + (d - 10) / 390 * (V0_max - V0_min)`
 
 4. Convert to physical strike speed:
 - `m_c = 0.50`
@@ -145,7 +145,7 @@ Given accepted input:
   "clientTsMs": 1771545605123,
   "shotDirectionDeg": 215.4,
   "cueElevationDeg": 18.0,
-  "dragPx": 420,
+  "dragPx": 320,
   "impactOffsetX": -0.008,
   "impactOffsetY": 0.010,
   "inputSeq": 331

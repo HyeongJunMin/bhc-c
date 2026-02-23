@@ -47,7 +47,7 @@ This document defines the minimum physics rules needed to produce realistic 3-cu
   - Elevation range: `0 ~ 89 deg` (clamped).
 - Stroke input:
   - Hold left-click, drag downward, release to strike.
-  - Valid drag distance range: `10 px ~ 1000 px` (clamped).
+  - Valid drag distance range: `10 px ~ 400 px` (clamped).
 - Spin input:
   - `W` -> move impact point toward 12 o'clock.
   - `S` -> move impact point toward 6 o'clock.
@@ -57,11 +57,11 @@ This document defines the minimum physics rules needed to produce realistic 3-cu
 ## 5. Drag-to-Speed Mapping (GDD-Aligned)
 Define drag distance as `d_px`.
 
-- `d_px_clamped = clamp(d_px, 10, 1000)`
+- `d_px_clamped = clamp(d_px, 10, 400)`
 - Minimum cue-ball initial speed: `V0_min = 1.0 m/s`
 - Maximum cue-ball initial speed: `V0_max = 50 km/h = 13.89 m/s`
 - Linear map:
-`V0_target = V0_min + (d_px_clamped - 10) / (1000 - 10) * (V0_max - V0_min)`
+`V0_target = V0_min + (d_px_clamped - 10) / (400 - 10) * (V0_max - V0_min)`
 
 `V0_target` is the desired post-impact cue-ball speed from the UI contract.
 
@@ -135,7 +135,7 @@ When miscue is triggered:
 - Larger `|x|` increases side spin and visible post-cushion throw.
 - `r_off > 0.9R` consistently triggers miscue.
 - Simulated cue-ball behavior remains deterministic under same input and tick rate.
-- `10 px` drag produces `1.0 m/s` and `1000 px` drag produces `13.89 m/s`.
+- `10 px` drag produces `1.0 m/s` and `400 px` drag produces `13.89 m/s`.
 
 ## 12. Out of Scope (v1.0)
 - Cloth anisotropy by direction

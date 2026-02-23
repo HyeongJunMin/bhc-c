@@ -45,16 +45,16 @@ test('상하 회전 입력은 누적 후 0~89 범위로 제한된다', () => {
   assert.equal(nextDown, 0);
 });
 
-test('드래그 픽셀은 10~1000 범위로 클램프된다', () => {
+test('드래그 픽셀은 10~400 범위로 클램프된다', () => {
   assert.equal(clampDragPx(1), 10);
-  assert.equal(clampDragPx(500), 500);
-  assert.equal(clampDragPx(1200), 1000);
+  assert.equal(clampDragPx(300), 300);
+  assert.equal(clampDragPx(1200), 400);
 });
 
 test('드래그 픽셀을 선속도로 선형 매핑한다', () => {
   assertAlmostEqual(mapDragPxToSpeedMps(10), 1);
-  assertAlmostEqual(mapDragPxToSpeedMps(1000), 13.89);
-  assertAlmostEqual(mapDragPxToSpeedMps(505), 7.445);
+  assertAlmostEqual(mapDragPxToSpeedMps(400), 13.89);
+  assertAlmostEqual(mapDragPxToSpeedMps(205), 7.445);
 });
 
 test('WASD 입력으로 당점 오프셋을 누적 이동한다', () => {

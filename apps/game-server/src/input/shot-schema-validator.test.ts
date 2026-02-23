@@ -13,7 +13,7 @@ const validPayload = {
   clientTsMs: 1000,
   shotDirectionDeg: 120,
   cueElevationDeg: 10,
-  dragPx: 500,
+  dragPx: 300,
   impactOffsetX: 0,
   impactOffsetY: 0,
   inputSeq: 1,

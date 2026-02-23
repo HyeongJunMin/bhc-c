@@ -64,7 +64,7 @@
     "dragPx": {
       "type": "number",
       "minimum": 10,
-      "maximum": 1000
+      "maximum": 400
     },
     "impactOffsetX": {
       "type": "number",
