@@ -302,6 +302,90 @@ test('샷 입력 제출: 스키마 유효 payload면 accepted 된다', () => {
   assert.ok(Math.hypot(cueBall?.vx ?? 0, cueBall?.vy ?? 0) > 0);
 });
 
+test('공-공 충돌: 수구 진행선에 목적구가 있으면 목적구 속도가 증가한다', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'coll-hit' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) {
+    return;
+  }
+  const cueBall = created.room.balls.find((ball) => ball.id === 'cueBall');
+  const objectBall1 = created.room.balls.find((ball) => ball.id === 'objectBall1');
+  assert.ok(cueBall);
+  assert.ok(objectBall1);
+  if (!cueBall || !objectBall1) {
+    return;
+  }
+  const shotDirectionDeg = ((Math.atan2(objectBall1.y - cueBall.y, objectBall1.x - cueBall.x) * 180) / Math.PI + 360) % 360;
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg,
+    cueElevationDeg: 10,
+    dragPx: 400,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+  assert.equal(result.ok, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 240));
+  assert.ok(Math.hypot(objectBall1.vx, objectBall1.vy) > 0.05);
+});
+
+test('비충돌 경로: 목적구 진행선에 없으면 목적구 속도는 0에 가깝다', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'coll-miss' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) {
+    return;
+  }
+  const objectBall1 = created.room.balls.find((ball) => ball.id === 'objectBall1');
+  const objectBall2 = created.room.balls.find((ball) => ball.id === 'objectBall2');
+  assert.ok(objectBall1);
+  assert.ok(objectBall2);
+  if (!objectBall1 || !objectBall2) {
+    return;
+  }
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 90,
+    cueElevationDeg: 10,
+    dragPx: 400,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+  assert.equal(result.ok, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 240));
+  assert.ok(Math.hypot(objectBall1.vx, objectBall1.vy) < 0.01);
+  assert.ok(Math.hypot(objectBall2.vx, objectBall2.vy) < 0.01);
+});
+
 test('샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID', () => {
   const { state } = createLobbyHttpServer();
   const created = createRoom(state, { title: 'shot-invalid' });

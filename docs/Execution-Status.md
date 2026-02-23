@@ -212,5 +212,5 @@
 | PHYS-COLL-001B | Agent A | done | 2026-02-23 15:58 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-001C | 탄성 충돌 임펄스(`e_bb=0.95`) 적용 완료 |
 | PHYS-COLL-001C | Agent A | done | 2026-02-23 15:58 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-001D | 겹침 보정(positional correction)/속도 상한/NaN 가드 적용 완료 |
 | PHYS-COLL-001D | Agent A | done | 2026-02-23 15:58 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-TEST-001A | shot 타이머 물리 substep 적용 + stream heartbeat 이중 스텝 제거 완료 |
-| PHYS-COLL-TEST-001A | Agent A | in_progress | 2026-02-23 15:58 | - | - | PHYS-COLL-TEST-001B | 정면 충돌 전달 테스트 작성 진행 중 |
-| PHYS-COLL-TEST-001B | Agent A | todo | 2026-02-23 15:45 | - | - | - | 비충돌/겹침 보정 회귀 테스트 대기 |
+| PHYS-COLL-TEST-001A | Agent A | done | 2026-02-23 15:59 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-TEST-001B | 정면 충돌 전달 테스트 추가 완료 |
+| PHYS-COLL-TEST-001B | Agent A | done | 2026-02-23 15:59 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | ROOM-SYNC-002A | 비충돌 경로 회귀 테스트 추가 완료 |
