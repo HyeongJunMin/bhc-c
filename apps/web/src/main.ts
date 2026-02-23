@@ -1,10 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PORT_MIN = 9211;
 const PORT_MAX = 9220;
 const DEFAULT_WEB_PORT = 9213;
 const DEFAULT_AUTH_SERVER_URL = `http://localhost:${PORT_MIN}`;
 const DEFAULT_LOBBY_SERVER_URL = `http://localhost:${PORT_MIN + 1}`;
+const WEB_PUBLIC_ROOT = fileURLToPath(new URL('../public', import.meta.url));
 
 function parsePort(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -60,6 +64,54 @@ async function proxyJsonRequest(
   } catch {
     writeJson(res, 502, { errorCode: upstreamUnavailableCode });
   }
+}
+
+function getAssetContentType(pathname: string): string {
+  const extension = extname(pathname).toLowerCase();
+  if (extension === '.png') {
+    return 'image/png';
+  }
+  if (extension === '.jpg' || extension === '.jpeg') {
+    return 'image/jpeg';
+  }
+  if (extension === '.webp') {
+    return 'image/webp';
+  }
+  if (extension === '.svg') {
+    return 'image/svg+xml';
+  }
+  return 'application/octet-stream';
+}
+
+async function tryServePublicAsset(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (req.method !== 'GET' || !req.url) {
+    return false;
+  }
+
+  const { pathname } = new URL(req.url, 'http://localhost');
+  if (!pathname.startsWith('/assets/')) {
+    return false;
+  }
+
+  const absolutePath = resolve(WEB_PUBLIC_ROOT, `.${pathname}`);
+  const isInsidePublicRoot = absolutePath === WEB_PUBLIC_ROOT || absolutePath.startsWith(`${WEB_PUBLIC_ROOT}${sep}`);
+  if (!isInsidePublicRoot) {
+    res.statusCode = 404;
+    res.end('Not Found');
+    return true;
+  }
+
+  try {
+    const content = await readFile(absolutePath);
+    res.statusCode = 200;
+    res.setHeader('content-type', getAssetContentType(pathname));
+    res.end(content);
+  } catch {
+    res.statusCode = 404;
+    res.end('Not Found');
+  }
+
+  return true;
 }
 
 function renderLoginPage(): string {
@@ -324,6 +376,20 @@ function renderLobbyPage(): string {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    #room-stage {
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 2 / 1;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      background: #0f172a;
+      display: block;
+    }
+    #stage-message {
+      margin-top: 8px;
+      color: #334155;
+      min-height: 20px;
     }
     button {
       border: 0;
@@ -716,6 +782,11 @@ function renderRoomPage(roomId: string): string {
       <div id="members" class="members"></div>
     </section>
     <section class="panel" style="margin-top: 14px;">
+      <h2>테이블 스테이지</h2>
+      <canvas id="room-stage" width="1200" height="600" aria-label="billiards-table-stage"></canvas>
+      <p id="stage-message">ROOM-UI-002A: 테이블 이미지 로딩 중...</p>
+    </section>
+    <section class="panel" style="margin-top: 14px;">
       <h2>인게임 HUD</h2>
       <p>현재 턴: <strong id="hud-turn">-</strong></p>
       <p>턴 타이머: <strong id="hud-timer">10</strong>초</p>
@@ -752,6 +823,8 @@ function renderRoomPage(roomId: string): string {
     const chatList = document.getElementById('chat-list');
     const chatForm = document.getElementById('chat-form');
     const chatInput = document.getElementById('chat-input');
+    const roomStage = document.getElementById('room-stage');
+    const stageMessage = document.getElementById('stage-message');
     const hudTurn = document.getElementById('hud-turn');
     const hudTimer = document.getElementById('hud-timer');
     const hudScoreboard = document.getElementById('hud-scoreboard');
@@ -793,6 +866,48 @@ function renderRoomPage(roomId: string): string {
       if (type !== 'error') {
         shotErrors.textContent = '';
       }
+    }
+
+    function setStageMessage(text, isError) {
+      stageMessage.textContent = text;
+      stageMessage.style.color = isError ? '#b91c1c' : '#334155';
+    }
+
+    function drawStageFallback(context) {
+      const width = roomStage.width;
+      const height = roomStage.height;
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = '#0f172a';
+      context.fillRect(0, 0, width, height);
+      context.fillStyle = '#155e75';
+      context.fillRect(16, 16, width - 32, height - 32);
+      context.strokeStyle = '#94a3b8';
+      context.lineWidth = 4;
+      context.strokeRect(16, 16, width - 32, height - 32);
+    }
+
+    function initRoomStage() {
+      if (!(roomStage instanceof HTMLCanvasElement)) {
+        return;
+      }
+      const context = roomStage.getContext('2d');
+      if (!context) {
+        setStageMessage('캔버스 컨텍스트를 초기화하지 못했습니다.', true);
+        return;
+      }
+
+      drawStageFallback(context);
+      const image = new Image();
+      image.onload = () => {
+        context.clearRect(0, 0, roomStage.width, roomStage.height);
+        context.drawImage(image, 0, 0, roomStage.width, roomStage.height);
+        setStageMessage('테이블 이미지 렌더 준비 완료', false);
+      };
+      image.onerror = () => {
+        drawStageFallback(context);
+        setStageMessage('테이블 이미지 로드에 실패했습니다. 기본 스테이지를 표시합니다.', true);
+      };
+      image.src = '/assets/table/table-top.png';
     }
 
     function getRoomErrorMessage(errorCode) {
@@ -1049,6 +1164,7 @@ function renderRoomPage(roomId: string): string {
       await loadChat();
     });
 
+    initRoomStage();
     loadRoom();
     loadChat();
     setInterval(loadRoom, 3000);
@@ -1067,6 +1183,10 @@ const authServerUrl = process.env.AUTH_SERVER_URL || DEFAULT_AUTH_SERVER_URL;
 const lobbyServerUrl = process.env.LOBBY_SERVER_URL || DEFAULT_LOBBY_SERVER_URL;
 
 const server = createServer(async (req, res) => {
+  if (await tryServePublicAsset(req, res)) {
+    return;
+  }
+
   if (req.url === '/health') {
     writeJson(res, 200, { ok: true });
     return;
