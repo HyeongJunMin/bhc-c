@@ -14,6 +14,7 @@ import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
+const SHOT_RESOLUTION_FALLBACK_MS = 700;
 const TABLE_WIDTH_M = 2.84;
 const TABLE_HEIGHT_M = 1.42;
 const BALL_RADIUS_M = 0.0615 / 2;
@@ -231,7 +232,86 @@ function stepRoomPhysics(room: LobbyRoom): void {
       ball.vx = 0;
       ball.vy = 0;
     }
+    ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
+    ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
+    ball.vx = Number.isFinite(ball.vx) ? ball.vx : 0;
+    ball.vy = Number.isFinite(ball.vy) ? ball.vy : 0;
+    ball.spinX = Number.isFinite(ball.spinX) ? ball.spinX : 0;
+    ball.spinY = Number.isFinite(ball.spinY) ? ball.spinY : 0;
+    ball.spinZ = Number.isFinite(ball.spinZ) ? ball.spinZ : 0;
   }
+}
+
+function areRoomBallsSettled(room: LobbyRoom): boolean {
+  for (const ball of room.balls) {
+    if (ball.isPocketed) {
+      continue;
+    }
+    if (Math.hypot(ball.vx, ball.vy) >= 0.03) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function finalizeShotLifecycle(state: LobbyState, room: LobbyRoom, actorMemberId: string): void {
+  const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
+  if (resolved) {
+    room.shotState = resolved;
+    const scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId);
+    let isGameFinished = false;
+    if (scoreResult.ok && scoreResult.gameEnded) {
+      room.state = 'FINISHED';
+      room.winnerMemberId = scoreResult.winnerPlayerId;
+      const winnerMemberId = scoreResult.winnerPlayerId;
+      room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
+        acc[member.memberId] = member.memberId === winnerMemberId ? 'WIN' : 'LOSE';
+        return acc;
+      }, {});
+      isGameFinished = true;
+    }
+    broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
+      roomId: room.roomId,
+      shotState: room.shotState,
+      state: room.state,
+      scoreBoard: room.scoreBoard,
+      winnerMemberId: room.winnerMemberId,
+      serverTimeMs: Date.now(),
+    });
+    if (isGameFinished) {
+      const resetAfterResolve = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+      if (resetAfterResolve) {
+        room.shotState = resetAfterResolve;
+      }
+      broadcastRoomEvent(state, room.roomId, 'game_finished', {
+        roomId: room.roomId,
+        winnerMemberId: room.winnerMemberId,
+        memberGameStates: room.memberGameStates,
+        scoreBoard: room.scoreBoard,
+        serverTimeMs: Date.now(),
+      });
+      state.shotStateResetTimers[room.roomId] = null;
+      return;
+    }
+  }
+  const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+  if (turnChanged) {
+    room.shotState = turnChanged;
+    if (room.members.length > 0) {
+      room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+    } else {
+      room.currentTurnIndex = 0;
+    }
+    room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+    broadcastRoomEvent(state, room.roomId, 'turn_changed', {
+      roomId: room.roomId,
+      currentMemberId: getCurrentTurnMemberId(room),
+      turnDeadlineMs: room.turnDeadlineMs,
+      scoreBoard: room.scoreBoard,
+      serverTimeMs: Date.now(),
+    });
+  }
+  state.shotStateResetTimers[room.roomId] = null;
 }
 
 function getDisconnectTimerKey(roomId: string, memberId: string): string {
@@ -789,67 +869,18 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
   });
   const previousTimer = state.shotStateResetTimers[room.roomId];
   if (previousTimer) {
-    clearTimeout(previousTimer);
+    clearInterval(previousTimer);
   }
-  state.shotStateResetTimers[room.roomId] = setTimeout(() => {
-    const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
-    if (resolved) {
-      room.shotState = resolved;
-      const scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId);
-      let isGameFinished = false;
-      if (scoreResult.ok && scoreResult.gameEnded) {
-        room.state = 'FINISHED';
-        room.winnerMemberId = scoreResult.winnerPlayerId;
-        const winnerMemberId = scoreResult.winnerPlayerId;
-        room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
-          acc[member.memberId] = member.memberId === winnerMemberId ? 'WIN' : 'LOSE';
-          return acc;
-        }, {});
-        isGameFinished = true;
+  const startedAtMs = Date.now();
+  state.shotStateResetTimers[room.roomId] = setInterval(() => {
+    if (areRoomBallsSettled(room) || Date.now() - startedAtMs >= SHOT_RESOLUTION_FALLBACK_MS) {
+      const timer = state.shotStateResetTimers[room.roomId];
+      if (timer) {
+        clearInterval(timer);
       }
-      broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
-        roomId: room.roomId,
-        shotState: room.shotState,
-        state: room.state,
-        scoreBoard: room.scoreBoard,
-        winnerMemberId: room.winnerMemberId,
-        serverTimeMs: Date.now(),
-      });
-      if (isGameFinished) {
-        const resetAfterResolve = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
-        if (resetAfterResolve) {
-          room.shotState = resetAfterResolve;
-        }
-        broadcastRoomEvent(state, room.roomId, 'game_finished', {
-          roomId: room.roomId,
-          winnerMemberId: room.winnerMemberId,
-          memberGameStates: room.memberGameStates,
-          scoreBoard: room.scoreBoard,
-          serverTimeMs: Date.now(),
-        });
-        state.shotStateResetTimers[room.roomId] = null;
-        return;
-      }
+      finalizeShotLifecycle(state, room, actorMemberId);
     }
-    const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
-    if (turnChanged) {
-      room.shotState = turnChanged;
-      if (room.members.length > 0) {
-        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
-      } else {
-        room.currentTurnIndex = 0;
-      }
-      room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
-      broadcastRoomEvent(state, room.roomId, 'turn_changed', {
-        roomId: room.roomId,
-        currentMemberId: getCurrentTurnMemberId(room),
-        turnDeadlineMs: room.turnDeadlineMs,
-        scoreBoard: room.scoreBoard,
-        serverTimeMs: Date.now(),
-      });
-    }
-    state.shotStateResetTimers[room.roomId] = null;
-  }, 800);
+  }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
 
   return { ok: true, payload: validated.payload };
 }
