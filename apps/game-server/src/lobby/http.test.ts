@@ -297,6 +297,9 @@ test('샷 입력 제출: 스키마 유효 payload면 accepted 된다', () => {
     impactOffsetY: 0,
   });
   assert.equal(result.ok, true);
+  const cueBall = created.room.balls.find((ball) => ball.id === 'cueBall');
+  assert.ok(cueBall);
+  assert.ok(Math.hypot(cueBall?.vx ?? 0, cueBall?.vy ?? 0) > 0);
 });
 
 test('샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID', () => {

@@ -6,7 +6,7 @@ import { validateRoomTitle } from './validate-room-title.ts';
 import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
-import { serializeRoomSnapshot } from '../game/snapshot-serializer.ts';
+import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
@@ -14,6 +14,10 @@ import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
+const TABLE_WIDTH_M = 2.84;
+const TABLE_HEIGHT_M = 1.42;
+const BALL_RADIUS_M = 0.0615 / 2;
+const PHYSICS_DT_SEC = ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS / 1000;
 
 type LobbyRoom = {
   roomId: string;
@@ -38,6 +42,7 @@ type LobbyRoom = {
   turnDeadlineMs: number | null;
   winnerMemberId: string | null;
   memberGameStates: Record<string, 'IN_ROOM' | 'PLAYING' | 'WIN' | 'LOSE' | 'KICKED'>;
+  balls: SnapshotBallFrame[];
 };
 
 type LobbyState = {
@@ -154,6 +159,79 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
     acc[member.memberId] = 'PLAYING';
     return acc;
   }, {});
+  room.balls = createInitialRoomBalls();
+}
+
+function createInitialRoomBalls(): SnapshotBallFrame[] {
+  return [
+    { id: 'cueBall', x: 0.70, y: 0.71, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
+    { id: 'objectBall1', x: 2.10, y: 0.62, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
+    { id: 'objectBall2', x: 2.24, y: 0.80, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
+  ];
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, value));
+}
+
+function dragPxToSpeedMps(dragPx: number): number {
+  const minPx = 10;
+  const maxPx = 400;
+  const minSpeed = 1;
+  const maxSpeed = 13.89;
+  const clamped = clampNumber(dragPx, minPx, maxPx);
+  const alpha = (clamped - minPx) / (maxPx - minPx);
+  return minSpeed + (maxSpeed - minSpeed) * alpha;
+}
+
+function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
+  const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
+  if (!cueBall) {
+    return;
+  }
+  const directionDeg = Number(payload.shotDirectionDeg);
+  const dragPx = Number(payload.dragPx);
+  const impactOffsetX = clampNumber(Number(payload.impactOffsetX), -0.9, 0.9);
+  const impactOffsetY = clampNumber(Number(payload.impactOffsetY), -0.9, 0.9);
+  const directionRad = (directionDeg * Math.PI) / 180;
+  const speed = dragPxToSpeedMps(dragPx);
+  cueBall.vx = Math.cos(directionRad) * speed;
+  cueBall.vy = Math.sin(directionRad) * speed;
+  cueBall.spinX = impactOffsetY * 20;
+  cueBall.spinY = 0;
+  cueBall.spinZ = impactOffsetX * 20;
+}
+
+function stepRoomPhysics(room: LobbyRoom): void {
+  for (const ball of room.balls) {
+    if (ball.isPocketed) {
+      continue;
+    }
+    ball.x += ball.vx * PHYSICS_DT_SEC;
+    ball.y += ball.vy * PHYSICS_DT_SEC;
+
+    if (ball.x <= BALL_RADIUS_M || ball.x >= TABLE_WIDTH_M - BALL_RADIUS_M) {
+      ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
+      ball.vx *= -0.82;
+    }
+    if (ball.y <= BALL_RADIUS_M || ball.y >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
+      ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
+      ball.vy *= -0.82;
+    }
+
+    ball.vx *= 0.985;
+    ball.vy *= 0.985;
+    ball.spinX *= 0.97;
+    ball.spinY *= 0.97;
+    ball.spinZ *= 0.97;
+    if (Math.hypot(ball.vx, ball.vy) < 0.02) {
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+  }
 }
 
 function getDisconnectTimerKey(roomId: string, memberId: string): string {
@@ -305,6 +383,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     turnDeadlineMs: null,
     winnerMemberId: null,
     memberGameStates: {},
+    balls: createInitialRoomBalls(),
   };
 
   state.nextRoomId += 1;
@@ -702,6 +781,7 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
   }
   room.shotState = nextOnSubmit;
+  applyShotToRoomBalls(room, validated.payload);
   broadcastRoomEvent(state, room.roomId, 'shot_started', {
     roomId: room.roomId,
     playerId: actorMemberId,
@@ -838,11 +918,7 @@ function buildRoomSnapshot(state: LobbyState, room: LobbyRoom) {
     currentMemberId: getCurrentTurnMemberId(room),
     turnDeadlineMs: room.turnDeadlineMs,
     scoreBoard: room.scoreBoard,
-    balls: [
-      { id: 'cueBall', x: 0.70, y: 0.71, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
-      { id: 'objectBall1', x: 2.10, y: 0.62, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
-      { id: 'objectBall2', x: 2.24, y: 0.80, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
-    ],
+    balls: room.balls,
   });
 }
 
@@ -898,6 +974,7 @@ function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, sta
     if (res.writableEnded) {
       return;
     }
+    stepRoomPhysics(opened.room);
     const heartbeatSnapshot = buildRoomSnapshot(state, opened.room);
     broadcastRoomEvent(state, roomId, 'room_snapshot', heartbeatSnapshot);
   }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
