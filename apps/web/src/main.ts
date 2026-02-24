@@ -9,7 +9,8 @@ const PORT_MAX = 9220;
 const DEFAULT_WEB_PORT = 9213;
 const DEFAULT_AUTH_SERVER_URL = `http://localhost:${PORT_MIN}`;
 const DEFAULT_LOBBY_SERVER_URL = `http://localhost:${PORT_MIN + 1}`;
-const WEB_PUBLIC_ROOT = fileURLToPath(new URL('../public', import.meta.url));
+const WEB_PUBLIC_ROOT_URL = new URL('../public/', import.meta.url);
+const WEB_PUBLIC_ROOT = resolve(fileURLToPath(WEB_PUBLIC_ROOT_URL));
 
 function parsePort(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -132,8 +133,13 @@ async function tryServePublicAsset(req: IncomingMessage, res: ServerResponse): P
   if (!pathname.startsWith('/assets/')) {
     return false;
   }
-
-  const absolutePath = resolve(WEB_PUBLIC_ROOT, `.${pathname}`);
+  const relativePath = pathname.replace(/^\/+/, '');
+  if (relativePath.length === 0) {
+    res.statusCode = 404;
+    res.end('Not Found');
+    return true;
+  }
+  const absolutePath = resolve(fileURLToPath(new URL(relativePath, WEB_PUBLIC_ROOT_URL)));
   const isInsidePublicRoot = absolutePath === WEB_PUBLIC_ROOT || absolutePath.startsWith(`${WEB_PUBLIC_ROOT}${sep}`);
   if (!isInsidePublicRoot) {
     res.statusCode = 404;
@@ -1025,8 +1031,10 @@ function renderRoomPage(roomId: string): string {
     const TABLE_WORLD_HEIGHT_M = 1.42;
     const stageState = {
       context: null,
-      image: null,
-      imageLoaded: false,
+      clothImage: null,
+      clothImageLoaded: false,
+      frameImage: null,
+      frameImageLoaded: false,
       animationFrameId: 0,
       lastSnapshotSeq: 0,
       snapshotBuffer: [],
@@ -1560,13 +1568,20 @@ function renderRoomPage(roomId: string): string {
       if (!context) {
         return;
       }
-      if (!stageState.imageLoaded || !stageState.image) {
+      if (!stageState.clothImageLoaded || !stageState.clothImage || !stageState.frameImageLoaded || !stageState.frameImage) {
         drawStageFallback(context);
         return;
       }
       context.clearRect(0, 0, roomStage.width, roomStage.height);
       context.drawImage(
-        stageState.image,
+        stageState.frameImage,
+        stageState.viewport.offsetX,
+        stageState.viewport.offsetY,
+        stageState.viewport.width,
+        stageState.viewport.height,
+      );
+      context.drawImage(
+        stageState.clothImage,
         stageState.viewport.offsetX,
         stageState.viewport.offsetY,
         stageState.viewport.width,
@@ -1635,23 +1650,41 @@ function renderRoomPage(roomId: string): string {
       resizeStageCanvas();
       drawStageFallback(context);
       seedStageSnapshots();
-      const image = new Image();
-      stageState.image = image;
-      image.onload = () => {
-        stageState.imageLoaded = true;
+      const clothImage = new Image();
+      const frameImage = new Image();
+      stageState.clothImage = clothImage;
+      stageState.frameImage = frameImage;
+      const updateStageReadyMessage = () => {
+        if (!stageState.clothImageLoaded || !stageState.frameImageLoaded) {
+          return;
+        }
         renderStageFrame();
         const originCanvas = worldToCanvas({ x: 0, y: 0 });
         setStageMessage(
-          '테이블 렌더 준비 완료 (DPR ' + stageState.dpr.toFixed(2) + ', origin=' + originCanvas.x.toFixed(1) + ',' + originCanvas.y.toFixed(1) + ')',
+          '테이블 레이어 렌더 준비 완료 (DPR ' + stageState.dpr.toFixed(2) + ', origin=' + originCanvas.x.toFixed(1) + ',' + originCanvas.y.toFixed(1) + ')',
           false,
         );
       };
-      image.onerror = () => {
-        stageState.imageLoaded = false;
-        drawStageFallback(context);
-        setStageMessage('테이블 이미지 로드에 실패했습니다. 기본 스테이지를 표시합니다.', true);
+      clothImage.onload = () => {
+        stageState.clothImageLoaded = true;
+        updateStageReadyMessage();
       };
-      image.src = '/assets/table/table-top.png';
+      clothImage.onerror = () => {
+        stageState.clothImageLoaded = false;
+        drawStageFallback(context);
+        setStageMessage('바닥 천 이미지 로드에 실패했습니다. 기본 스테이지를 표시합니다.', true);
+      };
+      frameImage.onload = () => {
+        stageState.frameImageLoaded = true;
+        updateStageReadyMessage();
+      };
+      frameImage.onerror = () => {
+        stageState.frameImageLoaded = false;
+        drawStageFallback(context);
+        setStageMessage('프레임 이미지 로드에 실패했습니다. 기본 스테이지를 표시합니다.', true);
+      };
+      frameImage.src = '/assets/table/frame.png';
+      clothImage.src = '/assets/table/cloth.png';
       window.addEventListener('resize', () => {
         resizeStageCanvas();
         renderStageFrame();

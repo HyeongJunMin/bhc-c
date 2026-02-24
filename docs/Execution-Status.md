@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 176 |
+| Total Tasks | 177 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 176 |
+| Done | 177 |
 | Blocked | 0 |
-| Last Updated | 2026-02-23 11:34 |
+| Last Updated | 2026-02-24 10:28 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | PHYS-RUNTIME-001E | done | 2026-02-23 11:34 | 정지판정 기반 샷 종료 + NaN/Infinity 방어 처리 완료 |
+| Agent A (web) | ROOM-UI-005A | done | 2026-02-24 10:28 | 테이블 레이어 에셋 404 원인(trailing slash 경로검사 실패) 수정 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -214,3 +214,4 @@
 | PHYS-COLL-001D | Agent A | done | 2026-02-23 15:58 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-TEST-001A | shot 타이머 물리 substep 적용 + stream heartbeat 이중 스텝 제거 완료 |
 | PHYS-COLL-TEST-001A | Agent A | done | 2026-02-23 15:59 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | PHYS-COLL-TEST-001B | 정면 충돌 전달 테스트 추가 완료 |
 | PHYS-COLL-TEST-001B | Agent A | done | 2026-02-23 15:59 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과 | - | ROOM-SYNC-002A | 비충돌 경로 회귀 테스트 추가 완료 |
+| ROOM-UI-005A | Agent A | done | 2026-02-24 10:28 | `pnpm --filter @bhc/web run lint` 통과, `node --input-type=module` 경로해석/파일읽기 검증(inside=true, ok=true) 통과 | - | ROOM-UI-005B | 테이블 정적 에셋 경로 정규화로 /assets/table/* 404 핫픽스 완료 |
