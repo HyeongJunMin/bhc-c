@@ -17,6 +17,30 @@ import {
   startRoomGame,
 } from './http.ts';
 
+async function waitUntil(
+  predicate: () => boolean,
+  timeoutMs: number = 30_000,
+  intervalMs: number = 20,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error(`waitUntil timeout: ${timeoutMs}ms`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+function forceBallsSettled(room: { balls: Array<{ vx: number; vy: number; spinX: number; spinY: number; spinZ: number }> }): void {
+  for (const ball of room.balls) {
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.spinX = 0;
+    ball.spinY = 0;
+    ball.spinZ = 0;
+  }
+}
+
 test('방 생성 성공: 유효 제목이면 생성된다', () => {
   const { state } = createLobbyHttpServer();
   const result = createRoom(state, { title: 'room-1' });
@@ -536,7 +560,8 @@ test('샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finis
     impactOffsetY: 0,
   });
   assert.equal(result.ok, true);
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  forceBallsSettled(created.room);
+  await waitUntil(() => created.room.state === 'FINISHED' && created.room.winnerMemberId === 'u1');
 
   assert.equal(created.room.state, 'FINISHED');
   assert.equal(created.room.winnerMemberId, 'u1');
@@ -683,7 +708,8 @@ test('샷 제출 후 shot_started -> shot_resolved -> turn_changed 이벤트 순
   };
   const result = submitRoomShot(state, created.room.roomId, 'u1', payload);
   assert.equal(result.ok, true);
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  forceBallsSettled(created.room);
+  await waitUntil(() => writes.join('').includes('event: turn_changed'));
 
   const output = writes.join('');
   const startedIndex = output.indexOf('event: shot_started');
@@ -726,7 +752,8 @@ test('HUD 동기화: 샷 종료 후 turnDeadlineMs가 갱신되고 currentTurnIn
     impactOffsetY: 0,
   });
   assert.equal(result.ok, true);
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  forceBallsSettled(created.room);
+  await waitUntil(() => created.room.currentTurnIndex === 1);
 
   assert.equal(created.room.currentTurnIndex, 1);
   assert.equal(created.room.members[created.room.currentTurnIndex]?.memberId, 'u2');

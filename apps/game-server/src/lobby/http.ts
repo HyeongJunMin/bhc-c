@@ -14,12 +14,12 @@ import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
-const SHOT_RESOLUTION_FALLBACK_MS = 700;
 const TABLE_WIDTH_M = 2.84;
 const TABLE_HEIGHT_M = 1.42;
 const BALL_RADIUS_M = 0.0615 / 2;
 const PHYSICS_DT_SEC = ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS / 1000;
 const PHYSICS_SUBSTEPS = 4;
+const SHOT_END_LINEAR_SPEED_THRESHOLD_MPS = 0.01;
 const BALL_BALL_RESTITUTION = 0.95;
 const CUSHION_RESTITUTION = 0.82;
 const MAX_BALL_SPEED_MPS = 30;
@@ -244,7 +244,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
       ball.spinX *= spinDamping;
       ball.spinY *= spinDamping;
       ball.spinZ *= spinDamping;
-      if (Math.hypot(ball.vx, ball.vy) < 0.02) {
+      if (Math.hypot(ball.vx, ball.vy) < SHOT_END_LINEAR_SPEED_THRESHOLD_MPS) {
         ball.vx = 0;
         ball.vy = 0;
       }
@@ -385,7 +385,7 @@ function areRoomBallsSettled(room: LobbyRoom): boolean {
     if (ball.isPocketed) {
       continue;
     }
-    if (Math.hypot(ball.vx, ball.vy) >= 0.03) {
+    if (Math.hypot(ball.vx, ball.vy) >= SHOT_END_LINEAR_SPEED_THRESHOLD_MPS) {
       return false;
     }
   }
@@ -1009,10 +1009,9 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
   if (previousTimer) {
     clearInterval(previousTimer);
   }
-  const startedAtMs = Date.now();
   state.shotStateResetTimers[room.roomId] = setInterval(() => {
     stepRoomPhysics(room);
-    if (areRoomBallsSettled(room) || Date.now() - startedAtMs >= SHOT_RESOLUTION_FALLBACK_MS) {
+    if (areRoomBallsSettled(room)) {
       const timer = state.shotStateResetTimers[room.roomId];
       if (timer) {
         clearInterval(timer);

@@ -2,8 +2,8 @@
 
 ## 1. Document Info
 - Title: Web 3-Cushion Billiards Physics Specification
-- Version: v1.0
-- Date: 2026-02-20
+- Version: v1.1
+- Date: 2026-02-24
 - Scope: Shot initialization, spin initialization, miscue limit, and core table/ball constants
 
 ## 2. Purpose
@@ -115,6 +115,12 @@ When miscue is triggered:
 6. Set `Rigidbody.velocity = v0_vec` once at impact frame.
 7. Compute `omega_x`, `omega_z` and set `Rigidbody.angularVelocity` once.
 8. Let engine resolve ball-ball, ball-cushion, and friction over time.
+
+## 9.1 Shot End Rule (Runtime, Mandatory)
+- A shot ends only when all non-pocketed balls satisfy:
+`|v| < 0.01 m/s`
+- Do not use fixed elapsed-time fallback (for example, `700 ms`) to force shot end.
+- The runtime loop must continue until the velocity threshold condition is satisfied.
 
 ## 10. Calibration Guidelines
 - Start with:
