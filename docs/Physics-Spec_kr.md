@@ -147,6 +147,14 @@
 - 충돌 전 접선 속도는 `(1 - mu_bc)`로 감쇠한다.
 - 추가 throw 접선 속도: `v_throw = sign(spin_z) * tan(theta) * |v_n'|`.
 
+## 9.3 3쿠션 득점 판정 연계 (런타임)
+- 샷 종료 시(`SHOT_END`) 해당 샷 동안 기록된 물리 이벤트(`BALL_COLLISION`, `CUSHION_COLLISION`)로 득점을 판정한다.
+- 1점 성립 조건:
+  1. `sourceBallId === cueBall`인 공-공 충돌에서 두 목적구(`objectBall1`, `objectBall2`)를 모두 접촉
+  2. 두 번째 목적구 접촉 이전 `sourceBallId === cueBall`인 쿠션 충돌이 3회 이상
+- 득점 성립 시: 현재 플레이어 점수 `+1`, 다음 샷 턴 유지
+- 득점 불성립 시: 점수 변화 없음, 턴을 다음 플레이어로 전환
+
 ## 10. 캘리브레이션 가이드
 - 시작값 권장:
   - `e_tip = 0.70`

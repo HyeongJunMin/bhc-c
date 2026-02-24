@@ -113,8 +113,13 @@
 - Fixed turn order by join order
 - Turn timer: 10 seconds
 - Timeout behavior: automatic turn skip only (no extra penalty)
+- After shot end, keep turn when 3-cushion score is valid.
+- After shot end, switch turn to next player when 3-cushion score is invalid.
 
 ### 10.3 Win/Lose Conditions
+- +1 scoring condition (valid 3-cushion):
+  - Cue ball must contact both object balls.
+  - Cue ball must contact cushions at least 3 times before second object-ball contact.
 - First player to 10 points wins
 - Match ends immediately at 10 points
 - No tie-break rule needed due to immediate end

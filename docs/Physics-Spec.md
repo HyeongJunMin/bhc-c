@@ -147,6 +147,14 @@ Runtime effect:
 - Dampen pre-collision tangential velocity by `(1 - mu_bc)`.
 - Add throw tangential velocity: `v_throw = sign(spin_z) * tan(theta) * |v_n'|`.
 
+## 9.3 3-Cushion Scoring Integration (Runtime)
+- At shot end (`SHOT_END`), evaluate scoring from shot-local physics events (`BALL_COLLISION`, `CUSHION_COLLISION`).
+- +1 scoring condition:
+  1. In ball-ball collisions where `sourceBallId === cueBall`, contact both object balls (`objectBall1`, `objectBall2`).
+  2. Before the second object-ball contact, record at least 3 cushion collisions where `sourceBallId === cueBall`.
+- If scored: add `+1` to current player's score and keep turn.
+- If not scored: no score change and switch turn to next player.
+
 ## 10. Calibration Guidelines
 - Start with:
   - `e_tip = 0.70`
