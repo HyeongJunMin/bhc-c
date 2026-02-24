@@ -7,6 +7,7 @@ import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
+import { applyCushionContactThrow } from '../game/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
@@ -22,6 +23,11 @@ const PHYSICS_SUBSTEPS = 4;
 const SHOT_END_LINEAR_SPEED_THRESHOLD_MPS = 0.01;
 const BALL_BALL_RESTITUTION = 0.95;
 const CUSHION_RESTITUTION = 0.82;
+const CUSHION_CONTACT_FRICTION_COEFFICIENT = 0.14;
+const CUSHION_CONTACT_REFERENCE_SPEED_MPS = 5.957692307692308;
+const CUSHION_CONTACT_TIME_EXPONENT = 1.2;
+const CUSHION_MAX_SPIN_MAGNITUDE = 0.615;
+const CUSHION_MAX_THROW_ANGLE_DEG = 55;
 const MAX_BALL_SPEED_MPS = 30;
 
 type LobbyRoom = {
@@ -225,11 +231,37 @@ function stepRoomPhysics(room: LobbyRoom): void {
 
       if (ball.x <= BALL_RADIUS_M || ball.x >= TABLE_WIDTH_M - BALL_RADIUS_M) {
         ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
-        ball.vx *= -CUSHION_RESTITUTION;
+        const collision = applyCushionContactThrow({
+          axis: 'x',
+          vx: ball.vx,
+          vy: ball.vy,
+          spinZ: ball.spinZ,
+          restitution: CUSHION_RESTITUTION,
+          contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
+          referenceNormalSpeedMps: CUSHION_CONTACT_REFERENCE_SPEED_MPS,
+          contactTimeExponent: CUSHION_CONTACT_TIME_EXPONENT,
+          maxSpinMagnitude: CUSHION_MAX_SPIN_MAGNITUDE,
+          maxThrowAngleDeg: CUSHION_MAX_THROW_ANGLE_DEG,
+        });
+        ball.vx = collision.vx;
+        ball.vy = collision.vy;
       }
       if (ball.y <= BALL_RADIUS_M || ball.y >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
         ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
-        ball.vy *= -CUSHION_RESTITUTION;
+        const collision = applyCushionContactThrow({
+          axis: 'y',
+          vx: ball.vx,
+          vy: ball.vy,
+          spinZ: ball.spinZ,
+          restitution: CUSHION_RESTITUTION,
+          contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
+          referenceNormalSpeedMps: CUSHION_CONTACT_REFERENCE_SPEED_MPS,
+          contactTimeExponent: CUSHION_CONTACT_TIME_EXPONENT,
+          maxSpinMagnitude: CUSHION_MAX_SPIN_MAGNITUDE,
+          maxThrowAngleDeg: CUSHION_MAX_THROW_ANGLE_DEG,
+        });
+        ball.vx = collision.vx;
+        ball.vy = collision.vy;
       }
     }
 

@@ -9,17 +9,17 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 183 |
+| Total Tasks | 190 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 183 |
+| Done | 190 |
 | Blocked | 0 |
-| Last Updated | 2026-02-24 10:55 |
+| Last Updated | 2026-02-24 11:48 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
 |---|---|---|---|---|
-| Agent A (web) | ROOM-UI-005G | done | 2026-02-24 10:55 | 테이블 레이어 QA(HTTP/경계/반응형/렌더순서) 자동화 5개 태스크 완료 |
+| Agent A (web) | PHYS-CT-007 | done | 2026-02-24 11:48 | 쿠션 접촉시간 근사 모델 문서/코드/테스트/QA 통합 반영 완료 |
 | Agent B (game-server) | - | idle | - | - |
 | Agent C (shared/physics/docs) | INF-002C | done | 2026-02-23 09:16 | 오프라인 실행 경로로 lint 스모크 통과 |
 
@@ -221,3 +221,128 @@
 | ROOM-UI-005E | Agent A | done | 2026-02-24 10:55 | `pnpm run qa:table-boundary` 통과 | - | ROOM-UI-005F | 공 가시 경계/물리 경계 상수 및 경계조건 일치성 자동 검증 완료 |
 | ROOM-UI-005F | Agent A | done | 2026-02-24 10:55 | `QA_BASE_URL=http://127.0.0.1:<mock-port> pnpm run qa:table-layer:render-http` 통과 | - | ROOM-UI-005G | HTTP 기반 렌더 순서(frame->cloth->balls) 회귀 자동 검증 완료 |
 | ROOM-UI-005G | Agent A | done | 2026-02-24 10:55 | `pnpm run qa:table-responsive` 통과 | - | - | 반응형 2:1 비율/뷰포트 왜곡 회귀 자동 검증 완료 |
+| PHYS-CT-001 | Agent A | done | 2026-02-24 11:48 |  근사식/상수 반영 확인 | - | PHYS-CT-002 | 쿠션 접촉시간 근사 모델 규칙( 속도 의존) 확정 완료 |
+| PHYS-CT-002 | Agent A | done | 2026-02-24 11:48 | [spec-guard] OK
+[spec-guard] checked files: 3 통과 | - | PHYS-CT-003 | 물리 문서 영/한 동기화 및 상수() 반영 완료 |
+| PHYS-CT-003 | Agent A | done | 2026-02-24 11:48 | ✔ 방 생성 성공: 유효 제목이면 생성된다 (4.8085ms)
+✔ 방 생성 실패: 제목이 비어있으면 거부된다 (0.115625ms)
+✔ 방 생성 실패: 제목이 15자를 초과하면 거부된다 (0.0875ms)
+✔ 방 목록 조회: WAITING 우선, 인원 적은 순, 최신 생성 순으로 정렬된다 (0.172875ms)
+✔ 방 입장 성공: 대기방 정원 미만이면 입장된다 (0.201709ms)
+✔ 방 입장 실패: 존재하지 않는 방이면 ROOM_NOT_FOUND (0.088916ms)
+✔ 방 상세 조회: 존재하는 roomId면 상세를 반환한다 (0.11425ms)
+✔ 게임 시작: 방장이고 2인 이상이면 IN_GAME으로 전환된다 (0.181333ms)
+✔ 강퇴: 방장이 타겟 멤버를 제거하면 인원이 감소한다 (0.240625ms)
+✔ 나가기: 멤버가 leave를 호출하면 룸에서 제거되고 host가 비면 다음 멤버로 위임된다 (0.371875ms)
+✔ 방장 나가기: host_delegated 이벤트가 발행되고 다음 멤버가 host가 된다 (0.193291ms)
+✔ 재경기: 방장이고 2인 이상이면 IN_GAME으로 전환된다 (0.111208ms)
+✔ 채팅 전송: 룸 멤버면 메시지가 저장된다 (0.149042ms)
+✔ 채팅 전송: 3초 이내 연속 전송이면 CHAT_RATE_LIMITED를 반환한다 (0.0775ms)
+✔ 채팅 전송: 동일 시점 2회 요청 시 1회만 성공하고 나머지는 CHAT_RATE_LIMITED로 거부된다 (0.137709ms)
+✔ 샷 입력 제출: 스키마 유효 payload면 accepted 된다 (0.52475ms)
+✔ 공-공 충돌: 수구 진행선에 목적구가 있으면 목적구 속도가 증가한다 (241.675125ms)
+✔ 공-공 충돌: substep 사이 중간 교차도 충돌로 처리한다 (80.933333ms)
+✔ 비충돌 경로: 목적구 진행선에 없으면 목적구 속도는 0에 가깝다 (240.393667ms)
+✔ 샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID (0.424083ms)
+✔ 샷 입력 제출: running 상태에서 중복 제출하면 SHOT_STATE_CONFLICT (0.383416ms)
+✔ 샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finished 이벤트가 발행된다 (62.281666ms)
+✔ 연결해제 유예 만료: IN_GAME에서 미복귀 시 LOSE 처리되고 1인 생존자는 즉시 WIN으로 종료된다 (0.473708ms)
+✔ 연결복구: 유예 타이머가 존재해도 스트림 재접속 시 타이머가 해제된다 (0.503125ms)
+✔ 룸 스트림 오픈: 룸 멤버면 snapshot을 반환한다 (0.120708ms)
+✔ 룸 스트림 오픈: 비멤버는 ROOM_STREAM_FORBIDDEN(403) (0.076875ms)
+✔ 룸 스트림 snapshot seq는 같은 room에서 단조 증가한다 (0.124542ms)
+✔ 샷 제출 후 shot_started -> shot_resolved -> turn_changed 이벤트 순서로 브로드캐스트된다 (62.367375ms)
+✔ HUD 동기화: 샷 종료 후 turnDeadlineMs가 갱신되고 currentTurnIndex가 다음 플레이어로 이동한다 (61.488208ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19722.986834 통과(29 pass) | - | PHYS-CT-004 | game-server 쿠션 충돌에 접촉시간 근사 throw 로직 반영 완료 |
+| PHYS-CT-004 | Agent A | done | 2026-02-24 11:48 | ✔ 스핀이 없으면 직각 입사에서 반사각은 0도에 가깝다 (0.951708ms)
+✔ 같은 스핀에서 속도가 낮을수록 반사각이 커진다 (0.101292ms)
+✔ 스핀 방향에 따라 접선 반사 방향이 바뀐다 (0.087125ms)
+✔ 최대 반사각 상한을 넘지 않는다 (0.073042ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 195.563334 통과(4 pass) | - | PHYS-CT-005 | 접촉시간 근사 로직 단위 테스트 추가 완료 |
+| PHYS-CT-005 | Agent A | done | 2026-02-24 11:48 | strokePct	speedMps	angleDeg
+10	1.991538	42.774
+20	3.313590	26.666
+30	4.635641	18.555
+40	5.957692	13.950
+50	7.279744	11.051
+60	8.601795	9.082
+70	9.923846	7.669
+80	11.245897	6.611
+90	12.567949	5.791
+100	13.890000	5.140
+PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | PHYS-CT-006 | 10~100% 반사각 표 생성/단조성 검증 QA 자동화 완료 |
+| PHYS-CT-006 | Agent A | done | 2026-02-24 11:48 | [spec-guard] OK
+[spec-guard] checked files: 3 통과 | - | PHYS-CT-007 | 스펙 가드 검증 완료 |
+| PHYS-CT-007 | Agent A | done | 2026-02-24 11:48 | ✔ 방 생성 성공: 유효 제목이면 생성된다 (4.331917ms)
+✔ 방 생성 실패: 제목이 비어있으면 거부된다 (0.089125ms)
+✔ 방 생성 실패: 제목이 15자를 초과하면 거부된다 (0.083125ms)
+✔ 방 목록 조회: WAITING 우선, 인원 적은 순, 최신 생성 순으로 정렬된다 (0.172334ms)
+✔ 방 입장 성공: 대기방 정원 미만이면 입장된다 (0.15ms)
+✔ 방 입장 실패: 존재하지 않는 방이면 ROOM_NOT_FOUND (0.062625ms)
+✔ 방 상세 조회: 존재하는 roomId면 상세를 반환한다 (0.165334ms)
+✔ 게임 시작: 방장이고 2인 이상이면 IN_GAME으로 전환된다 (0.268667ms)
+✔ 강퇴: 방장이 타겟 멤버를 제거하면 인원이 감소한다 (0.253625ms)
+✔ 나가기: 멤버가 leave를 호출하면 룸에서 제거되고 host가 비면 다음 멤버로 위임된다 (0.241584ms)
+✔ 방장 나가기: host_delegated 이벤트가 발행되고 다음 멤버가 host가 된다 (0.164333ms)
+✔ 재경기: 방장이고 2인 이상이면 IN_GAME으로 전환된다 (0.117458ms)
+✔ 채팅 전송: 룸 멤버면 메시지가 저장된다 (0.146208ms)
+✔ 채팅 전송: 3초 이내 연속 전송이면 CHAT_RATE_LIMITED를 반환한다 (0.076458ms)
+✔ 채팅 전송: 동일 시점 2회 요청 시 1회만 성공하고 나머지는 CHAT_RATE_LIMITED로 거부된다 (0.108417ms)
+✔ 샷 입력 제출: 스키마 유효 payload면 accepted 된다 (0.497083ms)
+✔ 공-공 충돌: 수구 진행선에 목적구가 있으면 목적구 속도가 증가한다 (241.929459ms)
+✔ 공-공 충돌: substep 사이 중간 교차도 충돌로 처리한다 (80.666375ms)
+✔ 비충돌 경로: 목적구 진행선에 없으면 목적구 속도는 0에 가깝다 (240.966167ms)
+✔ 샷 입력 제출: 스키마 위반 payload면 SHOT_INPUT_SCHEMA_INVALID (0.2955ms)
+✔ 샷 입력 제출: running 상태에서 중복 제출하면 SHOT_STATE_CONFLICT (0.147458ms)
+✔ 샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finished 이벤트가 발행된다 (61.291292ms)
+✔ 연결해제 유예 만료: IN_GAME에서 미복귀 시 LOSE 처리되고 1인 생존자는 즉시 WIN으로 종료된다 (0.31925ms)
+✔ 연결복구: 유예 타이머가 존재해도 스트림 재접속 시 타이머가 해제된다 (0.371709ms)
+✔ 룸 스트림 오픈: 룸 멤버면 snapshot을 반환한다 (0.094792ms)
+✔ 룸 스트림 오픈: 비멤버는 ROOM_STREAM_FORBIDDEN(403) (0.060625ms)
+✔ 룸 스트림 snapshot seq는 같은 room에서 단조 증가한다 (0.098625ms)
+✔ 샷 제출 후 shot_started -> shot_resolved -> turn_changed 이벤트 순서로 브로드캐스트된다 (60.495ms)
+✔ HUD 동기화: 샷 종료 후 turnDeadlineMs가 갱신되고 currentTurnIndex가 다음 플레이어로 이동한다 (62.041916ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19681.9455 통과(29 pass), 
+> bhc-c@0.1.0 qa:cushion-contact-time /Users/minhyeongjun/IdeaProjects/bhc
+> node --experimental-strip-types scripts/qa/cushion-contact-time-angle-table.ts
+
+strokePct	speedMps	angleDeg
+10	1.991538	42.774
+20	3.313590	26.666
+30	4.635641	18.555
+40	5.957692	13.950
+50	7.279744	11.051
+60	8.601795	9.082
+70	9.923846	7.669
+80	11.245897	6.611
+90	12.567949	5.791
+100	13.890000	5.140
+PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | - | 문서/코드/테스트/QA 통합 회귀 검증 완료 |
+| PHYS-CT-001 | Agent A | done | 2026-02-24 11:48 | `docs/Physics-Spec*.md` 근사식/상수 반영 확인 | - | PHYS-CT-002 | 쿠션 접촉시간 근사 모델 규칙(`tan(theta)` 속도 의존) 확정 완료 |
+| PHYS-CT-002 | Agent A | done | 2026-02-24 11:48 | `python3 scripts/ci/spec_guard.py docs/Physics-Spec.md docs/Physics-Spec_kr.md apps/game-server/src/lobby/http.ts` 통과 | - | PHYS-CT-003 | 물리 문서 영/한 동기화 및 상수(`mu_bc=0.14`) 반영 완료 |
+| PHYS-CT-003 | Agent A | done | 2026-02-24 11:48 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(29 pass) | - | PHYS-CT-004 | game-server 쿠션 충돌에 접촉시간 근사 throw 로직 반영 완료 |
+| PHYS-CT-004 | Agent A | done | 2026-02-24 11:48 | `node --experimental-strip-types --test apps/game-server/src/game/cushion-contact-throw.test.ts` 통과(4 pass) | - | PHYS-CT-005 | 접촉시간 근사 로직 단위 테스트 추가 완료 |
+| PHYS-CT-005 | Agent A | done | 2026-02-24 11:48 | `node --experimental-strip-types scripts/qa/cushion-contact-time-angle-table.ts` 통과 | - | PHYS-CT-006 | 10~100% 반사각 표 생성/단조성 검증 QA 자동화 완료 |
+| PHYS-CT-006 | Agent A | done | 2026-02-24 11:48 | `python3 scripts/ci/spec_guard.py docs/Physics-Spec.md docs/Physics-Spec_kr.md apps/game-server/src/lobby/http.ts` 통과 | - | PHYS-CT-007 | 스펙 가드 검증 완료 |
+| PHYS-CT-007 | Agent A | done | 2026-02-24 11:48 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(29 pass), `pnpm run qa:cushion-contact-time` 통과 | - | - | 문서/코드/테스트/QA 통합 회귀 검증 완료 |

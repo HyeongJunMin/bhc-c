@@ -13,6 +13,7 @@
     "qa:table-layer:all": "node --experimental-strip-types scripts/qa/room-table-layer-assets.ts --mode=all",
     "qa:table-boundary": "node --experimental-strip-types scripts/qa/room-boundary-consistency.ts",
     "qa:table-layer:render-http": "node --experimental-strip-types scripts/qa/room-layer-render-http.ts",
-    "qa:table-responsive": "node --experimental-strip-types scripts/qa/room-responsive-viewport.ts"
+    "qa:table-responsive": "node --experimental-strip-types scripts/qa/room-responsive-viewport.ts",
+    "qa:cushion-contact-time": "node --experimental-strip-types scripts/qa/cushion-contact-time-angle-table.ts"
   }
 }

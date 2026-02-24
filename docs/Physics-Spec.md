@@ -22,6 +22,7 @@ This document defines the minimum physics rules needed to produce realistic 3-cu
 - Outer size: `3.100 m x 1.700 m`
 - Cushion height: `0.037 m`
 - Ball-cushion restitution: `e_bc = 0.70 ~ 0.75`
+- Cushion-contact friction coefficient: `mu_bc = 0.14`
 - Sliding friction coefficient: `mu_s ~= 0.20`
 - Rolling friction coefficient: `mu_r ~= 0.01 ~ 0.015`
 
@@ -122,17 +123,45 @@ When miscue is triggered:
 - Do not use fixed elapsed-time fallback (for example, `700 ms`) to force shot end.
 - The runtime loop must continue until the velocity threshold condition is satisfied.
 
+## 9.2 Cushion Contact-Time Approximation (Runtime)
+To model the observed increase in throw angle at lower impact speed, apply a contact-time approximation during ball-cushion collisions.
+
+- Baseline tangent ratio:
+`tan(theta_base) = mu_bc * (1 + e_bc) / e_bc`
+- Speed scaling (contact-time approximation):
+`S(v_n) = (v_ref / max(|v_n'|, v_min))^alpha`
+- Spin scaling:
+`S_spin = clamp(|spin_z| / spin_z_max, 0, 1)`
+- Final tangent ratio:
+`tan(theta) = clamp(tan(theta_base) * S(v_n) * S_spin, 0, tan(theta_max))`
+
+Where:
+- `v_ref = 5.957692307692308 m/s` (40% stroke reference speed)
+- `v_min = 0.05 m/s`
+- `alpha = 1.2`
+- `spin_z_max = 0.615` (runtime spin unit upper bound)
+- `theta_max = 55 deg`
+
+Runtime effect:
+- Reverse normal velocity by `e_bc`.
+- Dampen pre-collision tangential velocity by `(1 - mu_bc)`.
+- Add throw tangential velocity: `v_throw = sign(spin_z) * tan(theta) * |v_n'|`.
+
 ## 10. Calibration Guidelines
 - Start with:
   - `e_tip = 0.70`
   - `e_bb = 0.95`
   - `e_bc = 0.72`
+  - `mu_bc = 0.14`
+  - `alpha = 1.2`
+  - `v_ref = 5.957692307692308 m/s`
+  - `theta_max = 55 deg`
   - `mu_s = 0.20`
   - `mu_r = 0.012`
 - Tune in this order:
 1. Shot travel length (power map and `e_tip`)
 2. Ball-to-ball rebound feel (`e_bb`)
-3. Cushion rebound angle/energy (`e_bc`)
+3. Cushion rebound angle/energy (`e_bc`) and cushion contact friction (`mu_bc`)
 4. Slide-to-roll transition and long-tail decay (`mu_s`, `mu_r`)
 
 ## 11. Validation Checklist
