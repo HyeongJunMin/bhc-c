@@ -10,6 +10,7 @@ COPY apps/game-server/package.json apps/game-server/package.json
 RUN pnpm install --frozen-lockfile --filter @bhc/game-server...
 
 COPY apps/game-server apps/game-server
+COPY schemas schemas
 
 WORKDIR /app/apps/game-server
 
