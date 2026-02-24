@@ -1604,6 +1604,12 @@ function renderRoomPage(roomId: string): string {
       return clampNumber(roundedValue, MIN_STROKE_PX, MAX_STROKE_PX);
     }
 
+    function normalizeImpactOffsetMeters(valueInR) {
+      const normalizedR = clampNumber(Number.isFinite(valueInR) ? valueInR : 0, -impactOffsetLimitR, impactOffsetLimitR);
+      const meters = normalizedR * cueBallRadiusM;
+      return Number(meters.toFixed(6));
+    }
+
     function updateShotInputsFromPointer(localX, localY) {
       const worldPoint = canvasToWorld({ x: localX, y: localY });
       const cueBall = getCueBallWorldPosition();
@@ -2057,8 +2063,8 @@ function renderRoomPage(roomId: string): string {
         shotDirectionDeg: Number(shotDirection.value),
         cueElevationDeg: Number(shotElevation.value),
         dragPx: normalizeStrokeDragPx(Number(shotDrag.value)),
-        impactOffsetX: Number(impactOffsetState.x.toFixed(4)),
-        impactOffsetY: Number(impactOffsetState.y.toFixed(4)),
+        impactOffsetX: normalizeImpactOffsetMeters(impactOffsetState.x),
+        impactOffsetY: normalizeImpactOffsetMeters(impactOffsetState.y),
       };
       shotSubmitInFlight = true;
       updateShotInputLockUi();
