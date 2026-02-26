@@ -1,0 +1,15 @@
+{
+  "name": "@bhc/game-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/main.ts",
+    "start": "node --experimental-strip-types src/main.ts",
+    "build": "echo 'game-server build placeholder'",
+    "test": "echo 'game-server test placeholder'",
+    "lint": "echo 'game-server lint placeholder'",
+    "migrate:up": "node-pg-migrate up --config-file node-pg-migrate.config.js",
+    "migrate:down": "node-pg-migrate down --config-file node-pg-migrate.config.js"
+  }
+}

@@ -1,0 +1,52 @@
+name: spec-guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  spec-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Collect changed files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            git diff --name-only "$BASE" "$HEAD" > changed_files.txt
+          else
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.sha }}"
+            if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+              git diff --name-only "HEAD~1" "$AFTER" > changed_files.txt
+            else
+              git diff --name-only "$BEFORE" "$AFTER" > changed_files.txt
+            fi
+          fi
+          cat changed_files.txt
+
+      - name: Run spec guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < changed_files.txt
+          if [[ ${#FILES[@]} -eq 0 ]]; then
+            echo "[spec-guard] No changed files; pass."
+            exit 0
+          fi
+          python3 scripts/ci/spec_guard.py "${FILES[@]}"

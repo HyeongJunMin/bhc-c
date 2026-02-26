@@ -1,0 +1,27 @@
+services:
+  game-server:
+    build:
+      context: ..
+      dockerfile: docker/game-server.Dockerfile
+    container_name: bhc-game-server
+    environment:
+      PORT: "9212"
+    ports:
+      - "9211:9211"
+      - "9212:9212"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    container_name: bhc-web
+    depends_on:
+      - game-server
+    environment:
+      WEB_PORT: "9213"
+      AUTH_SERVER_URL: "http://game-server:9211"
+      LOBBY_SERVER_URL: "http://game-server:9212"
+    ports:
+      - "9213:9213"
+    restart: unless-stopped

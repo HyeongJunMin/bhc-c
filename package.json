@@ -1,0 +1,24 @@
+{
+  "name": "bhc-c",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web 3-cushion billiards monorepo",
+  "scripts": {
+    "dev": "pnpm -r --parallel --if-present run dev",
+    "build": "pnpm -r --if-present run build",
+    "test": "pnpm -r --if-present run test",
+    "lint": "pnpm -r --if-present run lint",
+    "qa:table-layer:local": "node --experimental-strip-types scripts/qa/room-table-layer-assets.ts --mode=local",
+    "qa:table-layer:http": "node --experimental-strip-types scripts/qa/room-table-layer-assets.ts --mode=http",
+    "qa:table-layer:all": "node --experimental-strip-types scripts/qa/room-table-layer-assets.ts --mode=all",
+    "qa:table-boundary": "node --experimental-strip-types scripts/qa/room-boundary-consistency.ts",
+    "qa:table-layer:render-http": "node --experimental-strip-types scripts/qa/room-layer-render-http.ts",
+    "qa:table-responsive": "node --experimental-strip-types scripts/qa/room-responsive-viewport.ts",
+    "qa:cushion-contact-time": "node --experimental-strip-types scripts/qa/cushion-contact-time-angle-table.ts",
+    "qa:team-loop-summary": "MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_team_loop.sh | node --experimental-strip-types scripts/qa/parse-team-loop-summary.ts",
+    "qa:test-agent-summary": "SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_test_agent.sh | node --experimental-strip-types scripts/qa/parse-test-agent-summary.ts",
+    "qa:v2-auto-loop": "AUTO_LOOPS=1 MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_auto_loop.sh",
+    "qa:v2-auto-loop-summary": "AUTO_LOOPS=1 MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_auto_loop.sh | node --experimental-strip-types scripts/qa/parse-auto-loop-summary.ts"
+  }
+}

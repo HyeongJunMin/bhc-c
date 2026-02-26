@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bhc.local/schemas/shot-input-v1.json",
+  "title": "ShotInputV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaName",
+    "schemaVersion",
+    "roomId",
+    "matchId",
+    "turnId",
+    "playerId",
+    "clientTsMs",
+    "shotDirectionDeg",
+    "cueElevationDeg",
+    "dragPx",
+    "impactOffsetX",
+    "impactOffsetY"
+  ],
+  "properties": {
+    "schemaName": {
+      "type": "string",
+      "const": "shot_input"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "roomId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "matchId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "turnId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "playerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "clientTsMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "shotDirectionDeg": {
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 360
+    },
+    "cueElevationDeg": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 89
+    },
+    "dragPx": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 400
+    },
+    "impactOffsetX": {
+      "type": "number",
+      "minimum": -0.03075,
+      "maximum": 0.03075
+    },
+    "impactOffsetY": {
+      "type": "number",
+      "minimum": -0.03075,
+      "maximum": 0.03075
+    },
+    "inputSeq": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}
