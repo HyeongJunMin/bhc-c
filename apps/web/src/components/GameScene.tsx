@@ -7,6 +7,7 @@ import { BilliardTable } from './BilliardTable';
 import { Ball } from './Ball';
 import { CueStick } from './CueStick';
 import { GuideLine } from './GuideLine';
+import { ShotGuide } from './ShotGuide';
 import { useGameStore } from '../hooks/useGameStore';
 import { COLORS, RULES } from '../lib/constants';
 import { computeShotVelocity, isMiscue } from '../lib/physics-calculator';
@@ -228,7 +229,7 @@ function GameWorld() {
         />
       ))}
 
-      {/* 큐 스틱 - 드래그 중일 때만 보임 */}
+      {/* 큐 스틱 - 조준 중일 때 보임 */}
       <CueStick
         cueBallPosition={cueBall.position}
         directionDeg={shotInput.shotDirectionDeg}
@@ -237,7 +238,14 @@ function GameWorld() {
         isVisible={isAiming && isDragging}
       />
 
-      {/* 가이드 라인 - 드래그 중일 때만 보임 */}
+      {/* 샷 방향 가이드 라인 - 조준 중일 때 보임 (드래그 여부 상관없이) */}
+      <ShotGuide
+        cueBallPosition={cueBall.position}
+        directionDeg={shotInput.shotDirectionDeg}
+        isVisible={isAiming}
+      />
+
+      {/* 3쿠션 경로 예측 - 드래그 중일 때만 보임 */}
       <GuideLine
         cueBallPosition={cueBall.position}
         directionDeg={shotInput.shotDirectionDeg}

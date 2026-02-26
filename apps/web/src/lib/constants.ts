@@ -11,6 +11,7 @@ export const PHYSICS = {
   TABLE_OUTER_WIDTH: 3.100,
   TABLE_OUTER_HEIGHT: 1.700,
   CUSHION_HEIGHT: 0.037,
+  CUSHION_THICKNESS: 0.05,  // 쿠션 두께 (약 5cm)
   
   // 큐
   CUE_MASS: 0.5,
@@ -59,9 +60,9 @@ export const COLORS = {
   CUE_BALL: 0xffffff,      // 흰색 (수구)
   OBJECT_BALL_1: 0xff0000, // 선명한 빨강 (제1적구)
   OBJECT_BALL_2: 0xffd700, // 선명한 금색/노랑 (제2적구)
-  TABLE_CLOTH: 0x2d5a3d,
-  TABLE_RAIL: 0x4a3728,
-  CUSHION: 0x3d2b1f,
+  TABLE_CLOTH: 0x231fa7,
+  TABLE_RAIL: 0x3c3b49,
+  CUSHION: 0x1c2ba2,
   CUE_STICK: 0xd4a574,
   GUIDE_LINE: 0x00ff88,
 } as const;
