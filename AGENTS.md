@@ -51,3 +51,20 @@ When any spec document changes, related documents must be updated in the same ta
   2. done/not done
   3. validation command results
   4. next recommended task ID
+
+## Mandatory Commit Granularity
+- Exactly one micro task per commit.
+- Commit title must use the exact micro task ID (for example, `[PHY-AXIS-001A] ...`).
+- Never bundle multiple micro tasks in one commit.
+- Before commit, update `docs/Execution-Status.md` for that single task only.
+
+## Skills
+A skill is a set of local instructions to follow that is stored in a `SKILL.md` file.
+
+### Available skills
+- do-and-show: Execute requested work end-to-end and present concrete evidence (diff/test output) in the same response. (file: /Users/minhyeongjun/IdeaProjects/bhc/.codex/skills/do-and-show/SKILL.md)
+
+### How to use skills
+- Trigger rules: If the user says `do-and-show` (or equivalent like `해보고 보여줘`), this skill must be used for that turn.
+- Read only the minimum part of `SKILL.md` needed to execute the workflow.
+- Keep evidence concise: changed files, key command results, and residual risks only.

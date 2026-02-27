@@ -31,6 +31,7 @@ import {
   CUSHION_MAX_THROW_ANGLE_DEG,
   CUSHION_RESTITUTION,
   MAX_BALL_SPEED_MPS,
+  CUSHION_THICKNESS_M,
   TABLE_HEIGHT_M,
   TABLE_WIDTH_M,
 } from '../../../../packages/physics-core/src/constants.ts';
@@ -440,8 +441,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
       x += vx * substepDtSec;
       z += vz * substepDtSec;
 
-      if (x <= BALL_RADIUS_M || x >= TABLE_WIDTH_M - BALL_RADIUS_M) {
-        x = clampNumber(x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
+      if (x <= CUSHION_THICKNESS_M + BALL_RADIUS_M || x >= TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
+        x = clampNumber(x, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'x',
           vx,
@@ -465,8 +466,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
         spinY = collision.spinY;
         spinZ = collision.spinZ;
       }
-      if (z <= BALL_RADIUS_M || z >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
-        z = clampNumber(z, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
+      if (z <= CUSHION_THICKNESS_M + BALL_RADIUS_M || z >= TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
+        z = clampNumber(z, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'y',
           vx,
@@ -529,8 +530,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
         ball.vx *= ratio;
         ball.vy *= ratio;
       }
-      ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
-      setBallZ(ball, clampNumber(getBallZ(ball), BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M));
+      ball.x = clampNumber(ball.x, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
+      setBallZ(ball, clampNumber(getBallZ(ball), CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M));
       ball.vx = Number.isFinite(ball.vx) ? ball.vx : 0;
       ball.vy = Number.isFinite(ball.vy) ? ball.vy : 0;
       ball.spinX = Number.isFinite(ball.spinX) ? ball.spinX : 0;

@@ -4,6 +4,7 @@ export const BALL_DIAMETER_M = 0.0615;
 export const BALL_RADIUS_M = BALL_DIAMETER_M / 2;
 export const BALL_MASS_KG = 0.21;
 
+export const CUSHION_THICKNESS_M = 0.05;
 export const CUSHION_RESTITUTION = 0.72;
 export const BALL_BALL_RESTITUTION = 0.95;
 export const BALL_BALL_CONTACT_FRICTION = 0.05;

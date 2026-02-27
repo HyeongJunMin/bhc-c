@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:22-slim
 
 WORKDIR /app
 
@@ -19,4 +19,4 @@ ENV WEB_PORT=9213
 ENV AUTH_SERVER_URL=http://localhost:9211
 ENV LOBBY_SERVER_URL=http://localhost:9212
 
-CMD ["node", "--experimental-strip-types", "src/main.ts"]
+CMD ["npx", "vite", "--host", "--port", "9213"]

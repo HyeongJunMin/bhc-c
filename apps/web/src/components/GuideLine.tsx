@@ -30,10 +30,10 @@ export function GuideLine({ cueBallPosition, directionDeg, isVisible }: GuideLin
     
     const table = diamondMapper.tableRect;
     const bounds = {
-      minX: -table.width / 2 + PHYSICS.BALL_RADIUS,
-      maxX: table.width / 2 - PHYSICS.BALL_RADIUS,
-      minZ: -table.height / 2 + PHYSICS.BALL_RADIUS,
-      maxZ: table.height / 2 - PHYSICS.BALL_RADIUS,
+      minX: -table.width / 2 + PHYSICS.CUSHION_THICKNESS + PHYSICS.BALL_RADIUS,
+      maxX: table.width / 2 - PHYSICS.CUSHION_THICKNESS - PHYSICS.BALL_RADIUS,
+      minZ: -table.height / 2 + PHYSICS.CUSHION_THICKNESS + PHYSICS.BALL_RADIUS,
+      maxZ: table.height / 2 - PHYSICS.CUSHION_THICKNESS - PHYSICS.BALL_RADIUS,
     };
     
     // 최대 5번 반사
