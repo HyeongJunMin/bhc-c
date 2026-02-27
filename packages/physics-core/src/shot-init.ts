@@ -1,11 +1,12 @@
 import { computeInitialAngularVelocity } from './initial-angular-velocity.ts';
 import { computeInitialBallSpeed, solveCueSpeedForTargetBallSpeed } from './initial-velocity.ts';
+import { BALL_RADIUS_M, MAX_BALL_SPEED_MPS as MAX_SPEED_MPS } from './constants.ts';
 
 export const MIN_DRAG_PX = 10;
 export const MAX_DRAG_PX = 400;
 export const MIN_BALL_SPEED_MPS = 1;
-export const MAX_BALL_SPEED_MPS = 13.89;
-export const MAX_IMPACT_OFFSET_M = 0.03075;
+export const MAX_BALL_SPEED_MPS = MAX_SPEED_MPS;
+export const MAX_IMPACT_OFFSET_M = BALL_RADIUS_M;
 
 export type ShotInitInput = {
   dragPx: number;

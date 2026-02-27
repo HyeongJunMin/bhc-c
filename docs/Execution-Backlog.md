@@ -366,6 +366,19 @@
   - 구현 순서(마이크로 태스크)와 각 단계 DoD/검증명령 포함
   - 다음 세션에서 질문 없이 착수 가능한 수준
 
+### Phase J. 좌표계/물리 정합 리팩터 TODO (2026-02-27)
+
+#### PHY-AXIS-001 서버-클라 축 정합 로드맵
+- 목적: Three.js 렌더 좌표계(Y-up/XZ)와 game-server 2D 물리 좌표계를 문서/코드 경계에서 일관되게 정합한다.
+- 작업:
+  - Gate 0 기준 좌표계 고정(`world=Y-up`, `table plane=XZ`) 및 서버 임시 매핑(`server.y -> world.z`) 명시
+  - 물리 축 의미/부호표를 고정해 스핀 축 혼용 방지
+  - Phase 0~4(shot init/end 정합, 표면 마찰, 공-공/쿠션 스핀 결합)를 마이크로 태스크로 분해
+  - 서버 내부 좌표 `y -> z` 단계 전환 계획 수립
+- DoD:
+  - `docs/Execution-Backlog-Micro.md`에 실행 가능한 세부 태스크(`PHY-AXIS-001A~`) 정의
+  - `docs/Execution-Status.md`에 todo 등록 및 다음 추천 태스크 연결
+
 ## 6. 작업 단위 템플릿 (새 Task 추가 시 사용)
 아래 형식을 복사해 새 작업을 추가한다.
 

@@ -1,4 +1,5 @@
 type SnapshotBallId = 'cueBall' | 'objectBall1' | 'objectBall2';
+type SnapshotBallMotionState = 'SLIDING' | 'ROLLING' | 'SPINNING' | 'STATIONARY';
 
 export type SnapshotBallFrame = {
   id: SnapshotBallId;
@@ -9,6 +10,7 @@ export type SnapshotBallFrame = {
   spinX: number;
   spinY: number;
   spinZ: number;
+  motionState: SnapshotBallMotionState;
   isPocketed: boolean;
 };
 
@@ -52,6 +54,7 @@ export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
       spinX: toFiniteNumber(ball.spinX),
       spinY: toFiniteNumber(ball.spinY),
       spinZ: toFiniteNumber(ball.spinZ),
+      motionState: ball.motionState,
       isPocketed: Boolean(ball.isPocketed),
     })),
   };

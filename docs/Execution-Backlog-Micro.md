@@ -556,3 +556,14 @@
 
 #### QA-OBS-014 Unity in-editor QA 로그 자동 수집
 - `QA-OBS-014A`: Unity 런타임 로그 prefix(`[unity-runtime]`)를 기준으로 플레이 세션 성공/실패 지표를 파일로 덤프하는 보조 스크립트(문서+샘플) 추가
+
+### Phase V. 좌표계/물리 정합 리팩터 TODO (2026-02-27)
+
+#### PHY-AXIS-001 서버-클라 축 정합 로드맵
+- `PHY-AXIS-001A`: Gate 0 좌표계 기준 고정(`world=Y-up`, `table plane=XZ`)과 서버 임시 매핑(`server.y -> world.z`)을 문서화
+- `PHY-AXIS-001B`: game-server 물리 상수/축 의미(선속도, 스핀축) 용어집 추가 및 수식 부호표(우수법칙) 정리
+- `PHY-AXIS-001C`: `computeShotInitialization` + `evaluateShotEndWithFrames` 런타임 연결 정합 태스크 정의(입출력 매핑 포함)
+- `PHY-AXIS-001D`: 표면 마찰/슬립-롤링 상태머신(`SLIDING|ROLLING|SPINNING|STATIONARY`) 도입 작업 분해
+- `PHY-AXIS-001E`: 공-공 접선 임펄스(throw) 도입 작업 분해 및 검증 시나리오(각도 범위/회귀) 정의
+- `PHY-AXIS-001F`: 쿠션 충돌 스핀 결합(접촉 높이 토크/마찰 변환) 작업 분해 및 기존 throw 모델 호환 정책 정의
+- `PHY-AXIS-001G`: 서버 내부 물리 좌표 `y -> z` 단계 전환 계획 수립(경계 매핑 제거 목표)

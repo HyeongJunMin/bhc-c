@@ -11,24 +11,36 @@ import { applyCushionContactThrow } from '../game/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
+import { applyBallSurfaceFriction } from '../../../../packages/physics-core/src/ball-surface-friction.ts';
+import { applyBallBallCollisionWithSpin } from '../../../../packages/physics-core/src/ball-ball-collision.ts';
+import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
+import {
+  evaluateShotEndWithFrames,
+  initShotEndTracker,
+  type ShotEndTracker,
+} from '../../../../packages/physics-core/src/shot-end.ts';
+import {
+  BALL_BALL_RESTITUTION,
+  BALL_MASS_KG,
+  BALL_RADIUS_M,
+  CUSHION_CONTACT_FRICTION_COEFFICIENT,
+  CUSHION_CONTACT_REFERENCE_SPEED_MPS,
+  CUSHION_CONTACT_TIME_EXPONENT,
+  CUSHION_HEIGHT_M,
+  CUSHION_MAX_SPIN_MAGNITUDE,
+  CUSHION_MAX_THROW_ANGLE_DEG,
+  CUSHION_RESTITUTION,
+  MAX_BALL_SPEED_MPS,
+  TABLE_HEIGHT_M,
+  TABLE_WIDTH_M,
+} from '../../../../packages/physics-core/src/constants.ts';
+import { computeSquirtAngleRad } from '../../../../packages/physics-core/src/squirt.ts';
 
 const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
-const TABLE_WIDTH_M = 2.84;
-const TABLE_HEIGHT_M = 1.42;
-const BALL_RADIUS_M = 0.0615 / 2;
 const PHYSICS_DT_SEC = ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS / 1000;
 const PHYSICS_SUBSTEPS = 4;
-const SHOT_END_LINEAR_SPEED_THRESHOLD_MPS = 0.01;
-const BALL_BALL_RESTITUTION = 0.95;
-const CUSHION_RESTITUTION = 0.82;
-const CUSHION_CONTACT_FRICTION_COEFFICIENT = 0.14;
-const CUSHION_CONTACT_REFERENCE_SPEED_MPS = 5.957692307692308;
-const CUSHION_CONTACT_TIME_EXPONENT = 1.2;
-const CUSHION_MAX_SPIN_MAGNITUDE = 0.615;
-const CUSHION_MAX_THROW_ANGLE_DEG = 55;
-const MAX_BALL_SPEED_MPS = 30;
 const STREAM_HEARTBEAT_INTERVAL_MS = 15_000;
 const REDIS_STATE_VERSION = 1;
 const REDIS_LOBBY_STATE_KEY = process.env.UPSTASH_LOBBY_STATE_KEY || 'bhc:lobby:state:v1';
@@ -59,6 +71,7 @@ type LobbyRoom = {
   winnerMemberId: string | null;
   memberGameStates: Record<string, 'IN_ROOM' | 'PLAYING' | 'WIN' | 'LOSE' | 'KICKED'>;
   balls: SnapshotBallFrame[];
+  shotEndTracker: ShotEndTracker;
 };
 
 type LobbyState = {
@@ -129,6 +142,7 @@ type RoomStreamOpenResult =
           spinX: number;
           spinY: number;
           spinZ: number;
+          motionState: 'SLIDING' | 'ROLLING' | 'SPINNING' | 'STATIONARY';
           isPocketed: boolean;
         }>;
       };
@@ -212,6 +226,13 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
   state.shotStateResetTimers = {};
   state.disconnectGraceTimers = {};
   for (const room of state.rooms) {
+    room.shotEndTracker = initShotEndTracker();
+    room.balls = Array.isArray(room.balls)
+      ? room.balls.map((ball) => ({
+          ...ball,
+          motionState: ball.motionState ?? 'STATIONARY',
+        }))
+      : createInitialRoomBalls();
     state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
     state.shotStateResetTimers[room.roomId] = null;
   }
@@ -296,13 +317,47 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
     return acc;
   }, {});
   room.balls = createInitialRoomBalls();
+  room.shotEndTracker = initShotEndTracker();
 }
 
 function createInitialRoomBalls(): SnapshotBallFrame[] {
   return [
-    { id: 'cueBall', x: 0.70, y: 0.71, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
-    { id: 'objectBall1', x: 2.10, y: 0.62, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
-    { id: 'objectBall2', x: 2.24, y: 0.80, vx: 0, vy: 0, spinX: 0, spinY: 0, spinZ: 0, isPocketed: false },
+    {
+      id: 'cueBall',
+      x: 0.70,
+      y: 0.71,
+      vx: 0,
+      vy: 0,
+      spinX: 0,
+      spinY: 0,
+      spinZ: 0,
+      motionState: 'STATIONARY',
+      isPocketed: false,
+    },
+    {
+      id: 'objectBall1',
+      x: 2.10,
+      y: 0.62,
+      vx: 0,
+      vy: 0,
+      spinX: 0,
+      spinY: 0,
+      spinZ: 0,
+      motionState: 'STATIONARY',
+      isPocketed: false,
+    },
+    {
+      id: 'objectBall2',
+      x: 2.24,
+      y: 0.80,
+      vx: 0,
+      vy: 0,
+      spinX: 0,
+      spinY: 0,
+      spinZ: 0,
+      motionState: 'STATIONARY',
+      isPocketed: false,
+    },
   ];
 }
 
@@ -313,16 +368,6 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function dragPxToSpeedMps(dragPx: number): number {
-  const minPx = 10;
-  const maxPx = 400;
-  const minSpeed = 1;
-  const maxSpeed = 13.89;
-  const clamped = clampNumber(dragPx, minPx, maxPx);
-  const alpha = (clamped - minPx) / (maxPx - minPx);
-  return minSpeed + (maxSpeed - minSpeed) * alpha;
-}
-
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
   const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
   if (!cueBall) {
@@ -330,21 +375,34 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   }
   const directionDeg = Number(payload.shotDirectionDeg);
   const dragPx = Number(payload.dragPx);
-  const impactOffsetX = clampNumber(Number(payload.impactOffsetX), -0.9, 0.9);
-  const impactOffsetY = clampNumber(Number(payload.impactOffsetY), -0.9, 0.9);
+  const impactOffsetXRatio = clampNumber(Number(payload.impactOffsetX), -0.9, 0.9);
+  const impactOffsetYRatio = clampNumber(Number(payload.impactOffsetY), -0.9, 0.9);
+  const impactOffsetX = impactOffsetXRatio * BALL_RADIUS_M;
+  const impactOffsetY = impactOffsetYRatio * BALL_RADIUS_M;
+  const initialization = computeShotInitialization({
+    dragPx,
+    impactOffsetX,
+    impactOffsetY,
+  });
+
   const directionRad = (directionDeg * Math.PI) / 180;
-  const speed = dragPxToSpeedMps(dragPx);
-  cueBall.vx = Math.cos(directionRad) * speed;
-  cueBall.vy = Math.sin(directionRad) * speed;
-  cueBall.spinX = impactOffsetY * 20;
+  const squirtAngleRad = computeSquirtAngleRad({
+    impactOffsetX,
+    ballRadiusM: BALL_RADIUS_M,
+  });
+  const finalDirectionRad = directionRad - squirtAngleRad;
+
+  cueBall.vx = Math.cos(finalDirectionRad) * initialization.initialBallSpeedMps;
+  cueBall.vy = Math.sin(finalDirectionRad) * initialization.initialBallSpeedMps;
+  cueBall.spinX = initialization.omegaX;
   cueBall.spinY = 0;
-  cueBall.spinZ = impactOffsetX * 20;
+  cueBall.spinZ = initialization.omegaZ;
+  cueBall.motionState = 'SLIDING';
+  room.shotEndTracker = initShotEndTracker();
 }
 
 function stepRoomPhysics(room: LobbyRoom): void {
   const substepDtSec = PHYSICS_DT_SEC / PHYSICS_SUBSTEPS;
-  const linearDamping = Math.pow(0.985, 1 / PHYSICS_SUBSTEPS);
-  const spinDamping = Math.pow(0.97, 1 / PHYSICS_SUBSTEPS);
   for (let step = 0; step < PHYSICS_SUBSTEPS; step += 1) {
     const prevPositions = room.balls.map((ball) => ({ x: ball.x, y: ball.y }));
     for (const ball of room.balls) {
@@ -360,6 +418,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
           axis: 'x',
           vx: ball.vx,
           vy: ball.vy,
+          spinX: ball.spinX,
+          spinY: ball.spinY,
           spinZ: ball.spinZ,
           restitution: CUSHION_RESTITUTION,
           contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
@@ -367,9 +427,15 @@ function stepRoomPhysics(room: LobbyRoom): void {
           contactTimeExponent: CUSHION_CONTACT_TIME_EXPONENT,
           maxSpinMagnitude: CUSHION_MAX_SPIN_MAGNITUDE,
           maxThrowAngleDeg: CUSHION_MAX_THROW_ANGLE_DEG,
+          ballMassKg: BALL_MASS_KG,
+          ballRadiusM: BALL_RADIUS_M,
+          cushionHeightM: CUSHION_HEIGHT_M,
         });
         ball.vx = collision.vx;
         ball.vy = collision.vy;
+        ball.spinX = collision.spinX;
+        ball.spinY = collision.spinY;
+        ball.spinZ = collision.spinZ;
       }
       if (ball.y <= BALL_RADIUS_M || ball.y >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
         ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
@@ -377,6 +443,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
           axis: 'y',
           vx: ball.vx,
           vy: ball.vy,
+          spinX: ball.spinX,
+          spinY: ball.spinY,
           spinZ: ball.spinZ,
           restitution: CUSHION_RESTITUTION,
           contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
@@ -384,9 +452,15 @@ function stepRoomPhysics(room: LobbyRoom): void {
           contactTimeExponent: CUSHION_CONTACT_TIME_EXPONENT,
           maxSpinMagnitude: CUSHION_MAX_SPIN_MAGNITUDE,
           maxThrowAngleDeg: CUSHION_MAX_THROW_ANGLE_DEG,
+          ballMassKg: BALL_MASS_KG,
+          ballRadiusM: BALL_RADIUS_M,
+          cushionHeightM: CUSHION_HEIGHT_M,
         });
         ball.vx = collision.vx;
         ball.vy = collision.vy;
+        ball.spinX = collision.spinX;
+        ball.spinY = collision.spinY;
+        ball.spinZ = collision.spinZ;
       }
     }
 
@@ -396,15 +470,23 @@ function stepRoomPhysics(room: LobbyRoom): void {
       if (ball.isPocketed) {
         continue;
       }
-      ball.vx *= linearDamping;
-      ball.vy *= linearDamping;
-      ball.spinX *= spinDamping;
-      ball.spinY *= spinDamping;
-      ball.spinZ *= spinDamping;
-      if (Math.hypot(ball.vx, ball.vy) < SHOT_END_LINEAR_SPEED_THRESHOLD_MPS) {
-        ball.vx = 0;
-        ball.vy = 0;
-      }
+
+      const friction = applyBallSurfaceFriction({
+        vx: ball.vx,
+        vy: ball.vy,
+        spinX: ball.spinX,
+        spinY: ball.spinY,
+        spinZ: ball.spinZ,
+        radiusM: BALL_RADIUS_M,
+        dtSec: substepDtSec,
+      });
+      ball.vx = friction.vx;
+      ball.vy = friction.vy;
+      ball.spinX = friction.spinX;
+      ball.spinY = friction.spinY;
+      ball.spinZ = friction.spinZ;
+      ball.motionState = friction.motionState;
+
       const speed = Math.hypot(ball.vx, ball.vy);
       if (speed > MAX_BALL_SPEED_MPS) {
         const ratio = MAX_BALL_SPEED_MPS / speed;
@@ -418,6 +500,9 @@ function stepRoomPhysics(room: LobbyRoom): void {
       ball.spinX = Number.isFinite(ball.spinX) ? ball.spinX : 0;
       ball.spinY = Number.isFinite(ball.spinY) ? ball.spinY : 0;
       ball.spinZ = Number.isFinite(ball.spinZ) ? ball.spinZ : 0;
+      if (!ball.motionState) {
+        ball.motionState = 'STATIONARY';
+      }
     }
   }
 }
@@ -432,18 +517,15 @@ function resolveBallBallCollisions(
   const epsilon = 1e-8;
 
   function applyImpulse(first: SnapshotBallFrame, second: SnapshotBallFrame, normalX: number, normalY: number): boolean {
-    const relativeVx = second.vx - first.vx;
-    const relativeVy = second.vy - first.vy;
-    const velocityAlongNormal = relativeVx * normalX + relativeVy * normalY;
-    if (velocityAlongNormal >= 0) {
-      return false;
-    }
-    const impulse = -((1 + BALL_BALL_RESTITUTION) * velocityAlongNormal) / 2;
-    first.vx -= impulse * normalX;
-    first.vy -= impulse * normalY;
-    second.vx += impulse * normalX;
-    second.vy += impulse * normalY;
-    return true;
+    return applyBallBallCollisionWithSpin({
+      first,
+      second,
+      normalX,
+      normalY,
+      restitution: BALL_BALL_RESTITUTION,
+      ballMassKg: BALL_MASS_KG,
+      ballRadiusM: BALL_RADIUS_M,
+    }).collided;
   }
 
   function sweepHitTime(
@@ -538,18 +620,39 @@ function resolveBallBallCollisions(
 }
 
 function areRoomBallsSettled(room: LobbyRoom): boolean {
+  let maxLinearSpeed = 0;
+  let maxAngularSpeed = 0;
+  let activeBallCount = 0;
   for (const ball of room.balls) {
     if (ball.isPocketed) {
       continue;
     }
-    if (Math.hypot(ball.vx, ball.vy) >= SHOT_END_LINEAR_SPEED_THRESHOLD_MPS) {
-      return false;
+    activeBallCount += 1;
+    const linearSpeed = Math.hypot(ball.vx, ball.vy);
+    const angularSpeed = Math.hypot(ball.spinX, ball.spinY, ball.spinZ);
+    if (linearSpeed > maxLinearSpeed) {
+      maxLinearSpeed = linearSpeed;
+    }
+    if (angularSpeed > maxAngularSpeed) {
+      maxAngularSpeed = angularSpeed;
     }
   }
-  return true;
+
+  if (activeBallCount === 0) {
+    room.shotEndTracker = initShotEndTracker();
+    return true;
+  }
+
+  const evaluation = evaluateShotEndWithFrames(room.shotEndTracker, {
+    linearSpeedMps: maxLinearSpeed,
+    angularSpeedRadps: maxAngularSpeed,
+  });
+  room.shotEndTracker = evaluation.tracker;
+  return evaluation.isShotEnded;
 }
 
 function finalizeShotLifecycle(state: LobbyState, room: LobbyRoom, actorMemberId: string): void {
+  room.shotEndTracker = initShotEndTracker();
   const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
   if (resolved) {
     room.shotState = resolved;
@@ -770,6 +873,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     winnerMemberId: null,
     memberGameStates: {},
     balls: createInitialRoomBalls(),
+    shotEndTracker: initShotEndTracker(),
   };
 
   state.nextRoomId += 1;
