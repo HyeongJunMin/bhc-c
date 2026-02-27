@@ -571,3 +571,9 @@
 #### PHY-AXIS-002 서버 내부 좌표 전환 실행
 - `PHY-AXIS-002A`: game-server 물리 루프 내부 좌표 명칭을 `x/z`로 전환하고 snapshot 계약(`x/y`)과의 매핑 레이어를 추가
 - `PHY-AXIS-002B`: snapshot DTO에 `z/vz` 필드를 추가하고 기존 `y/vy`를 호환 유지하여 web/server 단계 이행 경로를 고정
+
+### Phase W. 충돌 끈끈이 현상 핫픽스 (2026-02-27)
+
+#### PHYS-STICKY-001 공-공 충돌 판정/분리 보정 정합
+- `PHYS-STICKY-001A`: `apps/web/src/core/SimplePhysics.ts`의 공-공 접근/이탈 판정 부호 로직을 수정하고(`relativeVelocity` 기준 정합), 분리 보정/반복 횟수(`separationFactor`, solver loop) 기본값을 조정
+- `PHYS-STICKY-001B`: `apps/game-server/src/lobby/http.ts`의 공-공 penetration correction 계수를 조정해 재충돌 루프를 완화하고 회귀 테스트(`lobby/http.test.ts`, web 물리 단위 테스트)로 검증

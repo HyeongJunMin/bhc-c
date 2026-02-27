@@ -76,7 +76,7 @@ export class SimplePhysics {
     const dt = Math.min(deltaTime, 0.016); // 최대 16ms (60fps)
 
     // 1. 위치 업데이트 전에 충돌 처리 (반복적으로 해결)
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       this.handleBallCollisions();
     }
 
@@ -207,7 +207,7 @@ export class SimplePhysics {
     const { ball1, ball2, normal, penetration } = collision;
 
     // === 1. 위치 분리 (겹침 해결) ===
-    const separationFactor = 1.05;
+    const separationFactor = 1.0;
     const totalMass = ball1.mass + ball2.mass;
     const ratio1 = ball2.mass / totalMass;
     const ratio2 = ball1.mass / totalMass;
@@ -218,10 +218,13 @@ export class SimplePhysics {
     ball2.position.add(normal.clone().multiplyScalar(separation * ratio2));
 
     // === 2. 속도 반응 (탄성 충돌) ===
-    const relativeVelocity = ball1.velocity.clone().sub(ball2.velocity);
+    // Relative velocity from ball1 to ball2.
+    // Using (ball2 - ball1) keeps "separating" check intuitive:
+    // dot >= 0 means moving apart along collision normal.
+    const relativeVelocity = ball2.velocity.clone().sub(ball1.velocity);
     const velocityAlongNormal = relativeVelocity.dot(normal);
 
-    if (velocityAlongNormal > 0) return;
+    if (velocityAlongNormal >= 0) return;
 
     // 충돌 반응 (반발 계수 적용)
     const restitution = PHYSICS.BALL_BALL_RESTITUTION;
@@ -229,9 +232,8 @@ export class SimplePhysics {
     impulse /= (1 / ball1.mass + 1 / ball2.mass);
 
     const impulseVector = normal.clone().multiplyScalar(impulse);
-
-    ball1.velocity.add(impulseVector.clone().multiplyScalar(1 / ball1.mass));
-    ball2.velocity.sub(impulseVector.clone().multiplyScalar(1 / ball2.mass));
+    ball1.velocity.sub(impulseVector.clone().multiplyScalar(1 / ball1.mass));
+    ball2.velocity.add(impulseVector.clone().multiplyScalar(1 / ball2.mass));
 
     // === 3. 접선 방향 마찰 ===
     const tangent = new Vector3(-normal.z, 0, normal.x);
@@ -240,8 +242,8 @@ export class SimplePhysics {
     const frictionImpulse = -velocityAlongTangent * 0.1;
     const frictionVector = tangent.multiplyScalar(frictionImpulse / totalMass);
     
-    ball1.velocity.add(frictionVector);
-    ball2.velocity.sub(frictionVector);
+    ball1.velocity.sub(frictionVector);
+    ball2.velocity.add(frictionVector);
   }
 
   /**
