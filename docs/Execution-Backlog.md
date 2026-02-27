@@ -388,6 +388,15 @@
   - `apps/game-server/src/lobby/http.ts` 물리 경로에 `y->z` 매핑 레이어 반영
   - 기존 `apps/game-server/src/lobby/http.test.ts` 회귀 통과
 
+#### PHY-AXIS-002B snapshot DTO 호환 승격
+- 목적: 클라이언트/QA 경로를 깨지 않고 snapshot 계약을 `x/z` 중심으로 단계 이행한다.
+- 작업:
+  - `room_snapshot.balls[]`에 `z`, `vz` 필드 추가
+  - 기존 `y`, `vy` 필드는 호환을 위해 유지
+- DoD:
+  - snapshot 직렬화 테스트에 `z/vz` 호환 필드 검증 추가
+  - 기존 `lobby/http.test.ts` 회귀 통과
+
 ## 6. 작업 단위 템플릿 (새 Task 추가 시 사용)
 아래 형식을 복사해 새 작업을 추가한다.
 

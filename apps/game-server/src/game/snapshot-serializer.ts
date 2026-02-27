@@ -48,8 +48,10 @@ export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
     balls: input.balls.map((ball) => ({
       id: ball.id,
       x: toFiniteNumber(ball.x),
+      z: toFiniteNumber(ball.y),
       y: toFiniteNumber(ball.y),
       vx: toFiniteNumber(ball.vx),
+      vz: toFiniteNumber(ball.vy),
       vy: toFiniteNumber(ball.vy),
       spinX: toFiniteNumber(ball.spinX),
       spinY: toFiniteNumber(ball.spinY),

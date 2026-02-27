@@ -136,8 +136,10 @@ type RoomStreamOpenResult =
         balls: Array<{
           id: 'cueBall' | 'objectBall1' | 'objectBall2';
           x: number;
+          z: number;
           y: number;
           vx: number;
+          vz: number;
           vy: number;
           spinX: number;
           spinY: number;

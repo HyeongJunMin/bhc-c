@@ -570,3 +570,4 @@
 
 #### PHY-AXIS-002 서버 내부 좌표 전환 실행
 - `PHY-AXIS-002A`: game-server 물리 루프 내부 좌표 명칭을 `x/z`로 전환하고 snapshot 계약(`x/y`)과의 매핑 레이어를 추가
+- `PHY-AXIS-002B`: snapshot DTO에 `z/vz` 필드를 추가하고 기존 `y/vy`를 호환 유지하여 web/server 단계 이행 경로를 고정
