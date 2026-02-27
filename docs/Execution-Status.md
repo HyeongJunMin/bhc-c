@@ -9,12 +9,12 @@
 ## 요약
 | Metric | Value |
 |---|---|
-| Total Tasks | 210 |
+| Total Tasks | 211 |
 | Todo | 0 |
 | In Progress | 0 |
-| Done | 210 |
+| Done | 211 |
 | Blocked | 0 |
-| Last Updated | 2026-02-27 14:12 |
+| Last Updated | 2026-02-27 14:22 |
 
 ## 에이전트 상태
 | Agent | Current Task | Status | Updated At | Note |
@@ -367,3 +367,4 @@ PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | - | 문�
 | PHY-AXIS-001E | Agent C | done | 2026-02-27 14:12 | `node --experimental-strip-types --test packages/physics-core/src/ball-ball-collision.test.ts` 통과 | - | PHY-AXIS-001F | 공-공 접선 임펄스(throw) 도입 완료 |
 | PHY-AXIS-001F | Agent C | done | 2026-02-27 14:12 | `node --experimental-strip-types --test apps/game-server/src/game/cushion-contact-throw.test.ts` 통과(6 pass) | - | PHY-AXIS-001G | 쿠션 충돌 스핀 결합(접촉 높이 토크/축 변환) 반영 완료 |
 | PHY-AXIS-001G | Agent C | done | 2026-02-27 14:12 | `node --experimental-strip-types --test apps/game-server/src/game/snapshot-serializer.test.ts` 통과(2 pass) | - | - | 서버 내부 좌표 전환 준비를 위한 motionState/물리 상태 확장 및 단계 전환 기반 완료 |
+| PHY-AXIS-002A | Agent C | done | 2026-02-27 14:22 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(29 pass) | - | - | 물리 루프 내부 좌표를 `x/z` 의미로 통일하고 snapshot(`x/y`) 매핑 함수(`getBallZ/setBallZ`) 적용 완료 |

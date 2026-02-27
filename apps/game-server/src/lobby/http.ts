@@ -368,6 +368,23 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+// Server snapshot contract keeps `y`, but runtime physics treats it as table-plane `z`.
+function getBallZ(ball: SnapshotBallFrame): number {
+  return ball.y;
+}
+
+function setBallZ(ball: SnapshotBallFrame, z: number): void {
+  ball.y = z;
+}
+
+function getBallVz(ball: SnapshotBallFrame): number {
+  return ball.vy;
+}
+
+function setBallVz(ball: SnapshotBallFrame, vz: number): void {
+  ball.vy = vz;
+}
+
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
   const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
   if (!cueBall) {
@@ -393,6 +410,7 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   const finalDirectionRad = directionRad - squirtAngleRad;
 
   cueBall.vx = Math.cos(finalDirectionRad) * initialization.initialBallSpeedMps;
+  // Runtime plane is XZ; `vy` stores z-axis planar velocity in snapshot schema.
   cueBall.vy = Math.sin(finalDirectionRad) * initialization.initialBallSpeedMps;
   cueBall.spinX = initialization.omegaX;
   cueBall.spinY = 0;
@@ -404,23 +422,31 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
 function stepRoomPhysics(room: LobbyRoom): void {
   const substepDtSec = PHYSICS_DT_SEC / PHYSICS_SUBSTEPS;
   for (let step = 0; step < PHYSICS_SUBSTEPS; step += 1) {
-    const prevPositions = room.balls.map((ball) => ({ x: ball.x, y: ball.y }));
+    const prevPositions = room.balls.map((ball) => ({ x: ball.x, z: getBallZ(ball) }));
     for (const ball of room.balls) {
       if (ball.isPocketed) {
         continue;
       }
-      ball.x += ball.vx * substepDtSec;
-      ball.y += ball.vy * substepDtSec;
+      let x = ball.x;
+      let z = getBallZ(ball);
+      let vx = ball.vx;
+      let vz = getBallVz(ball);
+      let spinX = ball.spinX;
+      let spinY = ball.spinY;
+      let spinZ = ball.spinZ;
 
-      if (ball.x <= BALL_RADIUS_M || ball.x >= TABLE_WIDTH_M - BALL_RADIUS_M) {
-        ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
+      x += vx * substepDtSec;
+      z += vz * substepDtSec;
+
+      if (x <= BALL_RADIUS_M || x >= TABLE_WIDTH_M - BALL_RADIUS_M) {
+        x = clampNumber(x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'x',
-          vx: ball.vx,
-          vy: ball.vy,
-          spinX: ball.spinX,
-          spinY: ball.spinY,
-          spinZ: ball.spinZ,
+          vx,
+          vy: vz,
+          spinX,
+          spinY,
+          spinZ,
           restitution: CUSHION_RESTITUTION,
           contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
           referenceNormalSpeedMps: CUSHION_CONTACT_REFERENCE_SPEED_MPS,
@@ -431,21 +457,21 @@ function stepRoomPhysics(room: LobbyRoom): void {
           ballRadiusM: BALL_RADIUS_M,
           cushionHeightM: CUSHION_HEIGHT_M,
         });
-        ball.vx = collision.vx;
-        ball.vy = collision.vy;
-        ball.spinX = collision.spinX;
-        ball.spinY = collision.spinY;
-        ball.spinZ = collision.spinZ;
+        vx = collision.vx;
+        vz = collision.vy;
+        spinX = collision.spinX;
+        spinY = collision.spinY;
+        spinZ = collision.spinZ;
       }
-      if (ball.y <= BALL_RADIUS_M || ball.y >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
-        ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
+      if (z <= BALL_RADIUS_M || z >= TABLE_HEIGHT_M - BALL_RADIUS_M) {
+        z = clampNumber(z, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'y',
-          vx: ball.vx,
-          vy: ball.vy,
-          spinX: ball.spinX,
-          spinY: ball.spinY,
-          spinZ: ball.spinZ,
+          vx,
+          vy: vz,
+          spinX,
+          spinY,
+          spinZ,
           restitution: CUSHION_RESTITUTION,
           contactFriction: CUSHION_CONTACT_FRICTION_COEFFICIENT,
           referenceNormalSpeedMps: CUSHION_CONTACT_REFERENCE_SPEED_MPS,
@@ -456,12 +482,20 @@ function stepRoomPhysics(room: LobbyRoom): void {
           ballRadiusM: BALL_RADIUS_M,
           cushionHeightM: CUSHION_HEIGHT_M,
         });
-        ball.vx = collision.vx;
-        ball.vy = collision.vy;
-        ball.spinX = collision.spinX;
-        ball.spinY = collision.spinY;
-        ball.spinZ = collision.spinZ;
+        vx = collision.vx;
+        vz = collision.vy;
+        spinX = collision.spinX;
+        spinY = collision.spinY;
+        spinZ = collision.spinZ;
       }
+
+      ball.x = x;
+      setBallZ(ball, z);
+      ball.vx = vx;
+      setBallVz(ball, vz);
+      ball.spinX = spinX;
+      ball.spinY = spinY;
+      ball.spinZ = spinZ;
     }
 
     resolveBallBallCollisions(room.balls, prevPositions, substepDtSec);
@@ -494,7 +528,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
         ball.vy *= ratio;
       }
       ball.x = clampNumber(ball.x, BALL_RADIUS_M, TABLE_WIDTH_M - BALL_RADIUS_M);
-      ball.y = clampNumber(ball.y, BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M);
+      setBallZ(ball, clampNumber(getBallZ(ball), BALL_RADIUS_M, TABLE_HEIGHT_M - BALL_RADIUS_M));
       ball.vx = Number.isFinite(ball.vx) ? ball.vx : 0;
       ball.vy = Number.isFinite(ball.vy) ? ball.vy : 0;
       ball.spinX = Number.isFinite(ball.spinX) ? ball.spinX : 0;
@@ -509,7 +543,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
 
 function resolveBallBallCollisions(
   balls: SnapshotBallFrame[],
-  prevPositions: Array<{ x: number; y: number }>,
+  prevPositions: Array<{ x: number; z: number }>,
   substepDtSec: number,
 ): void {
   const minDistance = BALL_RADIUS_M * 2;
@@ -529,26 +563,26 @@ function resolveBallBallCollisions(
   }
 
   function sweepHitTime(
-    firstPrev: { x: number; y: number },
+    firstPrev: { x: number; z: number },
     firstCurr: SnapshotBallFrame,
-    secondPrev: { x: number; y: number },
+    secondPrev: { x: number; z: number },
     secondCurr: SnapshotBallFrame,
   ): number | null {
     const startX = secondPrev.x - firstPrev.x;
-    const startY = secondPrev.y - firstPrev.y;
+    const startZ = secondPrev.z - firstPrev.z;
     const endX = secondCurr.x - firstCurr.x;
-    const endY = secondCurr.y - firstCurr.y;
+    const endZ = getBallZ(secondCurr) - getBallZ(firstCurr);
     const moveX = endX - startX;
-    const moveY = endY - startY;
-    const moveLenSq = moveX * moveX + moveY * moveY;
+    const moveZ = endZ - startZ;
+    const moveLenSq = moveX * moveX + moveZ * moveZ;
     let t = 0;
     if (moveLenSq > epsilon) {
-      t = -((startX * moveX) + (startY * moveY)) / moveLenSq;
+      t = -((startX * moveX) + (startZ * moveZ)) / moveLenSq;
       t = clampNumber(t, 0, 1);
     }
     const closestX = startX + moveX * t;
-    const closestY = startY + moveY * t;
-    const closestDistSq = closestX * closestX + closestY * closestY;
+    const closestZ = startZ + moveZ * t;
+    const closestDistSq = closestX * closestX + closestZ * closestZ;
     if (!Number.isFinite(closestDistSq) || closestDistSq > minDistanceSq) {
       return null;
     }
@@ -568,20 +602,20 @@ function resolveBallBallCollisions(
         continue;
       }
       const deltaX = second.x - first.x;
-      const deltaY = second.y - first.y;
-      const distanceSq = deltaX * deltaX + deltaY * deltaY;
+      const deltaZ = getBallZ(second) - getBallZ(first);
+      const distanceSq = deltaX * deltaX + deltaZ * deltaZ;
       if (Number.isFinite(distanceSq) && distanceSq <= minDistanceSq) {
         const distance = Math.sqrt(Math.max(distanceSq, epsilon));
         const normalX = distance > epsilon ? deltaX / distance : 1;
-        const normalY = distance > epsilon ? deltaY / distance : 0;
+        const normalY = distance > epsilon ? deltaZ / distance : 0;
         applyImpulse(first, second, normalX, normalY);
         const penetration = minDistance - distance;
         if (penetration > 0) {
           const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 0.8;
           first.x -= normalX * correction;
-          first.y -= normalY * correction;
+          setBallZ(first, getBallZ(first) - normalY * correction);
           second.x += normalX * correction;
-          second.y += normalY * correction;
+          setBallZ(second, getBallZ(second) + normalY * correction);
         }
         continue;
       }
@@ -594,27 +628,27 @@ function resolveBallBallCollisions(
         continue;
       }
       const firstHitX = firstPrev.x + (first.x - firstPrev.x) * hitTime;
-      const firstHitY = firstPrev.y + (first.y - firstPrev.y) * hitTime;
+      const firstHitZ = firstPrev.z + (getBallZ(first) - firstPrev.z) * hitTime;
       const secondHitX = secondPrev.x + (second.x - secondPrev.x) * hitTime;
-      const secondHitY = secondPrev.y + (second.y - secondPrev.y) * hitTime;
+      const secondHitZ = secondPrev.z + (getBallZ(second) - secondPrev.z) * hitTime;
       const hitDeltaX = secondHitX - firstHitX;
-      const hitDeltaY = secondHitY - firstHitY;
-      const hitDistance = Math.hypot(hitDeltaX, hitDeltaY);
+      const hitDeltaZ = secondHitZ - firstHitZ;
+      const hitDistance = Math.hypot(hitDeltaX, hitDeltaZ);
       const normalX = hitDistance > epsilon ? hitDeltaX / hitDistance : 1;
-      const normalY = hitDistance > epsilon ? hitDeltaY / hitDistance : 0;
+      const normalY = hitDistance > epsilon ? hitDeltaZ / hitDistance : 0;
       const collided = applyImpulse(first, second, normalX, normalY);
       if (!collided) {
         continue;
       }
       first.x = firstHitX;
-      first.y = firstHitY;
+      setBallZ(first, firstHitZ);
       second.x = secondHitX;
-      second.y = secondHitY;
+      setBallZ(second, secondHitZ);
       const remainDtSec = substepDtSec * (1 - hitTime);
       first.x += first.vx * remainDtSec;
-      first.y += first.vy * remainDtSec;
+      setBallZ(first, getBallZ(first) + getBallVz(first) * remainDtSec);
       second.x += second.vx * remainDtSec;
-      second.y += second.vy * remainDtSec;
+      setBallZ(second, getBallZ(second) + getBallVz(second) * remainDtSec);
     }
   }
 }

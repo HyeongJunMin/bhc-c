@@ -379,6 +379,15 @@
   - `docs/Execution-Backlog-Micro.md`에 실행 가능한 세부 태스크(`PHY-AXIS-001A~`) 정의
   - `docs/Execution-Status.md`에 todo 등록 및 다음 추천 태스크 연결
 
+#### PHY-AXIS-002 서버 내부 좌표 전환 실행
+- 목적: 외부 snapshot 계약 호환성을 유지하면서 game-server 물리 계산 내부 좌표를 `x/z` 의미로 통일한다.
+- 작업:
+  - physics loop/collision에서 `y` 축 변수명을 `z` 의미로 정렬
+  - `SnapshotBallFrame`의 `y`/`vy`와 내부 `z`/`vz` 사이 매핑 함수 도입
+- DoD:
+  - `apps/game-server/src/lobby/http.ts` 물리 경로에 `y->z` 매핑 레이어 반영
+  - 기존 `apps/game-server/src/lobby/http.test.ts` 회귀 통과
+
 ## 6. 작업 단위 템플릿 (새 Task 추가 시 사용)
 아래 형식을 복사해 새 작업을 추가한다.
 
