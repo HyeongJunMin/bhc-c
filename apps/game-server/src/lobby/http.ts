@@ -613,7 +613,7 @@ function resolveBallBallCollisions(
         applyImpulse(first, second, normalX, normalY);
         const penetration = minDistance - distance;
         if (penetration > 0) {
-          const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 0.8;
+          const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 1.0;
           first.x -= normalX * correction;
           setBallZ(first, getBallZ(first) - normalY * correction);
           second.x += normalX * correction;
