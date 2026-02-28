@@ -375,3 +375,4 @@ PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | - | 문�
 | MOTION-SYNC-001A | Agent C | done | 2026-02-28 20:43 | `pnpm --filter @bhc/game-server test` 통과(placeholder pass) | - | MOTION-SYNC-001B | impactOffset 이중 변환 제거(미터 단위 clamp 직접 적용) 완료 |
 | MOTION-SYNC-001B | Agent C | done | 2026-02-28 20:44 | `pnpm --filter @bhc/game-server test` 통과(placeholder pass) | - | MOTION-SYNC-002A | 샷 제출 시 IN_GAME 상태 및 현재 턴 멤버 검증 가드 추가 완료 |
 | MOTION-SYNC-002A | Agent C | done | 2026-02-28 20:45 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-002B | SSE 이벤트 수신/파싱 모듈(SseClient) 추가 완료 |
+| MOTION-SYNC-002B | Agent C | done | 2026-02-28 20:46 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-003A | 스냅샷 보간 모듈(SnapshotInterpolator) 추가 완료 |
