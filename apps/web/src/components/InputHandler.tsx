@@ -14,6 +14,9 @@ export function InputHandler() {
     phase,
     shotInput,
     isDragging,
+    shotPending,
+    currentTurnMemberId,
+    memberId,
     setDragPower,
     setImpactOffset,
     setIsDragging,
@@ -21,7 +24,7 @@ export function InputHandler() {
     resetShot,
   } = useGameStore();
 
-  const isAiming = phase === 'AIMING';
+  const isAiming = phase === 'AIMING' && !shotPending && !!memberId && currentTurnMemberId === memberId;
   const dragState = useRef({
     startY: 0,
     currentPower: 10,
