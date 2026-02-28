@@ -3,8 +3,6 @@ import { Vector3 } from 'three';
 export interface BallState {
   id: 'cueBall' | 'objectBall1' | 'objectBall2';
   position: Vector3;
-  velocity: Vector3;
-  angularVelocity: Vector3;
   isPocketed: boolean;
 }
 
@@ -45,7 +43,7 @@ export interface HalfSystemResult {
   angleCorrection: number;
 }
 
-export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'SCORING';
+export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'SCORING' | 'WAITING' | 'FINISHED';
 
 export interface AngularVelocity {
   omegaX: number;

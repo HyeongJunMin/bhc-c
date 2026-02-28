@@ -159,7 +159,6 @@ function GameWorld() {
       states.forEach((state, id) => {
         updateBall(id, {
           position: state.position,
-          velocity: state.velocity,
         });
       });
       

@@ -78,22 +78,16 @@ const createInitialBalls = (): BallState[] => [
   {
     id: 'cueBall',
     position: initialBallPositions.cueBall.clone(),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
     isPocketed: false,
   },
   {
     id: 'objectBall1',
     position: initialBallPositions.objectBall1.clone(),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
     isPocketed: false,
   },
   {
     id: 'objectBall2',
     position: initialBallPositions.objectBall2.clone(),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
     isPocketed: false,
   },
 ];
