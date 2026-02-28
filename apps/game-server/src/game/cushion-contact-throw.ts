@@ -22,6 +22,7 @@ export type CushionContactThrowInput = {
   cushionHeightM?: number;
   minNormalSpeedForThrowMps?: number;
   rollingSpinHeightFactor?: number;
+  cushionTorqueDamping?: number;
 };
 
 export type CushionContactThrowResult = {
@@ -91,10 +92,13 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const throwAngleDeg = Math.atan(throwTan) * (180 / Math.PI);
 
   // Torque from cushion contact height above ball center.
+  // cushionTorqueDamping < 1.0 accounts for energy absorbed by cushion rubber deformation,
+  // preventing unrealistic spin spikes that arise from treating the cushion as a rigid body.
   const inertia = (2 / 5) * ballMassKg * ballRadiusM * ballRadiusM;
   const normalImpulse = ballMassKg * (1 + input.restitution) * Math.abs(preVn);
-  const contactTorqueSpinDelta = (h * normalImpulse) / Math.max(1e-6, inertia);
-  
+  const torqueDamping = input.cushionTorqueDamping ?? 1.0;
+  const contactTorqueSpinDelta = ((h * normalImpulse) / Math.max(1e-6, inertia)) * torqueDamping;
+
   if (input.axis === 'x') {
     // X-axis cushion affects rolling spin along X (spinZ)
     spinZ += contactTorqueSpinDelta * normalDirection;

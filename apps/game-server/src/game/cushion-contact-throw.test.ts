@@ -21,6 +21,7 @@ const base = {
   maxThrowAngleDeg: 15,
   ballRadiusM: CUE_BALL_RADIUS_M,
   cushionHeightM: CUSHION_HEIGHT_M,
+  cushionTorqueDamping: 0.35,
 };
 
 function dragPxToSpeedMps(dragPx: number): number {
