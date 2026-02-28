@@ -6,10 +6,10 @@ export function GameUI() {
     phase, 
     shotInput, 
     isDragging,
+    memberId,
     currentTurnMemberId,
     scores, 
     turnMessage,
-    resetGame,
   } = useGameStore();
   
   const powerPercent = Math.round(
@@ -134,6 +134,43 @@ export function GameUI() {
           <div style={{ fontSize: 14, opacity: 0.6, marginTop: 10 }}>
             (오른쪽 클릭으로 당구대 회전)
           </div>
+        </div>
+      )}
+
+      {phase === 'WAITING' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(0,0,0,0.75)',
+            padding: '20px 32px',
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.2)',
+            fontSize: 20,
+          }}
+        >
+          {currentTurnMemberId && memberId && currentTurnMemberId !== memberId ? '상대 턴입니다...' : '턴 대기 중...'}
+        </div>
+      )}
+
+      {phase === 'FINISHED' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(0,0,0,0.85)',
+            padding: '24px 36px',
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.25)',
+            fontSize: 26,
+            fontWeight: 'bold',
+          }}
+        >
+          {turnMessage || '게임 종료'}
         </div>
       )}
 
@@ -297,31 +334,7 @@ export function GameUI() {
         <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>⌨️</span> <strong>WASD</strong>: 당점 조절
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>⌨️</span> <strong>스페이스</strong>: 새 게임
-        </div>
       </div>
-
-      {/* 게임 리셋 버튼 */}
-      <button
-        onClick={resetGame}
-        style={{
-          position: 'absolute',
-          top: 20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          padding: '10px 20px',
-          background: 'rgba(255,255,255,0.1)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: 8,
-          color: 'white',
-          cursor: 'pointer',
-          pointerEvents: 'auto',
-          fontSize: 14,
-        }}
-      >
-        New Game
-      </button>
 
       <style>{`
         @keyframes fadeInOut {
