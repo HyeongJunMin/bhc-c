@@ -17,6 +17,9 @@ export const CUSHION_CONTACT_TIME_EXPONENT = 1.2;
 export const CUSHION_MAX_SPIN_MAGNITUDE = 3.0;
 // Realistic max throw angle from cushion contact (intentional english at slow speed).
 export const CUSHION_MAX_THROW_ANGLE_DEG = 15;
+// Scale factor applied to the rolling-spin (spinZ/spinX) contribution in effectiveSpin.
+// Reduces throw caused by natural rolling; does not affect intentional english (spinY·d term).
+export const CUSHION_ROLLING_SPIN_HEIGHT_FACTOR = 0.1;
 export const CUSHION_HEIGHT_M = 0.037;
 
 export const SLIDING_FRICTION_COEFFICIENT = 0.2;

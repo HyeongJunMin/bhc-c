@@ -29,6 +29,7 @@ import {
   CUSHION_HEIGHT_M,
   CUSHION_MAX_SPIN_MAGNITUDE,
   CUSHION_MAX_THROW_ANGLE_DEG,
+  CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
   CUSHION_RESTITUTION,
   MAX_BALL_SPEED_MPS,
   PENETRATION_SLOP_M,
@@ -45,6 +46,7 @@ const DISCONNECT_GRACE_MS = 10_000;
 const PHYSICS_DT_SEC = ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS / 1000;
 const PHYSICS_SUBSTEPS = 4;
 const STREAM_HEARTBEAT_INTERVAL_MS = 15_000;
+const ENABLE_SHOT_DEBUG_LOG = process.env.SHOT_DEBUG_LOG !== '0';
 const REDIS_STATE_VERSION = 1;
 const REDIS_LOBBY_STATE_KEY = process.env.UPSTASH_LOBBY_STATE_KEY || 'bhc:lobby:state:v1';
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL || '';
@@ -390,6 +392,14 @@ function setBallVz(ball: SnapshotBallFrame, vz: number): void {
   ball.vy = vz;
 }
 
+function formatShotDebugNumber(value: number): number {
+  return Number(value.toFixed(5));
+}
+
+function computeIncidenceOrReflectionDeg(normalSpeed: number, tangentSpeed: number): number {
+  return (Math.atan2(Math.abs(tangentSpeed), Math.abs(normalSpeed)) * 180) / Math.PI;
+}
+
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
   const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
   if (!cueBall) {
@@ -420,6 +430,34 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   cueBall.spinZ = initialization.omegaZ;
   cueBall.motionState = 'SLIDING';
   room.shotEndTracker = initShotEndTracker();
+  if (ENABLE_SHOT_DEBUG_LOG) {
+    console.log('[ShotDebug][server] shot_initialized', {
+      roomId: room.roomId,
+      cueBallStart: {
+        x: formatShotDebugNumber(cueBall.x),
+        z: formatShotDebugNumber(getBallZ(cueBall)),
+      },
+      strokePowerDragPx: formatShotDebugNumber(dragPx),
+      impactOffsetM: {
+        x: formatShotDebugNumber(impactOffsetX),
+        y: formatShotDebugNumber(impactOffsetY),
+      },
+      initialLinearVelocityMps: {
+        vx: formatShotDebugNumber(cueBall.vx),
+        vz: formatShotDebugNumber(getBallVz(cueBall)),
+        speed: formatShotDebugNumber(Math.hypot(cueBall.vx, getBallVz(cueBall))),
+      },
+      initialAngularVelocityRadps: {
+        spinX: formatShotDebugNumber(cueBall.spinX),
+        spinY: formatShotDebugNumber(cueBall.spinY),
+        spinZ: formatShotDebugNumber(cueBall.spinZ),
+        magnitude: formatShotDebugNumber(Math.hypot(cueBall.spinX, cueBall.spinY, cueBall.spinZ)),
+      },
+      shotDirectionDeg: formatShotDebugNumber(directionDeg),
+      finalDirectionDeg: formatShotDebugNumber((finalDirectionRad * 180) / Math.PI),
+      squirtAngleDeg: formatShotDebugNumber((squirtAngleRad * 180) / Math.PI),
+    });
+  }
 }
 
 function stepRoomPhysics(room: LobbyRoom): void {
@@ -442,6 +480,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
       z += vz * substepDtSec;
 
       if (x <= CUSHION_THICKNESS_M + BALL_RADIUS_M || x >= TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
+        const preNormal = vx;
+        const preTangent = vz;
         x = clampNumber(x, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'x',
@@ -459,14 +499,39 @@ function stepRoomPhysics(room: LobbyRoom): void {
           ballMassKg: BALL_MASS_KG,
           ballRadiusM: BALL_RADIUS_M,
           cushionHeightM: CUSHION_HEIGHT_M,
+          rollingSpinHeightFactor: CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
         });
         vx = collision.vx;
         vz = collision.vy;
         spinX = collision.spinX;
         spinY = collision.spinY;
         spinZ = collision.spinZ;
+        if (ENABLE_SHOT_DEBUG_LOG) {
+          console.log('[ShotDebug][server] cushion_contact', {
+            roomId: room.roomId,
+            ballId: ball.id,
+            axis: 'x',
+            position: {
+              x: formatShotDebugNumber(x),
+              z: formatShotDebugNumber(z),
+            },
+            incidenceAngleDeg: formatShotDebugNumber(computeIncidenceOrReflectionDeg(preNormal, preTangent)),
+            reflectionAngleDeg: formatShotDebugNumber(computeIncidenceOrReflectionDeg(vx, vz)),
+            preVelocityMps: {
+              vx: formatShotDebugNumber(preNormal),
+              vz: formatShotDebugNumber(preTangent),
+            },
+            postVelocityMps: {
+              vx: formatShotDebugNumber(vx),
+              vz: formatShotDebugNumber(vz),
+            },
+            throwAngleDeg: formatShotDebugNumber(collision.throwAngleDeg),
+          });
+        }
       }
       if (z <= CUSHION_THICKNESS_M + BALL_RADIUS_M || z >= TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
+        const preNormal = vz;
+        const preTangent = vx;
         z = clampNumber(z, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'y',
@@ -484,12 +549,35 @@ function stepRoomPhysics(room: LobbyRoom): void {
           ballMassKg: BALL_MASS_KG,
           ballRadiusM: BALL_RADIUS_M,
           cushionHeightM: CUSHION_HEIGHT_M,
+          rollingSpinHeightFactor: CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
         });
         vx = collision.vx;
         vz = collision.vy;
         spinX = collision.spinX;
         spinY = collision.spinY;
         spinZ = collision.spinZ;
+        if (ENABLE_SHOT_DEBUG_LOG) {
+          console.log('[ShotDebug][server] cushion_contact', {
+            roomId: room.roomId,
+            ballId: ball.id,
+            axis: 'z',
+            position: {
+              x: formatShotDebugNumber(x),
+              z: formatShotDebugNumber(z),
+            },
+            incidenceAngleDeg: formatShotDebugNumber(computeIncidenceOrReflectionDeg(preNormal, preTangent)),
+            reflectionAngleDeg: formatShotDebugNumber(computeIncidenceOrReflectionDeg(vz, vx)),
+            preVelocityMps: {
+              vx: formatShotDebugNumber(preTangent),
+              vz: formatShotDebugNumber(preNormal),
+            },
+            postVelocityMps: {
+              vx: formatShotDebugNumber(vx),
+              vz: formatShotDebugNumber(vz),
+            },
+            throwAngleDeg: formatShotDebugNumber(collision.throwAngleDeg),
+          });
+        }
       }
 
       ball.x = x;

@@ -21,6 +21,7 @@ export type CushionContactThrowInput = {
   ballRadiusM?: number;
   cushionHeightM?: number;
   minNormalSpeedForThrowMps?: number;
+  rollingSpinHeightFactor?: number;
 };
 
 export type CushionContactThrowResult = {
@@ -59,14 +60,18 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   // This physically determines the friction-driven throw on the table plane.
   //
   // For z-axis cushion (axis='y', world z-normal): r_contact = (0, h, normalDir·d)
-  //   (ω × r)_x = spinY·d·normalDir − spinZ·h
+  //   (ω × r)_x = spinY·d·normalDir − spinZ·h·rollingFactor
   //
   // For x-axis cushion (axis='x', world x-normal): r_contact = (normalDir·d, h, 0)
-  //   (ω × r)_z = spinX·h − spinY·d·normalDir
+  //   (ω × r)_z = spinX·h·rollingFactor − spinY·d·normalDir
+  //
+  // rollingSpinHeightFactor scales the rolling-spin (spinZ/spinX) contribution independently
+  // from intentional english (spinY·d). Physical h is kept for torque calculation below.
+  const rollingFactor = input.rollingSpinHeightFactor ?? 1.0;
   const effectiveSpin =
     input.axis === 'x'
-      ? spinX * h - normalDirection * spinY * d
-      : normalDirection * spinY * d - spinZ * h;
+      ? spinX * h * rollingFactor - normalDirection * spinY * d
+      : normalDirection * spinY * d - spinZ * h * rollingFactor;
 
   const safeRestitution = Math.max(0.01, input.restitution);
   const safeReferenceSpeed = Math.max(minNormalSpeed, input.referenceNormalSpeedMps);
