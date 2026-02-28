@@ -31,6 +31,8 @@ import {
   CUSHION_MAX_THROW_ANGLE_DEG,
   CUSHION_RESTITUTION,
   MAX_BALL_SPEED_MPS,
+  PENETRATION_SLOP_M,
+  POSITION_CORRECTION_SCALE,
   CUSHION_THICKNESS_M,
   TABLE_HEIGHT_M,
   TABLE_WIDTH_M,
@@ -395,10 +397,8 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   }
   const directionDeg = Number(payload.shotDirectionDeg);
   const dragPx = Number(payload.dragPx);
-  const impactOffsetXRatio = clampNumber(Number(payload.impactOffsetX), -0.9, 0.9);
-  const impactOffsetYRatio = clampNumber(Number(payload.impactOffsetY), -0.9, 0.9);
-  const impactOffsetX = impactOffsetXRatio * BALL_RADIUS_M;
-  const impactOffsetY = impactOffsetYRatio * BALL_RADIUS_M;
+  const impactOffsetX = clampNumber(Number(payload.impactOffsetX), -BALL_RADIUS_M, BALL_RADIUS_M);
+  const impactOffsetY = clampNumber(Number(payload.impactOffsetY), -BALL_RADIUS_M, BALL_RADIUS_M);
   const initialization = computeShotInitialization({
     dragPx,
     impactOffsetX,
@@ -614,7 +614,7 @@ function resolveBallBallCollisions(
         applyImpulse(first, second, normalX, normalY);
         const penetration = minDistance - distance;
         if (penetration > 0) {
-          const correction = ((penetration - 1e-4 > 0 ? penetration - 1e-4 : 0) / 2) * 1.0;
+          const correction = (Math.max(penetration - PENETRATION_SLOP_M, 0) / 2) * POSITION_CORRECTION_SCALE;
           first.x -= normalX * correction;
           setBallZ(first, getBallZ(first) - normalY * correction);
           second.x += normalX * correction;
