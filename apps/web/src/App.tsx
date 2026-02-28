@@ -55,39 +55,43 @@ function App() {
       const interpolator = getSharedInterpolator();
       sseClient = new SseClient(API_BASE_URL, {
         onSnapshot: (snapshot) => {
+          const state = useGameStore.getState();
           interpolator.pushSnapshot(snapshot);
-          store.applyServerState(snapshot.state);
-          store.applyTurnInfo(snapshot.turn.currentMemberId, snapshot.turn.turnDeadlineMs);
-          store.applyScoreBoard(snapshot.scoreBoard);
+          state.applyServerState(snapshot.state);
+          state.applyTurnInfo(snapshot.turn.currentMemberId, snapshot.turn.turnDeadlineMs);
+          state.applyScoreBoard(snapshot.scoreBoard);
           const allStationary = snapshot.balls.every((ball) => ball.motionState === 'STATIONARY');
           const isMyTurn = snapshot.turn.currentMemberId === HARDCODED_MEMBER_ID;
-          if (allStationary && isMyTurn && !store.shotPending) {
-            store.setPhase('AIMING');
+          if (allStationary && isMyTurn && !state.shotPending) {
+            state.setPhase('AIMING');
           } else if (!allStationary) {
-            store.setPhase('SIMULATING');
+            state.setPhase('SIMULATING');
           } else if (!isMyTurn) {
-            store.setPhase('WAITING');
+            state.setPhase('WAITING');
           }
         },
         onShotStarted: () => {
-          store.setShotPending(false);
-          store.setPhase('SIMULATING');
+          const state = useGameStore.getState();
+          state.setShotPending(false);
+          state.setPhase('SIMULATING');
         },
         onShotResolved: (event) => {
-          store.applyScoreBoard(event.scoreBoard);
+          useGameStore.getState().applyScoreBoard(event.scoreBoard);
         },
         onTurnChanged: (event) => {
-          store.applyTurnInfo(event.currentMemberId, event.turnDeadlineMs);
-          store.applyScoreBoard(event.scoreBoard);
+          const state = useGameStore.getState();
+          state.applyTurnInfo(event.currentMemberId, event.turnDeadlineMs);
+          state.applyScoreBoard(event.scoreBoard);
           const isMyTurn = event.currentMemberId === HARDCODED_MEMBER_ID;
-          store.setPhase(isMyTurn ? 'AIMING' : 'WAITING');
+          state.setPhase(isMyTurn ? 'AIMING' : 'WAITING');
         },
         onGameFinished: (event) => {
-          store.setPhase('FINISHED');
-          store.setTurnMessage(event.winnerMemberId === HARDCODED_MEMBER_ID ? 'YOU WIN!' : 'YOU LOSE');
+          const state = useGameStore.getState();
+          state.setPhase('FINISHED');
+          state.setTurnMessage(event.winnerMemberId === HARDCODED_MEMBER_ID ? 'YOU WIN!' : 'YOU LOSE');
         },
-        onOpen: () => store.setConnectionStatus('connected'),
-        onError: () => store.setConnectionStatus('disconnected'),
+        onOpen: () => useGameStore.getState().setConnectionStatus('connected'),
+        onError: () => useGameStore.getState().setConnectionStatus('disconnected'),
       });
       sseClient.connect(roomId, HARDCODED_MEMBER_ID);
     }
