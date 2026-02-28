@@ -6,7 +6,7 @@ import { useGameStore } from './hooks/useGameStore';
 import { SseClient } from './net/SseClient';
 import { getSharedInterpolator } from './net/SnapshotInterpolator';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9212';
 const HARDCODED_ROOM_TITLE = '테스트방';
 const HARDCODED_MEMBER_ID = 'player1';
 let didBootstrapGameSession = false;
@@ -29,24 +29,39 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: HARDCODED_ROOM_TITLE }),
       });
+      if (!createRes.ok) {
+        throw new Error(`create room failed: ${createRes.status}`);
+      }
       const createBody = (await createRes.json()) as { room: { roomId: string } };
       const roomId = createBody.room.roomId;
+      if (!roomId) {
+        throw new Error('create room response missing roomId');
+      }
 
-      await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/join`, {
+      const joinPlayer1 = await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memberId: 'player1', displayName: 'Player 1' }),
       });
-      await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/join`, {
+      if (!joinPlayer1.ok) {
+        throw new Error(`join player1 failed: ${joinPlayer1.status}`);
+      }
+      const joinPlayer2 = await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memberId: 'player2', displayName: 'Player 2' }),
       });
-      await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/start`, {
+      if (!joinPlayer2.ok) {
+        throw new Error(`join player2 failed: ${joinPlayer2.status}`);
+      }
+      const startRes = await fetch(`${API_BASE_URL}/lobby/rooms/${roomId}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actorMemberId: 'player1' }),
       });
+      if (!startRes.ok) {
+        throw new Error(`start failed: ${startRes.status}`);
+      }
       if (!isActive) {
         return;
       }
@@ -56,12 +71,13 @@ function App() {
       sseClient = new SseClient(API_BASE_URL, {
         onSnapshot: (snapshot) => {
           const state = useGameStore.getState();
+          const localMemberId = state.memberId ?? HARDCODED_MEMBER_ID;
           interpolator.pushSnapshot(snapshot);
           state.applyServerState(snapshot.state);
           state.applyTurnInfo(snapshot.turn.currentMemberId, snapshot.turn.turnDeadlineMs);
           state.applyScoreBoard(snapshot.scoreBoard);
           const allStationary = snapshot.balls.every((ball) => ball.motionState === 'STATIONARY');
-          const isMyTurn = snapshot.turn.currentMemberId === HARDCODED_MEMBER_ID;
+          const isMyTurn = snapshot.turn.currentMemberId === localMemberId;
           if (allStationary && isMyTurn && !state.shotPending) {
             state.setPhase('AIMING');
           } else if (!allStationary) {
@@ -80,9 +96,10 @@ function App() {
         },
         onTurnChanged: (event) => {
           const state = useGameStore.getState();
+          const localMemberId = state.memberId ?? HARDCODED_MEMBER_ID;
           state.applyTurnInfo(event.currentMemberId, event.turnDeadlineMs);
           state.applyScoreBoard(event.scoreBoard);
-          const isMyTurn = event.currentMemberId === HARDCODED_MEMBER_ID;
+          const isMyTurn = event.currentMemberId === localMemberId;
           state.setPhase(isMyTurn ? 'AIMING' : 'WAITING');
         },
         onGameFinished: (event) => {
@@ -97,11 +114,14 @@ function App() {
     }
 
     void setupGame().catch(() => {
+      didBootstrapGameSession = false;
       store.setConnectionStatus('disconnected');
+      store.setTurnMessage('세션 초기화 실패');
     });
 
     return () => {
       isActive = false;
+      didBootstrapGameSession = false;
       sseClient?.disconnect();
     };
   }, []);

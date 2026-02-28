@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { Vector3 } from 'three';
 import { BallState, GamePhase, ShotInput } from '../types';
 import { PHYSICS } from '../lib/constants';
+import { clientToServerShotDirectionDeg } from '../lib/angle-convention';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9212';
 
 interface GameStore {
   // 게임 상태
@@ -104,7 +105,7 @@ const createInitialBalls = (): BallState[] => [
 
 export const useGameStore = create<GameStore>((set) => ({
   // 초기 상태 - direction: 90° = +X (왼쪽→오른쪽)
-  phase: 'AIMING',
+  phase: 'WAITING',
   balls: createInitialBalls(),
   shotInput: {
     shotDirectionDeg: 90,  // 90° = +X 방향 (가로)
@@ -164,6 +165,7 @@ export const useGameStore = create<GameStore>((set) => ({
     if (!state.roomId || !state.memberId) {
       return;
     }
+    const serverShotDirectionDeg = clientToServerShotDirectionDeg(state.shotInput.shotDirectionDeg);
     set({ shotPending: true, phase: 'SHOOTING', turnMessage: '', isDragging: false });
     try {
       const response = await fetch(`${API_BASE_URL}/lobby/rooms/${state.roomId}/shot`, {
@@ -179,7 +181,7 @@ export const useGameStore = create<GameStore>((set) => ({
             turnId: `${state.roomId}-turn-${Date.now()}`,
             playerId: state.memberId,
             clientTsMs: Date.now(),
-            shotDirectionDeg: state.shotInput.shotDirectionDeg,
+            shotDirectionDeg: serverShotDirectionDeg,
             cueElevationDeg: state.shotInput.cueElevationDeg,
             dragPx: state.shotInput.dragPx,
             impactOffsetX: state.shotInput.impactOffsetX,
@@ -188,10 +190,10 @@ export const useGameStore = create<GameStore>((set) => ({
         }),
       });
       if (!response.ok) {
-        set({ shotPending: false });
+        set({ shotPending: false, phase: 'AIMING' });
       }
     } catch {
-      set({ shotPending: false });
+      set({ shotPending: false, phase: 'AIMING' });
     }
   },
   

@@ -15,7 +15,6 @@ export function InputHandler() {
     shotInput,
     isDragging,
     shotPending,
-    currentTurnMemberId,
     memberId,
     setDragPower,
     setImpactOffset,
@@ -24,7 +23,7 @@ export function InputHandler() {
     resetShot,
   } = useGameStore();
 
-  const isAiming = phase === 'AIMING' && !shotPending && !!memberId && currentTurnMemberId === memberId;
+  const isAiming = phase === 'AIMING' && !shotPending && !!memberId;
   const dragState = useRef({
     startY: 0,
     currentPower: 10,
@@ -66,16 +65,10 @@ export function InputHandler() {
     
     setIsDragging(false);
     
-    // 최소 파워 체크 (15px 이상 드래그했으면 실행)
-    if (dragState.current.currentPower >= INPUT_LIMITS.DRAG_MIN + 5) {
-      console.log('[Input] Executing shot!');
-      executeShot();
-    } else {
-      // 취소 - 파워 리셋
-      console.log('[Input] Shot cancelled (power too low)');
-      setDragPower(10);
-    }
-  }, [isAiming, isDragging, setIsDragging, executeShot, setDragPower]);
+    // 클릭만 해도 최소 파워 샷이 나가도록 허용
+    console.log('[Input] Executing shot!');
+    executeShot();
+  }, [isAiming, isDragging, setIsDragging, executeShot]);
 
   // 키보드 입력 - 당점 조절 (드래그 중일 때만 가능)
   const handleKeyDown = useCallback(
