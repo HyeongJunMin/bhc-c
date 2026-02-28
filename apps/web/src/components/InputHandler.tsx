@@ -73,7 +73,7 @@ export function InputHandler() {
   // 키보드 입력 - 당점 조절 (드래그 중일 때만 가능)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!isAiming) return;
+      if (!isAiming || !isDragging) return;
       
       const step = 0.002;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.9; // 미스큐 여유
@@ -108,7 +108,7 @@ export function InputHandler() {
           break;
       }
     },
-    [isAiming, shotInput, setImpactOffset, resetShot]
+    [isAiming, isDragging, shotInput, setImpactOffset, resetShot]
   );
 
   // 이벤트 리스너 등록

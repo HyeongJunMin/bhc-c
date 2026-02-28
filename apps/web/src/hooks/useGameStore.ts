@@ -166,6 +166,26 @@ export const useGameStore = create<GameStore>((set) => ({
       return;
     }
     const serverShotDirectionDeg = clientToServerShotDirectionDeg(state.shotInput.shotDirectionDeg);
+    const cueBall = state.balls.find((ball) => ball.id === 'cueBall');
+    console.log('[ShotDebug][client] submit', {
+      roomId: state.roomId,
+      memberId: state.memberId,
+      cueBallStart: cueBall
+        ? {
+            x: Number(cueBall.position.x.toFixed(5)),
+            y: Number(cueBall.position.y.toFixed(5)),
+            z: Number(cueBall.position.z.toFixed(5)),
+          }
+        : null,
+      strokePowerDragPx: Number(state.shotInput.dragPx.toFixed(3)),
+      impactOffsetM: {
+        x: Number(state.shotInput.impactOffsetX.toFixed(5)),
+        y: Number(state.shotInput.impactOffsetY.toFixed(5)),
+      },
+      shotDirectionDegClient: Number(state.shotInput.shotDirectionDeg.toFixed(3)),
+      shotDirectionDegServer: Number(serverShotDirectionDeg.toFixed(3)),
+      cueElevationDeg: Number(state.shotInput.cueElevationDeg.toFixed(3)),
+    });
     set({ shotPending: true, phase: 'SHOOTING', turnMessage: '', isDragging: false });
     try {
       const response = await fetch(`${API_BASE_URL}/lobby/rooms/${state.roomId}/shot`, {
