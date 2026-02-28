@@ -1304,6 +1304,13 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
   if (!actorExists) {
     return { ok: false, statusCode: 404, errorCode: 'ROOM_MEMBER_NOT_FOUND' };
   }
+  if (room.state !== 'IN_GAME') {
+    return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
+  }
+  const currentTurnMemberId = getCurrentTurnMemberId(room);
+  if (!currentTurnMemberId || currentTurnMemberId !== actorMemberId) {
+    return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
+  }
 
   const validated = handleShotInputEntry(payload);
   if (!validated.ok) {

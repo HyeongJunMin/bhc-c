@@ -373,3 +373,4 @@ PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | - | 문�
 | PHYS-STICKY-001B | Agent C | done | 2026-02-28 00:27 | `node --experimental-strip-types --test apps/game-server/src/lobby/http.test.ts` 통과(29 pass) | - | - | game-server 공-공 penetration correction 계수 `0.8 -> 1.0` 조정으로 재충돌 루프 완화 및 web/server 동시 경로 정합 완료 |
 
 | MOTION-SYNC-001A | Agent C | done | 2026-02-28 20:43 | `pnpm --filter @bhc/game-server test` 통과(placeholder pass) | - | MOTION-SYNC-001B | impactOffset 이중 변환 제거(미터 단위 clamp 직접 적용) 완료 |
+| MOTION-SYNC-001B | Agent C | done | 2026-02-28 20:44 | `pnpm --filter @bhc/game-server test` 통과(placeholder pass) | - | MOTION-SYNC-002A | 샷 제출 시 IN_GAME 상태 및 현재 턴 멤버 검증 가드 추가 완료 |
