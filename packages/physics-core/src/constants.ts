@@ -11,12 +11,17 @@ export const BALL_BALL_CONTACT_FRICTION = 0.05;
 
 export const CUSHION_CONTACT_FRICTION_COEFFICIENT = 0.14;
 export const CUSHION_CONTACT_REFERENCE_SPEED_MPS = 5.957692307692308;
-export const CUSHION_CONTACT_TIME_EXPONENT = 1.2;
+// Exponent for contact-time scaling: higher = slower balls get proportionally more throw.
+// Lowered from 1.2 to 0.7 to prevent throw divergence at near-zero speeds.
+export const CUSHION_CONTACT_TIME_EXPONENT = 0.7;
 // Maximum effective spin (m/s) at cushion contact point for full throw scaling.
 // Computed as ω × r_contact tangential component; ~3.0 m/s corresponds to strong intentional english (~100 rad/s spinY).
 export const CUSHION_MAX_SPIN_MAGNITUDE = 3.0;
 // Realistic max throw angle from cushion contact (intentional english at slow speed).
 export const CUSHION_MAX_THROW_ANGLE_DEG = 15;
+// Hard cap on speedScale to prevent throw divergence at very low post-collision speeds.
+// Without this cap, (referenceSpeed / nearZeroSpeed)^exponent grows unboundedly.
+export const CUSHION_MAX_SPEED_SCALE = 5.0;
 // Scale factor applied to the rolling-spin (spinZ/spinX) contribution in effectiveSpin.
 // Reduces throw caused by natural rolling; does not affect intentional english (spinY·d term).
 export const CUSHION_ROLLING_SPIN_HEIGHT_FACTOR = 0.1;

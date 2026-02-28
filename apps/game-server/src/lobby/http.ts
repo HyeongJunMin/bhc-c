@@ -29,6 +29,7 @@ import {
   CUSHION_HEIGHT_M,
   CUSHION_MAX_SPIN_MAGNITUDE,
   CUSHION_MAX_THROW_ANGLE_DEG,
+  CUSHION_MAX_SPEED_SCALE,
   CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
   CUSHION_TORQUE_DAMPING,
   CUSHION_RESTITUTION,
@@ -515,6 +516,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
           cushionHeightM: CUSHION_HEIGHT_M,
           rollingSpinHeightFactor: CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
           cushionTorqueDamping: CUSHION_TORQUE_DAMPING,
+          maxSpeedScale: CUSHION_MAX_SPEED_SCALE,
         });
         vx = collision.vx;
         vz = collision.vy;
@@ -587,6 +589,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
           cushionHeightM: CUSHION_HEIGHT_M,
           rollingSpinHeightFactor: CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
           cushionTorqueDamping: CUSHION_TORQUE_DAMPING,
+          maxSpeedScale: CUSHION_MAX_SPEED_SCALE,
         });
         vx = collision.vx;
         vz = collision.vy;

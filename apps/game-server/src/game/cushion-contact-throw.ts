@@ -23,6 +23,7 @@ export type CushionContactThrowInput = {
   minNormalSpeedForThrowMps?: number;
   rollingSpinHeightFactor?: number;
   cushionTorqueDamping?: number;
+  maxSpeedScale?: number;
 };
 
 export type CushionContactThrowResult = {
@@ -76,7 +77,10 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const safeRestitution = Math.max(0.01, input.restitution);
   const safeReferenceSpeed = Math.max(minNormalSpeed, input.referenceNormalSpeedMps);
   const baseTan = (input.contactFriction * (1 + safeRestitution)) / safeRestitution;
-  const speedScale = Math.pow(safeReferenceSpeed / Math.max(absPostVn, minNormalSpeed), input.contactTimeExponent);
+  const rawSpeedScale = Math.pow(safeReferenceSpeed / Math.max(absPostVn, minNormalSpeed), input.contactTimeExponent);
+  const speedScale = input.maxSpeedScale !== undefined
+    ? Math.min(rawSpeedScale, input.maxSpeedScale)
+    : rawSpeedScale;
   const spinScale = clampNumber(Math.abs(effectiveSpin) / Math.max(1e-6, input.maxSpinMagnitude), 0, 1);
   const rawThrowTan = baseTan * speedScale * spinScale;
   const maxThrowTan = Math.tan((input.maxThrowAngleDeg * Math.PI) / 180);
