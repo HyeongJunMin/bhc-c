@@ -9,11 +9,16 @@ import { getSharedInterpolator } from './net/SnapshotInterpolator';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 const HARDCODED_ROOM_TITLE = '테스트방';
 const HARDCODED_MEMBER_ID = 'player1';
+let didBootstrapGameSession = false;
 
 function App() {
   const store = useGameStore();
 
   useEffect(() => {
+    if (didBootstrapGameSession) {
+      return;
+    }
+    didBootstrapGameSession = true;
     let sseClient: SseClient | null = null;
     let isActive = true;
 
@@ -87,7 +92,9 @@ function App() {
       sseClient.connect(roomId, HARDCODED_MEMBER_ID);
     }
 
-    void setupGame();
+    void setupGame().catch(() => {
+      store.setConnectionStatus('disconnected');
+    });
 
     return () => {
       isActive = false;
