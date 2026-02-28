@@ -13,7 +13,6 @@ interface GameStore {
   // 공 상태
   balls: BallState[];
   updateBall: (id: string, updates: Partial<BallState>) => void;
-  resetBalls: () => void;
   
   // 큐 입력
   shotInput: ShotInput;
@@ -36,16 +35,10 @@ interface GameStore {
   shotPending: boolean;
   
   // 게임 로직
-  currentPlayer: string;
-  players: string[];
   scores: Record<string, number>;
-  cushionContacts: number;
-  objectBallsHit: Set<string>;
   turnMessage: string;
   
   // 액션
-  addScore: (player: string) => void;
-  nextPlayer: () => void;
   setTurnMessage: (message: string) => void;
   setConnectionStatus: (status: GameStore['connectionStatus']) => void;
   setRoomInfo: (roomId: string, memberId: string) => void;
@@ -128,11 +121,7 @@ export const useGameStore = create<GameStore>((set) => ({
   currentTurnMemberId: null,
   turnDeadlineMs: null,
   shotPending: false,
-  currentPlayer: 'player1',
-  players: ['player1', 'player2'],
   scores: { player1: 0, player2: 0 },
-  cushionContacts: 0,
-  objectBallsHit: new Set(),
   turnMessage: '',
 
   // 액션
@@ -143,8 +132,6 @@ export const useGameStore = create<GameStore>((set) => ({
       b.id === id ? { ...b, ...updates } : b
     ),
   })),
-  
-  resetBalls: () => set({ balls: createInitialBalls() }),
   
   setShotDirection: (deg) => set((state) => ({
     shotInput: { ...state.shotInput, shotDirectionDeg: deg },
@@ -163,16 +150,6 @@ export const useGameStore = create<GameStore>((set) => ({
   })),
   
   setIsDragging: (dragging) => set({ isDragging: dragging }),
-  
-  addScore: (player) => set((state) => ({
-    scores: { ...state.scores, [player]: (state.scores[player] || 0) + 1 },
-  })),
-  
-  nextPlayer: () => set((state) => {
-    const currentIndex = state.players.indexOf(state.currentPlayer);
-    const nextIndex = (currentIndex + 1) % state.players.length;
-    return { currentPlayer: state.players[nextIndex] };
-  }),
   
   setTurnMessage: (message) => set({ turnMessage: message }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
@@ -235,7 +212,6 @@ export const useGameStore = create<GameStore>((set) => ({
     phase: 'AIMING',
     balls: createInitialBalls(),
     scores: { player1: 0, player2: 0 },
-    currentPlayer: 'player1',
     turnMessage: '',
     isDragging: false,
     shotInput: {

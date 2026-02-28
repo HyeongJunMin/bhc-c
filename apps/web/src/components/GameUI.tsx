@@ -6,7 +6,7 @@ export function GameUI() {
     phase, 
     shotInput, 
     isDragging,
-    currentPlayer, 
+    currentTurnMemberId,
     scores, 
     turnMessage,
     resetGame,
@@ -57,17 +57,17 @@ export function GameUI() {
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>SCORE</div>
           <div style={{ display: 'flex', gap: 20 }}>
             {Object.entries(scores).map(([player, score]) => (
-              <div 
+                  <div 
                 key={player} 
                 style={{ 
                   textAlign: 'center',
-                  opacity: currentPlayer === player ? 1 : 0.5,
+                  opacity: currentTurnMemberId === player ? 1 : 0.5,
                 }}
               >
                 <div style={{ 
                   fontSize: 24, 
                   fontWeight: 'bold',
-                  color: currentPlayer === player ? '#00ff88' : 'white',
+                  color: currentTurnMemberId === player ? '#00ff88' : 'white',
                 }}>
                   {score}
                 </div>

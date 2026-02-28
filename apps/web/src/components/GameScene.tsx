@@ -22,11 +22,8 @@ function GameWorld() {
     phase,
     shotInput,
     isDragging,
-    currentPlayer,
     updateBall,
     setPhase,
-    addScore,
-    nextPlayer,
     setTurnMessage,
     setShotDirection,
     resetGame,
@@ -168,13 +165,6 @@ function GameWorld() {
         
         if (result.isScore) {
           setTurnMessage('🎉 SCORE!');
-          addScore(currentPlayer);
-          
-          // 승리 체크
-          const currentScore = useGameStore.getState().scores[currentPlayer] || 0;
-          if (currentScore + 1 >= RULES.WINNING_SCORE) {
-            setTurnMessage(`🏆 ${currentPlayer} WINS!`);
-          }
         } else {
           const cushionCount = threeCushionRules.getCushionCount();
           if (cushionCount < RULES.REQUIRED_CUSHIONS) {
@@ -182,7 +172,6 @@ function GameWorld() {
           } else {
             setTurnMessage('Miss (Need both object balls)');
           }
-          nextPlayer();
         }
         
         setPhase('AIMING');
