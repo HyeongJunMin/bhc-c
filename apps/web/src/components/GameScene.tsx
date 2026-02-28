@@ -9,10 +9,7 @@ import { CueStick } from './CueStick';
 import { GuideLine } from './GuideLine';
 import { ShotGuide } from './ShotGuide';
 import { useGameStore } from '../hooks/useGameStore';
-import { COLORS, RULES } from '../lib/constants';
-import { computeShotVelocity, isMiscue } from '../lib/physics-calculator';
-import { simplePhysics } from '../core/SimplePhysics';
-import { threeCushionRules } from '../core/ThreeCushionRules';
+import { COLORS } from '../lib/constants';
 
 // 게임 월드 컴포넌트
 function GameWorld() {
@@ -22,40 +19,14 @@ function GameWorld() {
     phase,
     shotInput,
     isDragging,
-    updateBall,
-    setPhase,
-    setTurnMessage,
     setShotDirection,
     resetGame,
   } = useGameStore();
 
   const cueBall = balls.find((b) => b.id === 'cueBall')!;
   const isAiming = phase === 'AIMING';
-  const physicsInitialized = useRef(false);
   const controlsRef = useRef<any>(null);
   const lastAzimuthRef = useRef(0);
-
-  // 물리 엔진 초기화
-  useEffect(() => {
-    if (physicsInitialized.current) return;
-    
-    simplePhysics.init();
-    
-    // 공 생성
-    balls.forEach((ball) => {
-      simplePhysics.createBall(ball.id, ball.position);
-    });
-    
-    // 새 턴 시작
-    threeCushionRules.startTurn('cueBall', ['objectBall1', 'objectBall2']);
-    
-    physicsInitialized.current = true;
-    console.log('[GameScene] Physics initialized');
-
-    return () => {
-      simplePhysics.cleanup();
-    };
-  }, []);
 
   // 키보드 이벤트 (스페이스바)
   useEffect(() => {
@@ -97,88 +68,6 @@ function GameWorld() {
     if (Math.abs(degrees - lastAzimuthRef.current) > 1) {
       lastAzimuthRef.current = degrees;
       setShotDirection(degrees);
-    }
-  });
-
-  // 샷 실행
-  useEffect(() => {
-    if (phase === 'SHOOTING') {
-      console.log('[Game] Shooting! Direction:', shotInput.shotDirectionDeg, 'Power:', shotInput.dragPx);
-      
-      // 미스큐 체크
-      if (isMiscue(shotInput.impactOffsetX, shotInput.impactOffsetY)) {
-        console.log('[Game] Miscue!');
-        setTurnMessage('MISCUE!');
-        setPhase('SIMULATING');
-        return;
-      }
-      
-      const velocity = computeShotVelocity(
-        shotInput.shotDirectionDeg,
-        shotInput.cueElevationDeg,
-        shotInput.dragPx
-      );
-      
-      console.log('[Game] Velocity:', velocity);
-      simplePhysics.applyVelocity('cueBall', velocity);
-      
-      // 충돌 이벤트 리스너 설정
-      simplePhysics.onBallCollision = (id1, id2) => {
-        threeCushionRules.recordCollision({
-          type: 'BALL',
-          ballId1: id1,
-          ballId2: id2,
-          atMs: Date.now(),
-        });
-      };
-      
-      simplePhysics.onCushionCollision = (ballId, cushionId) => {
-        threeCushionRules.recordCollision({
-          type: 'CUSHION',
-          ballId,
-          cushionId,
-          atMs: Date.now(),
-        });
-      };
-    }
-  }, [phase, shotInput, setPhase, setTurnMessage]);
-
-  // 물리 업데이트
-  useFrame((_, delta) => {
-    if (!physicsInitialized.current) return;
-
-    if (phase === 'SIMULATING' || phase === 'SHOOTING') {
-      // 물리 스텝
-      simplePhysics.step(delta);
-      
-      // 상태 동기화
-      const states = simplePhysics.getAllBallStates();
-      states.forEach((state, id) => {
-        updateBall(id, {
-          position: state.position,
-        });
-      });
-      
-      // 모든 공이 멈췄는지 확인
-      if (simplePhysics.areAllBallsStopped(0.02)) {
-        const result = threeCushionRules.endTurn();
-        
-        if (result.isScore) {
-          setTurnMessage('🎉 SCORE!');
-        } else {
-          const cushionCount = threeCushionRules.getCushionCount();
-          if (cushionCount < RULES.REQUIRED_CUSHIONS) {
-            setTurnMessage(`Miss (Cushions: ${cushionCount}/3)`);
-          } else {
-            setTurnMessage('Miss (Need both object balls)');
-          }
-        }
-        
-        setPhase('AIMING');
-        
-        // 새 턴 시작
-        threeCushionRules.startTurn('cueBall', ['objectBall1', 'objectBall2']);
-      }
     }
   });
 
