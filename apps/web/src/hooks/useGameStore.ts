@@ -3,6 +3,8 @@ import { Vector3 } from 'three';
 import { BallState, GamePhase, ShotInput } from '../types';
 import { PHYSICS } from '../lib/constants';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
 interface GameStore {
   // 게임 상태
   phase: GamePhase;
@@ -51,7 +53,7 @@ interface GameStore {
   applyTurnInfo: (memberId: string | null, deadlineMs: number | null) => void;
   applyScoreBoard: (scoreBoard: Record<string, number>) => void;
   setShotPending: (pending: boolean) => void;
-  executeShot: () => void;
+  executeShot: () => Promise<void>;
   resetShot: () => void;
   resetGame: () => void;
 }
@@ -180,8 +182,40 @@ export const useGameStore = create<GameStore>((set) => ({
   applyScoreBoard: (scoreBoard) => set({ scores: scoreBoard }),
   setShotPending: (pending) => set({ shotPending: pending }),
   
-  executeShot: () => {
-    set({ phase: 'SHOOTING', turnMessage: '', isDragging: false });
+  executeShot: async () => {
+    const state = useGameStore.getState();
+    if (!state.roomId || !state.memberId) {
+      return;
+    }
+    set({ shotPending: true, phase: 'SHOOTING', turnMessage: '', isDragging: false });
+    try {
+      const response = await fetch(`${API_BASE_URL}/lobby/rooms/${state.roomId}/shot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actorMemberId: state.memberId,
+          payload: {
+            schemaName: 'shot_input',
+            schemaVersion: '1.0.0',
+            roomId: state.roomId,
+            matchId: state.roomId,
+            turnId: `${state.roomId}-turn-${Date.now()}`,
+            playerId: state.memberId,
+            clientTsMs: Date.now(),
+            shotDirectionDeg: state.shotInput.shotDirectionDeg,
+            cueElevationDeg: state.shotInput.cueElevationDeg,
+            dragPx: state.shotInput.dragPx,
+            impactOffsetX: state.shotInput.impactOffsetX,
+            impactOffsetY: state.shotInput.impactOffsetY,
+          },
+        }),
+      });
+      if (!response.ok) {
+        set({ shotPending: false });
+      }
+    } catch {
+      set({ shotPending: false });
+    }
   },
   
   resetShot: () => set(() => ({
