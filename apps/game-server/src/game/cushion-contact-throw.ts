@@ -32,15 +32,17 @@ export type CushionContactThrowResult = {
   spinZ: number;
   throwTan: number;
   throwAngleDeg: number;
+  effectiveSpin: number;
+  throwDirection: -1 | 0 | 1;
 };
 
 export function applyCushionContactThrow(input: CushionContactThrowInput): CushionContactThrowResult {
   const minNormalSpeed = input.minNormalSpeedForThrowMps ?? 0.05;
   const preVn = input.axis === 'x' ? input.vx : input.vy;
   const preVt = input.axis === 'x' ? input.vy : input.vx;
-  let spinX = input.spinX ?? 0;
-  let spinY = input.spinY ?? 0;
-  const spinZ = input.spinZ;
+  let spinX = input.spinX ?? 0; // Y-direction rolling (vz)
+  let spinY = input.spinY ?? 0; // Side Spin (English)
+  let spinZ = input.spinZ ?? 0; // X-direction rolling (vx)
 
   const postVn = -preVn * input.restitution;
   const absPostVn = Math.abs(postVn);
@@ -57,16 +59,13 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const normalDirection = Math.sign(preVn) === 0 ? 1 : Math.sign(preVn);
 
   // Effective spin: tangential surface velocity at the contact point due to spin (ω × r_contact).
-  // This physically determines the friction-driven throw on the table plane.
+  // Standardized axes: spinY=side, spinX=Z-roll, spinZ=X-roll.
   //
   // For z-axis cushion (axis='y', world z-normal): r_contact = (0, h, normalDir·d)
   //   (ω × r)_x = spinY·d·normalDir − spinZ·h·rollingFactor
   //
   // For x-axis cushion (axis='x', world x-normal): r_contact = (normalDir·d, h, 0)
   //   (ω × r)_z = spinX·h·rollingFactor − spinY·d·normalDir
-  //
-  // rollingSpinHeightFactor scales the rolling-spin (spinZ/spinX) contribution independently
-  // from intentional english (spinY·d). Physical h is kept for torque calculation below.
   const rollingFactor = input.rollingSpinHeightFactor ?? 1.0;
   const effectiveSpin =
     input.axis === 'x'
@@ -82,7 +81,7 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const maxThrowTan = Math.tan((input.maxThrowAngleDeg * Math.PI) / 180);
   const throwTan = clampNumber(rawThrowTan, 0, maxThrowTan);
 
-  const throwDirection = Math.sign(effectiveSpin);
+  const throwDirection = Math.sign(effectiveSpin) as -1 | 0 | 1;
   const dampedVt = preVt * (1 - input.contactFriction);
   const throwVt = throwDirection === 0 ? 0 : throwDirection * throwTan * absPostVn;
   const postVt = dampedVt + throwVt;
@@ -91,15 +90,28 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const vy = input.axis === 'x' ? postVt : postVn;
   const throwAngleDeg = Math.atan(throwTan) * (180 / Math.PI);
 
-  // Torque from cushion contact height above ball center affects spinX.
+  // Torque from cushion contact height above ball center.
   const inertia = (2 / 5) * ballMassKg * ballRadiusM * ballRadiusM;
   const normalImpulse = ballMassKg * (1 + input.restitution) * Math.abs(preVn);
   const contactTorqueSpinDelta = (h * normalImpulse) / Math.max(1e-6, inertia);
-  spinX += contactTorqueSpinDelta * normalDirection;
+  
+  if (input.axis === 'x') {
+    // X-axis cushion affects rolling spin along X (spinZ)
+    spinZ += contactTorqueSpinDelta * normalDirection;
+  } else {
+    // Y(Z)-axis cushion affects rolling spin along Z (spinX)
+    spinX += contactTorqueSpinDelta * normalDirection;
+  }
 
   // Partial conversion between side-axis spin and rolling-axis spin near cushion contact.
   const conversion = input.contactFriction * 0.08 * spinY;
-  spinX += conversion;
+  if (input.axis === 'x') {
+    // Side spin to rolling along the cushion (Y/Z direction -> spinX)
+    spinX += conversion;
+  } else {
+    // Side spin to rolling along the cushion (X direction -> spinZ)
+    spinZ += conversion;
+  }
   spinY -= conversion;
 
   return {
@@ -110,5 +122,7 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
     spinZ,
     throwTan,
     throwAngleDeg,
+    effectiveSpin,
+    throwDirection,
   };
 }

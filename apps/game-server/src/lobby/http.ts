@@ -400,6 +400,16 @@ function computeIncidenceOrReflectionDeg(normalSpeed: number, tangentSpeed: numb
   return (Math.atan2(Math.abs(tangentSpeed), Math.abs(normalSpeed)) * 180) / Math.PI;
 }
 
+function spinDirectionLabel(direction: -1 | 0 | 1): 'negative' | 'none' | 'positive' {
+  if (direction > 0) {
+    return 'positive';
+  }
+  if (direction < 0) {
+    return 'negative';
+  }
+  return 'none';
+}
+
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
   const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
   if (!cueBall) {
@@ -426,8 +436,8 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   // Runtime plane is XZ; `vy` stores z-axis planar velocity in snapshot schema.
   cueBall.vy = Math.sin(finalDirectionRad) * initialization.initialBallSpeedMps;
   cueBall.spinX = initialization.omegaX;
-  cueBall.spinY = 0;
-  cueBall.spinZ = initialization.omegaZ;
+  cueBall.spinY = initialization.omegaY;
+  cueBall.spinZ = 0;
   cueBall.motionState = 'SLIDING';
   room.shotEndTracker = initShotEndTracker();
   if (ENABLE_SHOT_DEBUG_LOG) {
@@ -482,6 +492,9 @@ function stepRoomPhysics(room: LobbyRoom): void {
       if (x <= CUSHION_THICKNESS_M + BALL_RADIUS_M || x >= TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
         const preNormal = vx;
         const preTangent = vz;
+        const preSpinX = spinX;
+        const preSpinY = spinY;
+        const preSpinZ = spinZ;
         x = clampNumber(x, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'x',
@@ -507,6 +520,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
         spinY = collision.spinY;
         spinZ = collision.spinZ;
         if (ENABLE_SHOT_DEBUG_LOG) {
+          const collisionSpeed = Math.hypot(preNormal, preTangent);
+          const reflectionSpeed = Math.hypot(vx, vz);
           console.log('[ShotDebug][server] cushion_contact', {
             roomId: room.roomId,
             ballId: ball.id,
@@ -520,11 +535,27 @@ function stepRoomPhysics(room: LobbyRoom): void {
             preVelocityMps: {
               vx: formatShotDebugNumber(preNormal),
               vz: formatShotDebugNumber(preTangent),
+              speed: formatShotDebugNumber(collisionSpeed),
             },
             postVelocityMps: {
               vx: formatShotDebugNumber(vx),
               vz: formatShotDebugNumber(vz),
+              speed: formatShotDebugNumber(reflectionSpeed),
             },
+            preSpinRadps: {
+              spinX: formatShotDebugNumber(preSpinX),
+              spinY: formatShotDebugNumber(preSpinY),
+              spinZ: formatShotDebugNumber(preSpinZ),
+              magnitude: formatShotDebugNumber(Math.hypot(preSpinX, preSpinY, preSpinZ)),
+            },
+            postSpinRadps: {
+              spinX: formatShotDebugNumber(spinX),
+              spinY: formatShotDebugNumber(spinY),
+              spinZ: formatShotDebugNumber(spinZ),
+              magnitude: formatShotDebugNumber(Math.hypot(spinX, spinY, spinZ)),
+            },
+            effectiveSpin: formatShotDebugNumber(collision.effectiveSpin),
+            spinDirection: spinDirectionLabel(collision.throwDirection),
             throwAngleDeg: formatShotDebugNumber(collision.throwAngleDeg),
           });
         }
@@ -532,6 +563,9 @@ function stepRoomPhysics(room: LobbyRoom): void {
       if (z <= CUSHION_THICKNESS_M + BALL_RADIUS_M || z >= TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M) {
         const preNormal = vz;
         const preTangent = vx;
+        const preSpinX = spinX;
+        const preSpinY = spinY;
+        const preSpinZ = spinZ;
         z = clampNumber(z, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
         const collision = applyCushionContactThrow({
           axis: 'y',
@@ -557,6 +591,8 @@ function stepRoomPhysics(room: LobbyRoom): void {
         spinY = collision.spinY;
         spinZ = collision.spinZ;
         if (ENABLE_SHOT_DEBUG_LOG) {
+          const collisionSpeed = Math.hypot(preNormal, preTangent);
+          const reflectionSpeed = Math.hypot(vx, vz);
           console.log('[ShotDebug][server] cushion_contact', {
             roomId: room.roomId,
             ballId: ball.id,
@@ -570,11 +606,27 @@ function stepRoomPhysics(room: LobbyRoom): void {
             preVelocityMps: {
               vx: formatShotDebugNumber(preTangent),
               vz: formatShotDebugNumber(preNormal),
+              speed: formatShotDebugNumber(collisionSpeed),
             },
             postVelocityMps: {
               vx: formatShotDebugNumber(vx),
               vz: formatShotDebugNumber(vz),
+              speed: formatShotDebugNumber(reflectionSpeed),
             },
+            preSpinRadps: {
+              spinX: formatShotDebugNumber(preSpinX),
+              spinY: formatShotDebugNumber(preSpinY),
+              spinZ: formatShotDebugNumber(preSpinZ),
+              magnitude: formatShotDebugNumber(Math.hypot(preSpinX, preSpinY, preSpinZ)),
+            },
+            postSpinRadps: {
+              spinX: formatShotDebugNumber(spinX),
+              spinY: formatShotDebugNumber(spinY),
+              spinZ: formatShotDebugNumber(spinZ),
+              magnitude: formatShotDebugNumber(Math.hypot(spinX, spinY, spinZ)),
+            },
+            effectiveSpin: formatShotDebugNumber(collision.effectiveSpin),
+            spinDirection: spinDirectionLabel(collision.throwDirection),
             throwAngleDeg: formatShotDebugNumber(collision.throwAngleDeg),
           });
         }
