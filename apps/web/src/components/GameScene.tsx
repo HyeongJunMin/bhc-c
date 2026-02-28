@@ -10,6 +10,7 @@ import { GuideLine } from './GuideLine';
 import { ShotGuide } from './ShotGuide';
 import { useGameStore } from '../hooks/useGameStore';
 import { COLORS } from '../lib/constants';
+import { getSharedInterpolator } from '../net/SnapshotInterpolator';
 
 // 게임 월드 컴포넌트
 function GameWorld() {
@@ -19,6 +20,7 @@ function GameWorld() {
     phase,
     shotInput,
     isDragging,
+    updateBall,
     setShotDirection,
     resetGame,
   } = useGameStore();
@@ -69,6 +71,19 @@ function GameWorld() {
       lastAzimuthRef.current = degrees;
       setShotDirection(degrees);
     }
+  });
+
+  useFrame(() => {
+    const result = getSharedInterpolator().sample();
+    if (!result) {
+      return;
+    }
+    result.balls.forEach((ball) => {
+      updateBall(ball.id, {
+        position: ball.position,
+        isPocketed: ball.isPocketed,
+      });
+    });
   });
 
   return (
