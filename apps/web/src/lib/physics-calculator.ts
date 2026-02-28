@@ -1,5 +1,9 @@
 import { PHYSICS } from './constants';
-import { AngularVelocity } from '../types';
+
+type AngularVelocity = {
+  omegaX: number;
+  omegaZ: number;
+};
 
 /**
  * 샷 물리 계산 (packages/physics-core 포팅)

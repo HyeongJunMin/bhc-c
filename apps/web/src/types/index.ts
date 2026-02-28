@@ -45,15 +45,8 @@ export interface HalfSystemResult {
 
 export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'SCORING' | 'WAITING' | 'FINISHED';
 
-export interface AngularVelocity {
-  omegaX: number;
-  omegaZ: number;
-}
-
 export interface GameState {
   phase: GamePhase;
   currentPlayer: string;
   scores: Record<string, number>;
-  cushionContacts: number;
-  objectBallsHit: Set<string>;
 }
