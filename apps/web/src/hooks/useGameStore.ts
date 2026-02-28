@@ -23,6 +23,15 @@ interface GameStore {
   // 드래그 상태 (침대 고정용)
   isDragging: boolean;
   setIsDragging: (dragging: boolean) => void;
+
+  // 서버 연결/상태
+  connectionStatus: 'disconnected' | 'connecting' | 'connected';
+  roomId: string | null;
+  memberId: string | null;
+  serverState: 'WAITING' | 'IN_GAME' | 'FINISHED';
+  currentTurnMemberId: string | null;
+  turnDeadlineMs: number | null;
+  shotPending: boolean;
   
   // 게임 로직
   currentPlayer: string;
@@ -36,6 +45,12 @@ interface GameStore {
   addScore: (player: string) => void;
   nextPlayer: () => void;
   setTurnMessage: (message: string) => void;
+  setConnectionStatus: (status: GameStore['connectionStatus']) => void;
+  setRoomInfo: (roomId: string, memberId: string) => void;
+  applyServerState: (state: GameStore['serverState']) => void;
+  applyTurnInfo: (memberId: string | null, deadlineMs: number | null) => void;
+  applyScoreBoard: (scoreBoard: Record<string, number>) => void;
+  setShotPending: (pending: boolean) => void;
   executeShot: () => void;
   resetShot: () => void;
   resetGame: () => void;
@@ -104,6 +119,13 @@ export const useGameStore = create<GameStore>((set) => ({
     impactOffsetY: 0,
   },
   isDragging: false,
+  connectionStatus: 'disconnected',
+  roomId: null,
+  memberId: null,
+  serverState: 'WAITING',
+  currentTurnMemberId: null,
+  turnDeadlineMs: null,
+  shotPending: false,
   currentPlayer: 'player1',
   players: ['player1', 'player2'],
   scores: { player1: 0, player2: 0 },
@@ -151,6 +173,12 @@ export const useGameStore = create<GameStore>((set) => ({
   }),
   
   setTurnMessage: (message) => set({ turnMessage: message }),
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
+  setRoomInfo: (roomId, memberId) => set({ roomId, memberId }),
+  applyServerState: (state) => set({ serverState: state }),
+  applyTurnInfo: (memberId, deadlineMs) => set({ currentTurnMemberId: memberId, turnDeadlineMs: deadlineMs }),
+  applyScoreBoard: (scoreBoard) => set({ scores: scoreBoard }),
+  setShotPending: (pending) => set({ shotPending: pending }),
   
   executeShot: () => {
     set({ phase: 'SHOOTING', turnMessage: '', isDragging: false });

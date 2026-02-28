@@ -378,3 +378,4 @@ PHYS-CT-QA pass: contact-time throw angle table generated 통과 | - | - | 문�
 | MOTION-SYNC-002B | Agent C | done | 2026-02-28 20:46 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-003A | 스냅샷 보간 모듈(SnapshotInterpolator) 추가 완료 |
 | MOTION-SYNC-003A | Agent C | done | 2026-02-28 20:47 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-003B | BallState 속도 필드 제거 및 GamePhase WAITING/FINISHED 확장 완료 |
 | MOTION-SYNC-003B | Agent C | done | 2026-02-28 20:49 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-004A | GameState의 cushion/object hit 필드 및 AngularVelocity 타입 제거 완료 |
+| MOTION-SYNC-004A | Agent C | done | 2026-02-28 20:51 | `pnpm --filter @bhc/web build` 통과 | - | MOTION-SYNC-004B | 스토어에 서버 연결/턴/샷 대기 상태 필드 및 적용 액션 추가 완료 |
