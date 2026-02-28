@@ -16,7 +16,7 @@ export interface InterpolatedSnapshot {
 
 type BufferedSnapshot = RoomSnapshot;
 
-const BUFFER_DELAY_MS = 100;
+const BUFFER_DELAY_MS = resolveBufferDelayMs();
 const STALE_THRESHOLD_MS = 500;
 const MAX_BUFFER_SIZE = 30;
 
@@ -146,4 +146,12 @@ function lerp(start: number, end: number, alpha: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function resolveBufferDelayMs(): number {
+  const raw = Number(import.meta.env.VITE_SNAPSHOT_BUFFER_MS ?? 100);
+  if (!Number.isFinite(raw)) {
+    return 100;
+  }
+  return Math.round(clamp(raw, 50, 300));
 }
