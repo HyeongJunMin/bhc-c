@@ -50,7 +50,7 @@ export class SimplePhysics {
       position: position.clone(),
       velocity: new Vector3(0, 0, 0),
       radius,
-      mass: PHYSICS.BALL_MASS,
+      mass: 0.21,
     });
   }
 
@@ -131,12 +131,12 @@ export class SimplePhysics {
       // 좌/우 쿠션
       if (ball.position.x < minX) {
         ball.position.x = minX;
-        ball.velocity.x = -ball.velocity.x * PHYSICS.BALL_CUSHION_RESTITUTION;
+        ball.velocity.x = -ball.velocity.x * 0.72;
         collided = true;
         cushionId = 'left';
       } else if (ball.position.x > maxX) {
         ball.position.x = maxX;
-        ball.velocity.x = -ball.velocity.x * PHYSICS.BALL_CUSHION_RESTITUTION;
+        ball.velocity.x = -ball.velocity.x * 0.72;
         collided = true;
         cushionId = 'right';
       }
@@ -144,12 +144,12 @@ export class SimplePhysics {
       // 상/하 쿠션
       if (ball.position.z < minZ) {
         ball.position.z = minZ;
-        ball.velocity.z = -ball.velocity.z * PHYSICS.BALL_CUSHION_RESTITUTION;
+        ball.velocity.z = -ball.velocity.z * 0.72;
         collided = true;
         cushionId = 'top';
       } else if (ball.position.z > maxZ) {
         ball.position.z = maxZ;
-        ball.velocity.z = -ball.velocity.z * PHYSICS.BALL_CUSHION_RESTITUTION;
+        ball.velocity.z = -ball.velocity.z * 0.72;
         collided = true;
         cushionId = 'bottom';
       }
@@ -227,7 +227,7 @@ export class SimplePhysics {
     if (velocityAlongNormal >= 0) return;
 
     // 충돌 반응 (반발 계수 적용)
-    const restitution = PHYSICS.BALL_BALL_RESTITUTION;
+    const restitution = 0.95;
     let impulse = -(1 + restitution) * velocityAlongNormal;
     impulse /= (1 / ball1.mass + 1 / ball2.mass);
 

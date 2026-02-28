@@ -5,6 +5,11 @@ type AngularVelocity = {
   omegaZ: number;
 };
 
+const CUE_MASS = 0.5;
+const BALL_MASS = 0.21;
+const TIP_RESTITUTION = 0.7;
+const MISCUE_THRESHOLD_RATIO = 0.9;
+
 /**
  * 샷 물리 계산 (packages/physics-core 포팅)
  */
@@ -22,7 +27,6 @@ export function dragToTargetSpeed(dragPx: number): number {
  * 목표 속도에서 큐 속도 역산
  */
 export function solveCueSpeed(targetBallSpeed: number): number {
-  const { CUE_MASS, BALL_MASS, TIP_RESTITUTION } = PHYSICS;
   return (targetBallSpeed * (CUE_MASS + BALL_MASS)) / (CUE_MASS * (1 + TIP_RESTITUTION));
 }
 
@@ -30,7 +34,6 @@ export function solveCueSpeed(targetBallSpeed: number): number {
  * 초기 선속도 계산
  */
 export function computeInitialBallSpeed(cueSpeed: number): number {
-  const { CUE_MASS, BALL_MASS, TIP_RESTITUTION } = PHYSICS;
   return ((CUE_MASS * (1 + TIP_RESTITUTION)) / (CUE_MASS + BALL_MASS)) * cueSpeed;
 }
 
@@ -56,7 +59,7 @@ export function computeInitialAngularVelocity(
  */
 export function isMiscue(impactOffsetX: number, impactOffsetY: number): boolean {
   const offsetDistance = Math.hypot(impactOffsetX, impactOffsetY);
-  return offsetDistance > PHYSICS.MISCUE_THRESHOLD_RATIO * PHYSICS.BALL_RADIUS;
+  return offsetDistance > MISCUE_THRESHOLD_RATIO * PHYSICS.BALL_RADIUS;
 }
 
 /**

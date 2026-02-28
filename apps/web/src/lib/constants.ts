@@ -3,7 +3,6 @@ export const PHYSICS = {
   // 공
   BALL_DIAMETER: 0.0615,
   BALL_RADIUS: 0.03075,
-  BALL_MASS: 0.21,
   
   // 테이블 (납작 크기)
   TABLE_WIDTH: 2.844,
@@ -12,22 +11,6 @@ export const PHYSICS = {
   TABLE_OUTER_HEIGHT: 1.700,
   CUSHION_HEIGHT: 0.037,
   CUSHION_THICKNESS: 0.05,  // 쿠션 두께 (약 5cm)
-  
-  // 큐
-  CUE_MASS: 0.5,
-  TIP_RESTITUTION: 0.7,
-  
-  // 반발계수
-  BALL_BALL_RESTITUTION: 0.95,
-  BALL_CUSHION_RESTITUTION: 0.72,
-  
-  // 마찰
-  SLIDING_FRICTION: 0.20,
-  ROLLING_FRICTION: 0.012,
-  CUSHION_FRICTION: 0.14,
-  
-  // 미스큐
-  MISCUE_THRESHOLD_RATIO: 0.9,
   
   // 샷 속도 매핑
   MIN_DRAG_PX: 10,
