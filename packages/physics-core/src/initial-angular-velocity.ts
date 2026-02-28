@@ -2,7 +2,7 @@ export const CUE_BALL_RADIUS_M = 0.03075;
 
 export type AngularVelocity = {
   omegaX: number;
-  omegaZ: number;
+  omegaY: number;
 };
 
 export function computeInitialAngularVelocity(
@@ -15,6 +15,6 @@ export function computeInitialAngularVelocity(
 
   return {
     omegaX: (5 * initialBallSpeedMps * impactOffsetY) / denominator,
-    omegaZ: (5 * initialBallSpeedMps * impactOffsetX) / denominator,
+    omegaY: (5 * initialBallSpeedMps * impactOffsetX) / denominator,
   };
 }
