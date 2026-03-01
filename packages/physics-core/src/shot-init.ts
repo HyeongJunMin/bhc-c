@@ -17,7 +17,7 @@ export type ShotInitInput = {
 export type ShotInitResult = {
   initialBallSpeedMps: number;
   omegaX: number;
-  omegaZ: number;
+  omegaY: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -55,6 +55,6 @@ export function computeShotInitialization(input: ShotInitInput): ShotInitResult 
   return {
     initialBallSpeedMps,
     omegaX: angularVelocity.omegaX,
-    omegaZ: angularVelocity.omegaZ,
+    omegaY: angularVelocity.omegaY,
   };
 }

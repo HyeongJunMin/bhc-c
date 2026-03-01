@@ -7,7 +7,7 @@ import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
-import { applyCushionContactThrow } from '../game/cushion-contact-throw.ts';
+import { applyCushionContactThrow } from '../../../../packages/physics-core/src/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
