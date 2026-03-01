@@ -28,6 +28,7 @@ export type CushionContactThrowInput = {
   restitutionHigh?: number;
   restitutionMidSpeedMps?: number;
   restitutionSigmoidK?: number;
+  frictionSpinDamping?: number;
 };
 
 export type CushionContactThrowResult = {
@@ -152,6 +153,20 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
     spinZ += conversion;
   }
   spinY -= conversion;
+
+  // Friction-driven damping of rolling spin parallel to the cushion face.
+  // Cushion contact friction dissipates the rolling spin that drives ball along the cushion surface.
+  // Applied after contactTorque so the torque-boosted spin is also subject to damping.
+  const frictionSpinDamping = input.frictionSpinDamping ?? 0;
+  if (frictionSpinDamping > 0) {
+    if (input.axis === 'x') {
+      // x-axis cushion: ball rolls along z → spinZ is the parallel rolling axis
+      spinZ *= (1 - frictionSpinDamping);
+    } else {
+      // z-axis cushion: ball rolls along x → spinX is the parallel rolling axis
+      spinX *= (1 - frictionSpinDamping);
+    }
+  }
 
   return {
     vx,

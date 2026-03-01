@@ -32,6 +32,7 @@ import {
   CUSHION_MAX_SPEED_SCALE,
   CUSHION_ROLLING_SPIN_HEIGHT_FACTOR,
   CUSHION_TORQUE_DAMPING,
+  CUSHION_FRICTION_SPIN_DAMPING,
   CUSHION_RESTITUTION,
   CUSHION_RESTITUTION_LOW,
   CUSHION_RESTITUTION_HIGH,
@@ -525,6 +526,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
           restitutionHigh: CUSHION_RESTITUTION_HIGH,
           restitutionMidSpeedMps: CUSHION_RESTITUTION_MID_SPEED_MPS,
           restitutionSigmoidK: CUSHION_RESTITUTION_SIGMOID_K,
+          frictionSpinDamping: CUSHION_FRICTION_SPIN_DAMPING,
         });
         vx = collision.vx;
         vz = collision.vy;
@@ -602,6 +604,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
           restitutionHigh: CUSHION_RESTITUTION_HIGH,
           restitutionMidSpeedMps: CUSHION_RESTITUTION_MID_SPEED_MPS,
           restitutionSigmoidK: CUSHION_RESTITUTION_SIGMOID_K,
+          frictionSpinDamping: CUSHION_FRICTION_SPIN_DAMPING,
         });
         vx = collision.vx;
         vz = collision.vy;

@@ -26,6 +26,7 @@ const base = {
   restitutionLow: 0.88,
   restitutionHigh: 0.65,
   restitutionMidSpeedMps: 2.0,
+  frictionSpinDamping: 0.12,
   restitutionSigmoidK: 1.5,
 };
 
@@ -235,4 +236,50 @@ test('속도 의존 반발계수가 없으면 고정 반발계수 사용', () =>
   // With base restitution 0.72 and no speed-dependent override
   assert.equal(Math.abs(fixed.vx / speed - 0.72) < 0.01, true,
     `고정 반발계수 0.72 적용 시 반사 속도 비율이 0.72에 가까워야 함`);
+});
+
+test('x축 쿠션 충돌 후 spinZ가 감쇠된다', () => {
+  const initialSpinZ = 50;
+  const result = applyCushionContactThrow({
+    ...base,
+    axis: 'x',
+    vx: -3,
+    vy: 0,
+    spinX: 0,
+    spinY: 0,
+    spinZ: initialSpinZ,
+  });
+
+  // spinZ should be reduced by frictionSpinDamping
+  assert.equal(result.spinZ < initialSpinZ, true,
+    `x축 쿠션 후 spinZ(${result.spinZ.toFixed(2)})가 초기값(${initialSpinZ})보다 작아야 함`);
+});
+
+test('z축 쿠션 충돌 후 spinX가 감쇠된다', () => {
+  const initialSpinX = 40;
+  const result = applyCushionContactThrow({
+    ...base,
+    axis: 'y',
+    vx: 0,
+    vy: -3,
+    spinX: initialSpinX,
+    spinY: 0,
+    spinZ: 0,
+  });
+
+  // spinX after contactTorque+frictionDamping should be less than initialSpinX + contactTorque
+  // We verify frictionDamping is active by comparing with frictionSpinDamping=0 case
+  const noDamping = applyCushionContactThrow({
+    ...base,
+    axis: 'y',
+    vx: 0,
+    vy: -3,
+    spinX: initialSpinX,
+    spinY: 0,
+    spinZ: 0,
+    frictionSpinDamping: 0,
+  });
+
+  assert.equal(result.spinX < noDamping.spinX, true,
+    `frictionSpinDamping 적용 시 spinX(${result.spinX.toFixed(2)})가 미적용(${noDamping.spinX.toFixed(2)})보다 작아야 함`);
 });
