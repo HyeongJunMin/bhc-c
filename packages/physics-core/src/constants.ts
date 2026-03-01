@@ -5,7 +5,16 @@ export const BALL_RADIUS_M = BALL_DIAMETER_M / 2;
 export const BALL_MASS_KG = 0.21;
 
 export const CUSHION_THICKNESS_M = 0.05;
+// Base restitution used as the mid-speed reference in speedDependentRestitution.
+// At low speeds (~0 m/s) restitution reaches CUSHION_RESTITUTION_LOW;
+// at high speeds (>4 m/s) it approaches CUSHION_RESTITUTION_HIGH.
 export const CUSHION_RESTITUTION = 0.72;
+export const CUSHION_RESTITUTION_LOW = 0.88;
+export const CUSHION_RESTITUTION_HIGH = 0.65;
+// Mid-point speed (m/s) for the sigmoid transition between low/high restitution.
+export const CUSHION_RESTITUTION_MID_SPEED_MPS = 2.0;
+// Steepness of the sigmoid curve (higher = sharper transition).
+export const CUSHION_RESTITUTION_SIGMOID_K = 1.5;
 export const BALL_BALL_RESTITUTION = 0.95;
 export const BALL_BALL_CONTACT_FRICTION = 0.05;
 

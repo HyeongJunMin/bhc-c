@@ -23,6 +23,10 @@ const base = {
   ballRadiusM: CUE_BALL_RADIUS_M,
   cushionHeightM: CUSHION_HEIGHT_M,
   cushionTorqueDamping: 0.35,
+  restitutionLow: 0.88,
+  restitutionHigh: 0.65,
+  restitutionMidSpeedMps: 2.0,
+  restitutionSigmoidK: 1.5,
 };
 
 function dragPxToSpeedMps(dragPx: number): number {
@@ -189,4 +193,46 @@ test('z축 쿠션에서 spinY english가 throw를 발생시킨다', () => {
 
   assert.equal(result.throwAngleDeg > 0, true);
   assert.equal(result.throwAngleDeg <= base.maxThrowAngleDeg + 1e-9, true);
+});
+
+test('속도 의존 반발계수: 저속 충돌이 고속 충돌보다 반사 속도 비율이 높다', () => {
+  const slowSpeed = 0.5;
+  const fastSpeed = 5.0;
+
+  const slowResult = applyCushionContactThrow({
+    ...base,
+    vx: -slowSpeed,
+    vy: 0,
+    spinY: 0,
+  });
+
+  const fastResult = applyCushionContactThrow({
+    ...base,
+    vx: -fastSpeed,
+    vy: 0,
+    spinY: 0,
+  });
+
+  const slowRestitutionRatio = slowResult.vx / slowSpeed;
+  const fastRestitutionRatio = fastResult.vx / fastSpeed;
+
+  // Low speed → higher restitution → higher reflected speed ratio
+  assert.equal(slowRestitutionRatio > fastRestitutionRatio, true,
+    `저속 반발비율(${slowRestitutionRatio.toFixed(3)}) > 고속 반발비율(${fastRestitutionRatio.toFixed(3)}) 이어야 함`);
+});
+
+test('속도 의존 반발계수가 없으면 고정 반발계수 사용', () => {
+  const speed = 3.0;
+  const fixed = applyCushionContactThrow({
+    ...base,
+    vx: -speed,
+    vy: 0,
+    spinY: 0,
+    restitutionLow: undefined,
+    restitutionHigh: undefined,
+  });
+
+  // With base restitution 0.72 and no speed-dependent override
+  assert.equal(Math.abs(fixed.vx / speed - 0.72) < 0.01, true,
+    `고정 반발계수 0.72 적용 시 반사 속도 비율이 0.72에 가까워야 함`);
 });
