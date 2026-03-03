@@ -8,6 +8,7 @@ import type { SimulationResult } from '@physics-core/standalone-simulator';
 import { TestScene } from '../components/test/TestScene';
 import { PlaybackSlider } from '../components/test/PlaybackSlider';
 import { exportSandboxInputJson } from '../test-sandbox/export';
+import { FrameKinematicsPanel } from '../components/test/FrameKinematicsPanel';
 
 export function TestSandboxPage() {
   const navigate = useNavigate();
@@ -218,6 +219,13 @@ export function TestSandboxPage() {
               totalFrames={actual?.totalFrames ?? 0}
               onFrameChange={setCurrentFrame}
             />
+            <div style={{ marginTop: 8, marginBottom: 8 }}>
+              <FrameKinematicsPanel
+                result={actual}
+                currentFrame={currentFrame}
+                onFrameSelect={setCurrentFrame}
+              />
+            </div>
             <pre
               style={{
                 margin: 0,

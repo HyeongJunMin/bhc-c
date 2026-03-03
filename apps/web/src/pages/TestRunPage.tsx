@@ -10,6 +10,7 @@ import { TestScene } from '../components/test/TestScene';
 import { ControlPanel } from '../components/test/ControlPanel';
 import { PlaybackSlider } from '../components/test/PlaybackSlider';
 import { AnalysisPanel } from '../components/test/AnalysisPanel';
+import { FrameKinematicsPanel } from '../components/test/FrameKinematicsPanel';
 
 const BASELINE_STORAGE_PREFIX = 'physics-baseline-';
 
@@ -250,6 +251,13 @@ export function TestRunPage() {
 
           {/* Analysis panel (bottom half) */}
           <div style={{ flex: 1, minHeight: 0, padding: 16, overflowY: 'auto' }}>
+            <div style={{ marginBottom: 12 }}>
+              <FrameKinematicsPanel
+                result={actual}
+                currentFrame={currentFrame}
+                onFrameSelect={setCurrentFrame}
+              />
+            </div>
             <AnalysisPanel
               analysis={analysis}
               events={actual?.events ?? []}
