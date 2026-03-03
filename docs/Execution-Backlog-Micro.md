@@ -627,3 +627,6 @@
 
 #### SBX-018 ura_backcut 시작속도 조정
 - `SBX-018`: `/test/ura_backcut` 시작속도(`dragPx`)를 206으로 조정해 구간4 제1적구 재충돌을 회피
+
+#### SBX-019 ura_backcut 시작속도 재조정
+- `SBX-019`: `/test/ura_backcut` 시작속도(`dragPx`)를 더 작은 값(199)으로 조정하고 제1적구 재충돌 미발생을 재검증
