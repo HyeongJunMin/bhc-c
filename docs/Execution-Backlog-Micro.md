@@ -630,3 +630,6 @@
 
 #### SBX-019 ura_backcut 시작속도 재조정
 - `SBX-019`: `/test/ura_backcut` 시작속도(`dragPx`)를 더 작은 값(199)으로 조정하고 제1적구 재충돌 미발생을 재검증
+
+#### SBX-020 ura_backcut 1구간 입사각 60도 보정
+- `SBX-020`: `/test/ura_backcut` 제1적구 x좌표를 조정해 첫 쿠션 입사각(법선 기준)을 60도 근처로 보정
