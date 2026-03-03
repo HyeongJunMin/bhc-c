@@ -246,16 +246,25 @@ function resolveBallCollisions(
     const endZ = secondCurr.z - firstCurr.z;
     const moveX = endX - startX;
     const moveZ = endZ - startZ;
-    const moveLenSq = moveX * moveX + moveZ * moveZ;
-    let t = 0;
-    if (moveLenSq > epsilon) {
-      t = -((startX * moveX) + (startZ * moveZ)) / moveLenSq;
-      t = clampNumber(t, 0, 1);
+
+    // Solve quadratic |start + move*t|² = minDistanceSq for first contact time
+    const a = moveX * moveX + moveZ * moveZ;
+    const b = 2 * (startX * moveX + startZ * moveZ);
+    const c = startX * startX + startZ * startZ - minDistanceSq;
+
+    // If relative motion is negligible, check static overlap
+    if (a < epsilon) {
+      return c <= 0 ? 0 : null;
     }
-    const closestX = startX + moveX * t;
-    const closestZ = startZ + moveZ * t;
-    const closestDistSq = closestX * closestX + closestZ * closestZ;
-    if (!Number.isFinite(closestDistSq) || closestDistSq > minDistanceSq) {
+
+    const discriminant = b * b - 4 * a * c;
+    if (!Number.isFinite(discriminant) || discriminant < 0) {
+      return null;
+    }
+
+    // First contact = smaller root
+    const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+    if (!Number.isFinite(t) || t < 0 || t > 1) {
       return null;
     }
     return t;
@@ -276,7 +285,39 @@ function resolveBallCollisions(
       const deltaX = second.x - first.x;
       const deltaZ = second.z - first.z;
       const distanceSq = deltaX * deltaX + deltaZ * deltaZ;
-      if (Number.isFinite(distanceSq) && distanceSq <= minDistanceSq) {
+      const overlapping = Number.isFinite(distanceSq) && distanceSq <= minDistanceSq;
+
+      // Always try sweep first for accurate first-contact normal
+      if (firstPrev && secondPrev) {
+        const hitTime = sweepHitTime(firstPrev, first, secondPrev, second);
+        if (hitTime !== null) {
+          const firstHitX = firstPrev.x + (first.x - firstPrev.x) * hitTime;
+          const firstHitZ = firstPrev.z + (first.z - firstPrev.z) * hitTime;
+          const secondHitX = secondPrev.x + (second.x - secondPrev.x) * hitTime;
+          const secondHitZ = secondPrev.z + (second.z - secondPrev.z) * hitTime;
+          const hitDeltaX = secondHitX - firstHitX;
+          const hitDeltaZ = secondHitZ - firstHitZ;
+          const hitDistance = Math.hypot(hitDeltaX, hitDeltaZ);
+          const normalX = hitDistance > epsilon ? hitDeltaX / hitDistance : 1;
+          const normalY = hitDistance > epsilon ? hitDeltaZ / hitDistance : 0;
+          const collided = applyImpulse(first, second, normalX, normalY, frameIndex);
+          if (collided) {
+            first.x = firstHitX;
+            first.z = firstHitZ;
+            second.x = secondHitX;
+            second.z = secondHitZ;
+            const remainDtSec = substepDtSec * (1 - hitTime);
+            first.x += first.vx * remainDtSec;
+            first.z += first.vz * remainDtSec;
+            second.x += second.vx * remainDtSec;
+            second.z += second.vz * remainDtSec;
+          }
+          continue;
+        }
+      }
+
+      // Fallback: balls already overlapping at start of substep (sweep returned null)
+      if (overlapping) {
         const distance = Math.sqrt(Math.max(distanceSq, epsilon));
         const normalX = distance > epsilon ? deltaX / distance : 1;
         const normalY = distance > epsilon ? deltaZ / distance : 0;
@@ -290,38 +331,7 @@ function resolveBallCollisions(
           second.x += normalX * correction;
           second.z += normalY * correction;
         }
-        continue;
       }
-
-      if (!firstPrev || !secondPrev) {
-        continue;
-      }
-      const hitTime = sweepHitTime(firstPrev, first, secondPrev, second);
-      if (hitTime === null) {
-        continue;
-      }
-      const firstHitX = firstPrev.x + (first.x - firstPrev.x) * hitTime;
-      const firstHitZ = firstPrev.z + (first.z - firstPrev.z) * hitTime;
-      const secondHitX = secondPrev.x + (second.x - secondPrev.x) * hitTime;
-      const secondHitZ = secondPrev.z + (second.z - secondPrev.z) * hitTime;
-      const hitDeltaX = secondHitX - firstHitX;
-      const hitDeltaZ = secondHitZ - firstHitZ;
-      const hitDistance = Math.hypot(hitDeltaX, hitDeltaZ);
-      const normalX = hitDistance > epsilon ? hitDeltaX / hitDistance : 1;
-      const normalY = hitDistance > epsilon ? hitDeltaZ / hitDistance : 0;
-      const collided = applyImpulse(first, second, normalX, normalY, frameIndex);
-      if (!collided) {
-        continue;
-      }
-      first.x = firstHitX;
-      first.z = firstHitZ;
-      second.x = secondHitX;
-      second.z = secondHitZ;
-      const remainDtSec = substepDtSec * (1 - hitTime);
-      first.x += first.vx * remainDtSec;
-      first.z += first.vz * remainDtSec;
-      second.x += second.vx * remainDtSec;
-      second.z += second.vz * remainDtSec;
     }
   }
 }
