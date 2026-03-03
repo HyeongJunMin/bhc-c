@@ -4,6 +4,7 @@ import { straightUpCushion } from './scenarios/straight-up-cushion';
 import { angle45 } from './scenarios/angle-45';
 import { cushionBounce } from './scenarios/cushion-bounce';
 import { spinEnglish } from './scenarios/spin-english';
+import { uraBackcut } from './scenarios/ura-backcut';
 
 export const scenarios: TestScenario[] = [
   straightRight,
@@ -11,6 +12,7 @@ export const scenarios: TestScenario[] = [
   angle45,
   cushionBounce,
   spinEnglish,
+  uraBackcut,
 ];
 
 export function getScenario(id: string): TestScenario | undefined {
