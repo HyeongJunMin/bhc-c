@@ -102,7 +102,7 @@ function SceneContent({ actual, baseline, analysis, currentFrame }: Props) {
 
 export function TestScene({ actual, baseline, analysis, currentFrame }: Props) {
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
         shadows
         orthographic
@@ -125,6 +125,50 @@ export function TestScene({ actual, baseline, analysis, currentFrame }: Props) {
           currentFrame={currentFrame}
         />
       </Canvas>
+
+      <div
+        style={{
+          position: 'absolute',
+          left: 12,
+          bottom: 12,
+          background: 'rgba(11, 18, 32, 0.88)',
+          border: '1px solid #1e293b',
+          borderRadius: 6,
+          padding: '8px 10px',
+          color: '#cbd5e1',
+          fontSize: 11,
+          fontFamily: 'monospace',
+          lineHeight: 1.4,
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{ color: '#94a3b8', marginBottom: 4 }}>TABLE AXIS</div>
+        <div>+X: {'->'} 오른쪽</div>
+        <div>+Y: {'^'} 위쪽 (내부 z+)</div>
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          right: 12,
+          bottom: 12,
+          background: 'rgba(11, 18, 32, 0.88)',
+          border: '1px solid #1e293b',
+          borderRadius: 6,
+          padding: '8px 10px',
+          color: '#cbd5e1',
+          fontSize: 11,
+          fontFamily: 'monospace',
+          lineHeight: 1.4,
+          pointerEvents: 'none',
+          textAlign: 'right',
+        }}
+      >
+        <div style={{ color: '#94a3b8', marginBottom: 4 }}>SPIN AXIS (XYZ)</div>
+        <div>X축: {'->'} 기준 회전 (오른손법칙 +)</div>
+        <div>Y축: 테이블 수직축 회전</div>
+        <div>Z축: {'^'} 기준 회전 (오른손법칙 +)</div>
+      </div>
     </div>
   );
 }
