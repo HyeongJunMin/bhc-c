@@ -9,6 +9,8 @@ interface CueStickProps {
   elevationDeg: number;
   power: number; // 0~1
   isVisible: boolean;
+  impactOffsetX?: number; // 좌우 당점 (-R ~ +R)
+  impactOffsetY?: number; // 상하 당점 (-R ~ +R)
 }
 
 export function CueStick({
@@ -17,6 +19,8 @@ export function CueStick({
   elevationDeg,
   power,
   isVisible,
+  impactOffsetX = 0,
+  impactOffsetY = 0,
 }: CueStickProps) {
   const groupRef = useRef<Group>(null);
   
@@ -62,6 +66,17 @@ export function CueStick({
     };
   }, [cueBallPosition, directionDeg, elevationDeg, power]);
 
+  // 당점에 따른 피벗(기울기) 계산
+  const pivotOffset = useMemo(() => {
+    const radius = PHYSICS.BALL_RADIUS;
+    // 당점 오프셋을 각도로 변환
+    // offsetX: 좌우 스핀 → Y축 회전
+    // offsetY: 상하 스핀 → X축 회전 (이미 elevationDeg가 있으므로 추가)
+    const pivotX = -(impactOffsetY / radius) * 0.15; // 상하 당점 (15% 스케일)
+    const pivotY = (impactOffsetX / radius) * 0.15;  // 좌우 당점 (15% 스케일)
+    return { x: pivotX, y: pivotY };
+  }, [impactOffsetX, impactOffsetY]);
+
   useFrame(() => {
     if (groupRef.current) {
       groupRef.current.position.copy(position);
@@ -69,6 +84,11 @@ export function CueStick({
       groupRef.current.lookAt(lookAtPosition);
       // 기본 큐 방향이 Y+이므로 Z+ 방향으로 회전
       groupRef.current.rotateX(-Math.PI / 2);
+      
+      // 당점에 따른 피벗 적용
+      groupRef.current.rotateX(pivotOffset.x); // 상하
+      groupRef.current.rotateY(pivotOffset.y); // 좌우
+      
       groupRef.current.visible = isVisible;
     }
   });

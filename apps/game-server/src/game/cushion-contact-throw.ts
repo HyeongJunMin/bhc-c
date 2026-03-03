@@ -16,6 +16,7 @@ export type CushionContactThrowInput = {
   maxSpinMagnitude: number;
   maxThrowAngleDeg: number;
   minNormalSpeedForThrowMps?: number;
+  maxPostCollisionSpeedScale?: number;
 };
 
 export type CushionContactThrowResult = {
@@ -30,7 +31,7 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const preVn = input.axis === 'x' ? input.vx : input.vy;
   const preVt = input.axis === 'x' ? input.vy : input.vx;
 
-  const postVn = -preVn * input.restitution;
+  let postVn = -preVn * input.restitution;
   const absPostVn = Math.abs(postVn);
 
   const safeRestitution = Math.max(0.01, input.restitution);
@@ -45,7 +46,20 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   const throwDirection = Math.sign(input.spinZ);
   const dampedVt = preVt * (1 - input.contactFriction);
   const throwVt = throwDirection === 0 ? 0 : throwDirection * throwTan * absPostVn;
-  const postVt = dampedVt + throwVt;
+  let postVt = dampedVt + throwVt;
+
+  // Protect against non-physical energy spikes from throw amplification.
+  // Spin transfer can increase tangential speed, but cap the total post-collision speed
+  // to a bounded multiple of pre-collision speed.
+  const preSpeed = Math.hypot(preVn, preVt);
+  const postSpeed = Math.hypot(postVn, postVt);
+  const maxPostCollisionSpeedScale = input.maxPostCollisionSpeedScale ?? 1.02;
+  if (preSpeed > 0 && postSpeed > preSpeed * maxPostCollisionSpeedScale) {
+    const cappedPostSpeed = preSpeed * maxPostCollisionSpeedScale;
+    const ratio = cappedPostSpeed / postSpeed;
+    postVn *= ratio;
+    postVt *= ratio;
+  }
 
   const vx = input.axis === 'x' ? postVn : postVt;
   const vy = input.axis === 'x' ? postVt : postVn;

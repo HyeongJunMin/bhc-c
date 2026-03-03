@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "echo 'physics-core build placeholder'",
-    "test": "echo 'physics-core test placeholder'",
-    "lint": "echo 'physics-core lint placeholder'"
+    "build": "node --experimental-strip-types -e \"import('./src/three-cushion-model.ts'); import('./src/score-adapter.ts'); import('./src/shot-end.ts');\"",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "lint": "node --experimental-strip-types --test src/**/*.test.ts"
   }
 }

@@ -5,10 +5,9 @@ services:
       dockerfile: docker/game-server.Dockerfile
     container_name: bhc-game-server
     environment:
-      PORT: "9212"
+      PORT: "9900"
     ports:
-      - "9211:9211"
-      - "9212:9212"
+      - "9900:9900"
     restart: unless-stopped
 
   web:
@@ -19,9 +18,8 @@ services:
     depends_on:
       - game-server
     environment:
-      WEB_PORT: "9213"
-      AUTH_SERVER_URL: "http://game-server:9211"
-      LOBBY_SERVER_URL: "http://game-server:9212"
+      WEB_PORT: "9900"
+      API_SERVER_URL: "http://game-server:9900"
     ports:
-      - "9213:9213"
+      - "9901:9900"
     restart: unless-stopped

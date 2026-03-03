@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import type { AimControlMode } from '../../../../packages/shared-types/src/aim-control.ts';
 
 export interface BallState {
   id: 'cueBall' | 'objectBall1' | 'objectBall2';
@@ -9,6 +10,7 @@ export interface BallState {
 }
 
 export interface ShotInput {
+  aimControlMode: AimControlMode;
   shotDirectionDeg: number;
   cueElevationDeg: number;
   dragPx: number;

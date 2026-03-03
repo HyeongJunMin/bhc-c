@@ -1,10 +1,11 @@
-import { createAuthHttpServer } from './auth/http.ts';
-import { createLobbyHttpServer } from './lobby/http.ts';
+import { createServer } from 'node:http';
 
-const PORT_MIN = 9211;
-const PORT_MAX = 9220;
-const DEFAULT_AUTH_PORT = 9211;
-const DEFAULT_LOBBY_PORT = 9212;
+import { createAuthRequestHandler } from './auth/http.ts';
+import { createLobbyRequestHandler } from './lobby/http.ts';
+
+const PORT_MIN = 1;
+const PORT_MAX = 65535;
+const DEFAULT_PORT = 9900;
 
 function parsePort(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -17,27 +18,53 @@ function parsePort(name: string, fallback: number): number {
   return value;
 }
 
-const authPort = parsePort('AUTH_PORT', DEFAULT_AUTH_PORT);
-const lobbyPort = parsePort('LOBBY_PORT', DEFAULT_LOBBY_PORT);
+const port = parsePort('PORT', DEFAULT_PORT);
 
-if (authPort === lobbyPort) {
-  throw new Error(`AUTH_PORT and LOBBY_PORT must be different. received: ${authPort}`);
-}
+const authState = {
+  nextUserId: 1,
+  nextGuestId: 1,
+  usersByUsername: new Map(),
+};
 
-const { server: authServer } = createAuthHttpServer();
-const { server: lobbyServer } = createLobbyHttpServer();
+const lobbyState = {
+  nextRoomId: 1,
+  rooms: [],
+  roomStreamSeqByRoomId: {},
+  roomStreamSubscribers: {},
+  shotStateResetTimers: {},
+  disconnectGraceTimers: {},
+  userLastChatSentAtByRoomAndMember: new Map(),
+};
 
-authServer.listen(authPort, () => {
-  console.log(`[game-server] auth listening on http://localhost:${authPort}`);
+const authHandler = createAuthRequestHandler(authState);
+const lobbyHandler = createLobbyRequestHandler(lobbyState);
+
+const server = createServer((req, res) => {
+  if (req.url === '/health') {
+    res.statusCode = 200;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (req.url?.startsWith('/auth/')) {
+    void authHandler(req, res);
+    return;
+  }
+  if (req.url?.startsWith('/lobby/')) {
+    void lobbyHandler(req, res);
+    return;
+  }
+  res.statusCode = 404;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify({ errorCode: 'NOT_FOUND' }));
 });
 
-lobbyServer.listen(lobbyPort, () => {
-  console.log(`[game-server] lobby listening on http://localhost:${lobbyPort}`);
+server.listen(port, () => {
+  console.log(`[game-server] listening on http://localhost:${port}`);
 });
 
 function shutdown(): void {
-  authServer.close();
-  lobbyServer.close();
+  server.close();
 }
 
 process.on('SIGINT', shutdown);

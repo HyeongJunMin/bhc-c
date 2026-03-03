@@ -7,12 +7,14 @@ interface BallProps {
   id: string;
   color: number;
   position: Vector3;
+  angularVelocity?: Vector3; // 스핀 각속도
   isActive?: boolean;
   onClick?: (id: string) => void;
 }
 
-export function Ball({ id, color, position, isActive = false, onClick }: BallProps) {
+export function Ball({ id, color, position, angularVelocity, isActive = false, onClick }: BallProps) {
   const meshRef = useRef<Mesh>(null);
+  const rotationRef = useRef({ x: 0, y: 0, z: 0 });
   
   const radius = PHYSICS.BALL_RADIUS;
 
@@ -29,13 +31,24 @@ export function Ball({ id, color, position, isActive = false, onClick }: BallPro
     );
   }, [color]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (meshRef.current) {
       // 시각적 강조 효과
       if (isActive) {
         meshRef.current.scale.setScalar(1.05);
       } else {
         meshRef.current.scale.setScalar(1.0);
+      }
+      
+      // 스핀에 따른 회전 적용
+      if (angularVelocity) {
+        rotationRef.current.x += angularVelocity.x * delta;
+        rotationRef.current.y += angularVelocity.y * delta;
+        rotationRef.current.z += angularVelocity.z * delta;
+        
+        meshRef.current.rotation.x = rotationRef.current.x;
+        meshRef.current.rotation.y = rotationRef.current.y;
+        meshRef.current.rotation.z = rotationRef.current.z;
       }
     }
   });
@@ -50,6 +63,12 @@ export function Ball({ id, color, position, isActive = false, onClick }: BallPro
     >
       <sphereGeometry args={[radius, 32, 32]} />
       {material}
+      {/* 스핀 시각화 마커 (빨간 점) */}
+      <mesh position={[0, radius * 0.95, 0]}>
+        <sphereGeometry args={[radius * 0.08, 16, 16]} />
+        <meshBasicMaterial color={0xff0000} />
+      </mesh>
+      
       {/* 공 번호 표시 (흰색 공 제외) */}
       {color !== COLORS.CUE_BALL && (
         <mesh position={[0, 0, radius * 0.9]}>

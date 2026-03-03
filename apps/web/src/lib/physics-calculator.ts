@@ -88,6 +88,7 @@ export function computeShotVelocity(
   const cueSpeed = solveCueSpeed(targetSpeed);
   const ballSpeed = computeInitialBallSpeed(cueSpeed);
   
+  // 파워 100% (원래대로)
   const dir = computeShotDirection(directionDeg, elevationDeg);
   
   return {

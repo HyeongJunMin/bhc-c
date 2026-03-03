@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node --experimental-strip-types src/main.ts",
     "start": "node --experimental-strip-types src/main.ts",
-    "build": "echo 'game-server build placeholder'",
-    "test": "echo 'game-server test placeholder'",
-    "lint": "echo 'game-server lint placeholder'",
+    "build": "node --experimental-strip-types -e \"import('./src/auth/http.ts'); import('./src/lobby/http.ts');\"",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "lint": "node --experimental-strip-types --test src/**/*.test.ts",
     "migrate:up": "node-pg-migrate up --config-file node-pg-migrate.config.js",
     "migrate:down": "node-pg-migrate down --config-file node-pg-migrate.config.js"
   }

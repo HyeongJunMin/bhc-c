@@ -73,7 +73,7 @@ async function collectSseEvents(
 }
 
 async function run(): Promise<void> {
-  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9213';
+  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9900';
   const targetEvents = ['shot_started', 'shot_resolved', 'turn_changed'];
 
   const hostId = 'qa-single-host';

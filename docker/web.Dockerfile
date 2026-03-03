@@ -13,10 +13,9 @@ COPY apps/web apps/web
 
 WORKDIR /app/apps/web
 
-EXPOSE 9213
+EXPOSE 9900
 
-ENV WEB_PORT=9213
-ENV AUTH_SERVER_URL=http://localhost:9211
-ENV LOBBY_SERVER_URL=http://localhost:9212
+ENV WEB_PORT=9900
+ENV API_SERVER_URL=http://localhost:9900
 
-CMD ["node", "--experimental-strip-types", "src/main.ts"]
+CMD ["sh", "-lc", "pnpm run dev -- --host 0.0.0.0 --port ${WEB_PORT}"]

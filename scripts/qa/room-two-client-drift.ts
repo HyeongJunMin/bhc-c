@@ -82,7 +82,7 @@ function assertMonotonicSeq(samples: SnapshotSample[]): void {
 }
 
 async function run(): Promise<void> {
-  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9213';
+  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9900';
   const driftThreshold = 0.03075; // 공 반지름 1.0배
 
   const memberId = 'qa-drift-member';

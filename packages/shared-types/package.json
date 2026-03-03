@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "echo 'shared-types build placeholder'",
-    "test": "echo 'shared-types test placeholder'",
-    "lint": "echo 'shared-types lint placeholder'"
+    "build": "node --experimental-transform-types -e \"import('./src/index.ts');\"",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "lint": "node --experimental-strip-types --test src/**/*.test.ts"
   }
 }

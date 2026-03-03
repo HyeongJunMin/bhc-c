@@ -1,17 +1,20 @@
+import { TABLE_GEOMETRY } from '../../../../packages/shared-types/src/table-geometry.ts';
+
 // 물리 상수 (Physics-Spec.md 기준)
 export const PHYSICS = {
   // 공
-  BALL_DIAMETER: 0.0615,
-  BALL_RADIUS: 0.03075,
+  BALL_DIAMETER: TABLE_GEOMETRY.ballDiameterM,
+  BALL_RADIUS: TABLE_GEOMETRY.ballRadiusM,
   BALL_MASS: 0.21,
   
-  // 테이블 (납작 크기)
-  TABLE_WIDTH: 2.844,
-  TABLE_HEIGHT: 1.422,
-  TABLE_OUTER_WIDTH: 3.100,
-  TABLE_OUTER_HEIGHT: 1.700,
-  CUSHION_HEIGHT: 0.037,
-  CUSHION_THICKNESS: 0.05,  // 쿠션 두께 (약 5cm)
+  // 테이블 (내경)
+  TABLE_WIDTH: TABLE_GEOMETRY.tableInnerWidthM,
+  TABLE_HEIGHT: TABLE_GEOMETRY.tableInnerHeightM,
+  TABLE_OUTER_WIDTH: TABLE_GEOMETRY.tableOuterWidthM,
+  TABLE_OUTER_HEIGHT: TABLE_GEOMETRY.tableOuterHeightM,
+  CUSHION_HEIGHT: TABLE_GEOMETRY.cushionHeightM,
+  CUSHION_THICKNESS: TABLE_GEOMETRY.cushionThicknessM,
+  COLLISION_PLANE_OFFSET: TABLE_GEOMETRY.effectiveCollisionPlaneOffsetM,
   
   // 큐
   CUE_MASS: 0.5,
@@ -52,17 +55,17 @@ export const INPUT_LIMITS = {
   ELEVATION_MAX: 89,
   DRAG_MIN: 10,
   DRAG_MAX: 400,
-  OFFSET_MAX: 0.03075, // 공 반지름
+  OFFSET_MAX: TABLE_GEOMETRY.ballRadiusM, // 공 반지름
 } as const;
 
 // 색상
 export const COLORS = {
-  CUE_BALL: 0xffffff,      // 흰색 (수구)
-  OBJECT_BALL_1: 0xff0000, // 선명한 빨강 (제1적구)
-  OBJECT_BALL_2: 0xffd700, // 선명한 금색/노랑 (제2적구)
-  TABLE_CLOTH: 0x231fa7,
-  TABLE_RAIL: 0x3c3b49,
-  CUSHION: 0x1c2ba2,
+  CUE_BALL: 0xffffff,
+  OBJECT_BALL_1: 0xff0000,
+  OBJECT_BALL_2: 0xffd700,
+  TABLE_CLOTH: 0x2d8a4e,
+  TABLE_RAIL: 0x8B4513,
+  CUSHION: 0x2d5a2d,
   CUE_STICK: 0xd4a574,
   GUIDE_LINE: 0x00ff88,
 } as const;

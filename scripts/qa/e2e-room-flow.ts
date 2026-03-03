@@ -17,7 +17,7 @@ async function requestJson(url: string, options?: RequestInit): Promise<JsonResu
 }
 
 async function run(): Promise<void> {
-  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9213';
+  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9900';
 
   const guest1 = await requestJson(`${baseUrl}/api/auth/guest`, {
     method: 'POST',
@@ -136,4 +136,3 @@ run().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-

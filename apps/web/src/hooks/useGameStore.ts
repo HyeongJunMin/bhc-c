@@ -2,6 +2,16 @@ import { create } from 'zustand';
 import { Vector3 } from 'three';
 import { BallState, GamePhase, ShotInput } from '../types';
 import { PHYSICS } from '../lib/constants';
+import { AIM_CONTROL_CONTRACT, type AimControlMode } from '../../../../packages/shared-types/src/aim-control.ts';
+const AIM_MODE_STORAGE_KEY = 'bhc.aimControlMode';
+
+function readInitialAimControlMode(): AimControlMode {
+  if (typeof window === 'undefined') {
+    return AIM_CONTROL_CONTRACT.defaultMode;
+  }
+  const raw = window.sessionStorage.getItem(AIM_MODE_STORAGE_KEY);
+  return raw === 'MANUAL_AIM' || raw === 'AUTO_SYNC' ? raw : AIM_CONTROL_CONTRACT.defaultMode;
+}
 
 interface GameStore {
   // 게임 상태
@@ -16,6 +26,7 @@ interface GameStore {
   // 큐 입력
   shotInput: ShotInput;
   setShotDirection: (deg: number) => void;
+  setAimControlMode: (mode: AimControlMode) => void;
   setCueElevation: (deg: number) => void;
   setDragPower: (px: number) => void;
   setImpactOffset: (x: number, y: number) => void;
@@ -103,6 +114,7 @@ export const useGameStore = create<GameStore>((set) => ({
   phase: 'AIMING',
   balls: createInitialBalls(),
   shotInput: {
+    aimControlMode: readInitialAimControlMode(),
     shotDirectionDeg: 90,  // 90° = +X 방향 (가로)
     cueElevationDeg: 0,
     dragPx: 10,
@@ -131,6 +143,15 @@ export const useGameStore = create<GameStore>((set) => ({
   setShotDirection: (deg) => set((state) => ({
     shotInput: { ...state.shotInput, shotDirectionDeg: deg },
   })),
+
+  setAimControlMode: (mode) => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(AIM_MODE_STORAGE_KEY, mode);
+    }
+    set((state) => ({
+      shotInput: { ...state.shotInput, aimControlMode: mode },
+    }));
+  },
   
   setCueElevation: (deg) => set((state) => ({
     shotInput: { ...state.shotInput, cueElevationDeg: deg },
@@ -165,6 +186,7 @@ export const useGameStore = create<GameStore>((set) => ({
   resetShot: () => set(() => ({
     phase: 'AIMING',
     shotInput: {
+      aimControlMode: AIM_CONTROL_CONTRACT.defaultMode,
       shotDirectionDeg: 0,  // 0° = +Z 방향
       cueElevationDeg: 0,
       dragPx: 10,
@@ -183,6 +205,7 @@ export const useGameStore = create<GameStore>((set) => ({
     turnMessage: '',
     isDragging: false,
     shotInput: {
+      aimControlMode: AIM_CONTROL_CONTRACT.defaultMode,
       shotDirectionDeg: 0,  // 0° = +Z 방향
       cueElevationDeg: 0,
       dragPx: 10,

@@ -14,6 +14,7 @@ import {
   rematchRoomGame,
   sendRoomChatMessage,
   submitRoomShot,
+  resolveRecoveryFallbackEnabled,
   startRoomGame,
 } from './http.ts';
 
@@ -50,6 +51,23 @@ test('방 생성 성공: 유효 제목이면 생성된다', () => {
     assert.equal(result.room.roomId, 'room-1');
     assert.equal(result.room.title, 'room-1');
   }
+});
+
+test('fallback feature flag 파싱: 명시 값(true/false 계열)과 기본값 적용이 정확하다', () => {
+  assert.equal(resolveRecoveryFallbackEnabled(undefined, true), true);
+  assert.equal(resolveRecoveryFallbackEnabled(undefined, false), false);
+  assert.equal(resolveRecoveryFallbackEnabled('1', false), true);
+  assert.equal(resolveRecoveryFallbackEnabled('true', false), true);
+  assert.equal(resolveRecoveryFallbackEnabled('yes', false), true);
+  assert.equal(resolveRecoveryFallbackEnabled('on', false), true);
+  assert.equal(resolveRecoveryFallbackEnabled('0', true), false);
+  assert.equal(resolveRecoveryFallbackEnabled('false', true), false);
+  assert.equal(resolveRecoveryFallbackEnabled('no', true), false);
+  assert.equal(resolveRecoveryFallbackEnabled('off', true), false);
+  assert.equal(resolveRecoveryFallbackEnabled('  TrUe ', false), true);
+  assert.equal(resolveRecoveryFallbackEnabled('  ', true), true);
+  assert.equal(resolveRecoveryFallbackEnabled('unexpected', true), true);
+  assert.equal(resolveRecoveryFallbackEnabled('unexpected', false), false);
 });
 
 test('방 생성 실패: 제목이 비어있으면 거부된다', () => {
@@ -560,6 +578,13 @@ test('샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finis
     impactOffsetY: 0,
   });
   assert.equal(result.ok, true);
+  created.room.shotEvents = [
+    { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cueBall', targetBallId: 'objectBall1' },
+    { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cueBall', cushionId: 'top' },
+    { type: 'CUSHION_COLLISION', atMs: 30, sourceBallId: 'cueBall', cushionId: 'left' },
+    { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cueBall', cushionId: 'bottom' },
+    { type: 'BALL_COLLISION', atMs: 50, sourceBallId: 'cueBall', targetBallId: 'objectBall2' },
+  ];
   forceBallsSettled(created.room);
   await waitUntil(() => created.room.state === 'FINISHED' && created.room.winnerMemberId === 'u1');
 
@@ -570,6 +595,52 @@ test('샷 종료: 10점 도달 시 FINISHED와 winner가 설정되고 game_finis
   assert.equal(created.room.scoreBoard.u1, 10);
   const output = writes.join('');
   assert.ok(output.includes('event: game_finished'));
+});
+
+test('3쿠션 득점 샷: 점수가 증가하고 현재 플레이어 턴이 유지된다', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: '3c-score' });
+  assert.equal(created.ok, true);
+  if (!created.ok) {
+    return;
+  }
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) {
+    return;
+  }
+
+  const result = submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 120,
+    cueElevationDeg: 10,
+    dragPx: 300,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+  assert.equal(result.ok, true);
+  created.room.shotEvents = [
+    { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cueBall', targetBallId: 'objectBall1' },
+    { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cueBall', cushionId: 'top' },
+    { type: 'CUSHION_COLLISION', atMs: 30, sourceBallId: 'cueBall', cushionId: 'left' },
+    { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cueBall', cushionId: 'bottom' },
+    { type: 'BALL_COLLISION', atMs: 50, sourceBallId: 'cueBall', targetBallId: 'objectBall2' },
+  ];
+  forceBallsSettled(created.room);
+  await waitUntil(() => created.room.shotState === 'idle');
+
+  assert.equal(created.room.scoreBoard.u1, 1);
+  assert.equal(created.room.currentTurnIndex, 0);
+  assert.equal(created.room.members[created.room.currentTurnIndex]?.memberId, 'u1');
 });
 
 test('연결해제 유예 만료: IN_GAME에서 미복귀 시 LOSE 처리되고 1인 생존자는 즉시 WIN으로 종료된다', () => {

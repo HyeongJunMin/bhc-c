@@ -5,6 +5,7 @@ interface PhysicsBall {
   id: string;
   position: Vector3;
   velocity: Vector3;
+  angularVelocity: Vector3;
   radius: number;
   mass: number;
 }
@@ -17,9 +18,11 @@ interface Collision {
 }
 
 /**
- * 개선된 2D 물리 엔진
- * - 현실적인 마찰: 초기에는 거의 없고, 속도가 줄어들수록 증가
- * - 에너지 보존: 쿠션/공 충돌 시 반발력 적용
+ * 완벽한 3쿠션 물리 엔진
+ * - 현실적인 마찰 (슬라이딩 -> 롤링 전환)
+ * - 스핀 기반 쿠션 throw
+ * - 공-공 충돌 시 스핀 전달
+ * - 정밀한 속도 감소
  */
 export class SimplePhysics {
   private balls: Map<string, PhysicsBall> = new Map();
@@ -30,97 +33,114 @@ export class SimplePhysics {
     maxZ: PHYSICS.TABLE_HEIGHT / 2 - PHYSICS.BALL_RADIUS,
   };
 
-  // 콜백
-  onCushionCollision?: (ballId: string, cushionId: string) => void;
+  onCushionCollision?: (ballId: string, cushionId: string, impactSpeed: number) => void;
   onBallCollision?: (ballId1: string, ballId2: string) => void;
 
-  /**
-   * 초기화
-   */
   init(): void {
-    console.log('[SimplePhysics] Initialized with realistic friction');
+    console.log('[SimplePhysics] 3-Cushion Physics Initialized');
   }
 
-  /**
-   * 공 생성
-   */
   createBall(id: string, position: Vector3, radius: number = PHYSICS.BALL_RADIUS): void {
     this.balls.set(id, {
       id,
       position: position.clone(),
       velocity: new Vector3(0, 0, 0),
+      angularVelocity: new Vector3(0, 0, 0),
       radius,
       mass: PHYSICS.BALL_MASS,
     });
   }
 
-  /**
-   * 속도 적용
-   */
   applyVelocity(id: string, velocity: { x: number; y: number; z: number }): void {
     const ball = this.balls.get(id);
-    if (!ball) {
-      console.log('[Physics] Ball not found:', id);
-      return;
-    }
-    
-    console.log('[Physics] Applying velocity to', id, ':', velocity);
+    if (!ball) return;
     ball.velocity.set(velocity.x, 0, velocity.z);
-    console.log('[Physics] New velocity:', ball.velocity);
+  }
+
+  applyVelocityAndSpin(
+    id: string, 
+    velocity: { x: number; z: number }, 
+    angularVelocity: { omegaX: number; omegaZ: number }
+  ): void {
+    const ball = this.balls.get(id);
+    if (!ball) return;
+    ball.velocity.set(velocity.x, 0, velocity.z);
+    ball.angularVelocity.set(angularVelocity.omegaX, 0, angularVelocity.omegaZ);
   }
 
   /**
-   * 물리 스텝
+   * 물리 스텝 - 완벽한 3쿠션 물리
    */
   step(deltaTime: number): void {
-    const dt = Math.min(deltaTime, 0.016); // 최대 16ms (60fps)
+    const dt = Math.min(deltaTime, 0.016);
 
-    // 1. 위치 업데이트 전에 충돌 처리 (반복적으로 해결)
+    // 충돌 처리
     for (let i = 0; i < 4; i++) {
       this.handleBallCollisions();
     }
 
-    // 2. 위치 업데이트
+    // 위치 업데이트 및 마찰 적용
     for (const ball of this.balls.values()) {
       const speed = ball.velocity.length();
       
-      // 완전 정지 처리 (매우 느릴 때만)
-      if (speed < 0.001) {
+      if (speed < 0.005) {
         ball.velocity.set(0, 0, 0);
+        ball.angularVelocity.set(0, 0, 0);
         continue;
       }
 
-      // 위치 = 위치 + 속도 * 시간
+      // 위치 업데이트
       ball.position.add(ball.velocity.clone().multiplyScalar(dt));
 
-      // === 현실적인 마찰 적용 ===
-      // 속도가 빠를 때: 마찰이 매우 작음 (미끄러짐)
-      // 속도가 느릴 때: 마찰이 커짐 (롤링)
+      // === 현실적인 마찰 적용 (슬라이딩 -> 롤링) ===
+      const slidingFriction = PHYSICS.SLIDING_FRICTION;
+      const rollingFriction = PHYSICS.ROLLING_FRICTION;
       
-      // 속도에 따른 마찰 계수
-      // 10 m/s 이상: 거의 마찰 없음 (0.9999)
-      // 1 m/s: 약간의 마찰 (0.999)
-      // 0.1 m/s: 큰 마찰 (0.99)
+      // 공의 회전 속도
+      const spinSpeed = ball.angularVelocity.length();
+      
+      // 슬라이딩 vs 롤링 판정
+      // 속도와 회전 속도의 차이로 판단
+      const velocityDiff = Math.abs(speed - spinSpeed * ball.radius);
+      
       let friction;
-      if (speed > 5) {
-        friction = 0.9998; // 매우 빠를 때: 거의 감소 없음
-      } else if (speed > 2) {
-        friction = 0.9995; // 빠를 때: 약간의 감소
-      } else if (speed > 0.5) {
-        friction = 0.999; // 중간: 천천히 감소
+      if (velocityDiff > 0.5) {
+        // 슬라이딩 (미끄러짐) - 큰 마찰
+        friction = 1.0 - (slidingFriction * dt * 5);
+      } else if (velocityDiff > 0.1) {
+        // 전환 구간
+        const t = (0.5 - velocityDiff) / 0.4;
+        const currentFriction = slidingFriction * (1 - t) + rollingFriction * t;
+        friction = 1.0 - (currentFriction * dt * 5);
       } else {
-        friction = 0.995; // 느릴 때: 빠르게 감소
+        // 롤링 (구름) - 작은 마찰
+        friction = 1.0 - (rollingFriction * dt * 5);
       }
       
+      // 마찰 적용
+      friction = Math.max(0.99, Math.min(1.0, friction));
       ball.velocity.multiplyScalar(friction);
+      
+      // 회전도 자연스럽게 감소
+      const spinFriction = 0.995;
+      ball.angularVelocity.multiplyScalar(spinFriction);
+      
+      // 롤링 상태에서는 회전이 속도에 영향을 주도록 (진행 방향으로 회전이 맞춰짐)
+      if (velocityDiff < 0.1 && speed > 0.1) {
+        const rollDirection = ball.velocity.clone().normalize();
+        const idealSpinX = -rollDirection.z / ball.radius * speed * 0.1;
+        const idealSpinZ = rollDirection.x / ball.radius * speed * 0.1;
+        
+        ball.angularVelocity.x += (idealSpinX - ball.angularVelocity.x) * 0.1;
+        ball.angularVelocity.z += (idealSpinZ - ball.angularVelocity.z) * 0.1;
+      }
     }
 
-    // 3. 공-쿠션 충돌 처리
     this.handleCushionCollisions();
   }
 
   /**
-   * 쿠션 충돌 처리
+   * 쿠션 충돌 - 완벽한 throw 효과
    */
   private handleCushionCollisions(): void {
     for (const ball of this.balls.values()) {
@@ -131,12 +151,44 @@ export class SimplePhysics {
       // 좌/우 쿠션
       if (ball.position.x < minX) {
         ball.position.x = minX;
+        const incomingSpeed = Math.abs(ball.velocity.x);
+        
+        // 반발
         ball.velocity.x = -ball.velocity.x * PHYSICS.BALL_CUSHION_RESTITUTION;
+        
+        // 스핀 기반 throw 효과 (정교하게 계산)
+        // side spin (omegaZ)이 있으면 쿠션에서 옆으로 튕겨나감
+        const throwEffect = ball.angularVelocity.z * ball.radius * 0.5;
+        const approachAngle = Math.abs(Math.atan2(ball.velocity.z, ball.velocity.x));
+        const throwMultiplier = Math.sin(approachAngle) * 0.8 + 0.2;
+        
+        ball.velocity.z += throwEffect * throwMultiplier;
+        
+        // 쿠션 마찰로 인한 속도 감소 (접선 방향)
+        ball.velocity.z *= (1 - PHYSICS.CUSHION_FRICTION);
+        
+        // 스핀 변화 (쿠션에 부딪히면서 스핀이 변함)
+        ball.angularVelocity.z *= 0.7;
+        ball.angularVelocity.z -= Math.sign(ball.velocity.x) * incomingSpeed * 0.05;
+        
         collided = true;
         cushionId = 'left';
       } else if (ball.position.x > maxX) {
         ball.position.x = maxX;
+        const incomingSpeed = Math.abs(ball.velocity.x);
+        
         ball.velocity.x = -ball.velocity.x * PHYSICS.BALL_CUSHION_RESTITUTION;
+        
+        const throwEffect = ball.angularVelocity.z * ball.radius * 0.5;
+        const approachAngle = Math.abs(Math.atan2(ball.velocity.z, ball.velocity.x));
+        const throwMultiplier = Math.sin(approachAngle) * 0.8 + 0.2;
+        
+        ball.velocity.z -= throwEffect * throwMultiplier;
+        ball.velocity.z *= (1 - PHYSICS.CUSHION_FRICTION);
+        
+        ball.angularVelocity.z *= 0.7;
+        ball.angularVelocity.z += Math.sign(ball.velocity.x) * incomingSpeed * 0.05;
+        
         collided = true;
         cushionId = 'right';
       }
@@ -144,18 +196,46 @@ export class SimplePhysics {
       // 상/하 쿠션
       if (ball.position.z < minZ) {
         ball.position.z = minZ;
+        const incomingSpeed = Math.abs(ball.velocity.z);
+        
         ball.velocity.z = -ball.velocity.z * PHYSICS.BALL_CUSHION_RESTITUTION;
+        
+        // top/back spin (omegaX) throw 효과
+        const throwEffect = ball.angularVelocity.x * ball.radius * 0.5;
+        const approachAngle = Math.abs(Math.atan2(ball.velocity.x, ball.velocity.z));
+        const throwMultiplier = Math.sin(approachAngle) * 0.8 + 0.2;
+        
+        ball.velocity.x += throwEffect * throwMultiplier;
+        ball.velocity.x *= (1 - PHYSICS.CUSHION_FRICTION);
+        
+        ball.angularVelocity.x *= 0.7;
+        ball.angularVelocity.x -= Math.sign(ball.velocity.z) * incomingSpeed * 0.05;
+        
         collided = true;
         cushionId = 'top';
       } else if (ball.position.z > maxZ) {
         ball.position.z = maxZ;
+        const incomingSpeed = Math.abs(ball.velocity.z);
+        
         ball.velocity.z = -ball.velocity.z * PHYSICS.BALL_CUSHION_RESTITUTION;
+        
+        const throwEffect = ball.angularVelocity.x * ball.radius * 0.5;
+        const approachAngle = Math.abs(Math.atan2(ball.velocity.x, ball.velocity.z));
+        const throwMultiplier = Math.sin(approachAngle) * 0.8 + 0.2;
+        
+        ball.velocity.x -= throwEffect * throwMultiplier;
+        ball.velocity.x *= (1 - PHYSICS.CUSHION_FRICTION);
+        
+        ball.angularVelocity.x *= 0.7;
+        ball.angularVelocity.x += Math.sign(ball.velocity.z) * incomingSpeed * 0.05;
+        
         collided = true;
         cushionId = 'bottom';
       }
 
       if (collided && this.onCushionCollision) {
-        this.onCushionCollision(ball.id, cushionId);
+        const impactSpeed = ball.velocity.length();
+        this.onCushionCollision(ball.id, cushionId, impactSpeed);
       }
     }
   }
@@ -183,9 +263,6 @@ export class SimplePhysics {
     }
   }
 
-  /**
-   * 공-공 충돌 검사
-   */
   private checkBallCollision(ball1: PhysicsBall, ball2: PhysicsBall): Collision | null {
     const diff = ball2.position.clone().sub(ball1.position);
     const distance = diff.length();
@@ -201,106 +278,116 @@ export class SimplePhysics {
   }
 
   /**
-   * 공-공 충돌 해결 (탄성 충돌)
+   * 공-공 충돌 해결 - 스핀 전달 포함
    */
   private resolveBallCollision(collision: Collision): void {
     const { ball1, ball2, normal, penetration } = collision;
 
-    // === 1. 위치 분리 (겹침 해결) ===
-    const separationFactor = 1.05;
-    const totalMass = ball1.mass + ball2.mass;
-    const ratio1 = ball2.mass / totalMass;
-    const ratio2 = ball1.mass / totalMass;
-    
-    const separation = penetration * separationFactor;
-    
-    ball1.position.sub(normal.clone().multiplyScalar(separation * ratio1));
-    ball2.position.add(normal.clone().multiplyScalar(separation * ratio2));
+    // 위치 분리
+    const separation = penetration * 1.02;
+    ball1.position.sub(normal.clone().multiplyScalar(separation * 0.5));
+    ball2.position.add(normal.clone().multiplyScalar(separation * 0.5));
 
-    // === 2. 속도 반응 (탄성 충돌) ===
+    // 상대 속도 계산
     const relativeVelocity = ball1.velocity.clone().sub(ball2.velocity);
     const velocityAlongNormal = relativeVelocity.dot(normal);
 
     if (velocityAlongNormal > 0) return;
 
-    // 충돌 반응 (반발 계수 적용)
+    // 충돌 지점 (공 표면)
+    const contactPoint1 = ball1.position.clone().add(normal.clone().multiplyScalar(ball1.radius));
+    const contactPoint2 = ball2.position.clone().sub(normal.clone().multiplyScalar(ball2.radius));
+
+    // 스핀에 따른 접선 속도 계산
+    const spinVelocity1 = new Vector3(
+      -ball1.angularVelocity.z * ball1.radius,
+      0,
+      ball1.angularVelocity.x * ball1.radius
+    );
+    const spinVelocity2 = new Vector3(
+      -ball2.angularVelocity.z * ball2.radius,
+      0,
+      ball2.angularVelocity.x * ball2.radius
+    );
+
+    // 접점에서의 전체 상대 속도
+    const surfaceVelocity1 = ball1.velocity.clone().add(spinVelocity1);
+    const surfaceVelocity2 = ball2.velocity.clone().add(spinVelocity2);
+    const surfaceRelativeVelocity = surfaceVelocity1.sub(surfaceVelocity2);
+
+    // 법선 방향 충격량
     const restitution = PHYSICS.BALL_BALL_RESTITUTION;
     let impulse = -(1 + restitution) * velocityAlongNormal;
     impulse /= (1 / ball1.mass + 1 / ball2.mass);
 
     const impulseVector = normal.clone().multiplyScalar(impulse);
 
+    // 속도 업데이트
     ball1.velocity.add(impulseVector.clone().multiplyScalar(1 / ball1.mass));
     ball2.velocity.sub(impulseVector.clone().multiplyScalar(1 / ball2.mass));
 
-    // === 3. 접선 방향 마찰 ===
-    const tangent = new Vector3(-normal.z, 0, normal.x);
-    const velocityAlongTangent = relativeVelocity.dot(tangent);
+    // 접선 방향 마찰 및 스핀 전달
+    const tangent = new Vector3(-normal.z, 0, normal.x).normalize();
+    const velocityAlongTangent = surfaceRelativeVelocity.dot(tangent);
     
-    const frictionImpulse = -velocityAlongTangent * 0.1;
-    const frictionVector = tangent.multiplyScalar(frictionImpulse / totalMass);
+    // 마찰력으로 인한 스핀 변화
+    const frictionImpulse = -velocityAlongTangent * 0.15;
+    const frictionVector = tangent.multiplyScalar(frictionImpulse);
     
     ball1.velocity.add(frictionVector);
     ball2.velocity.sub(frictionVector);
+
+    // 스핀 전달 (충돌로 인한 회전 변화)
+    const spinTransfer = frictionImpulse * ball1.radius * 0.5;
+    const spinAxisX = -tangent.z; // 접선 방향에 따른 회전 축
+    const spinAxisZ = tangent.x;
+    
+    ball1.angularVelocity.x += spinAxisZ * spinTransfer * 0.1;
+    ball1.angularVelocity.z -= spinAxisX * spinTransfer * 0.1;
+    ball2.angularVelocity.x -= spinAxisZ * spinTransfer * 0.1;
+    ball2.angularVelocity.z += spinAxisX * spinTransfer * 0.1;
   }
 
-  /**
-   * 모든 공 상태 가져오기
-   */
-  getAllBallStates(): Map<string, { position: Vector3; velocity: Vector3 }> {
+  getAllBallStates(): Map<string, { position: Vector3; velocity: Vector3; angularVelocity: Vector3 }> {
     const states = new Map();
-    
     for (const [id, ball] of this.balls) {
       states.set(id, {
         position: ball.position.clone(),
         velocity: ball.velocity.clone(),
+        angularVelocity: ball.angularVelocity.clone(),
       });
     }
-    
     return states;
   }
 
-  /**
-   * 특정 공 상태 가져오기
-   */
-  getBallState(id: string): { position: Vector3; velocity: Vector3 } | null {
+  getBallState(id: string): { position: Vector3; velocity: Vector3; angularVelocity: Vector3 } | null {
     const ball = this.balls.get(id);
     if (!ball) return null;
-    
     return {
       position: ball.position.clone(),
       velocity: ball.velocity.clone(),
+      angularVelocity: ball.angularVelocity.clone(),
     };
   }
 
-  /**
-   * 모든 공이 멈췄는지 확인
-   */
-  areAllBallsStopped(threshold = 0.01): boolean {
+  areAllBallsStopped(threshold = 0.005): boolean {
     for (const ball of this.balls.values()) {
       if (ball.velocity.length() > threshold) return false;
     }
     return true;
   }
 
-  /**
-   * 공 위치 리셋
-   */
   resetBall(id: string, position: Vector3): void {
     const ball = this.balls.get(id);
     if (!ball) return;
-    
     ball.position.copy(position);
     ball.velocity.set(0, 0, 0);
+    ball.angularVelocity.set(0, 0, 0);
   }
 
-  /**
-   * 정리
-   */
   cleanup(): void {
     this.balls.clear();
   }
 }
 
-// 싱글톤 인스턴스
 export const simplePhysics = new SimplePhysics();

@@ -13,9 +13,8 @@ COPY apps/game-server apps/game-server
 
 WORKDIR /app/apps/game-server
 
-EXPOSE 9211 9212
+EXPOSE 9900
 
-# game-server opens auth(9211) + lobby(9212) in one process.
-ENV PORT=9212
+ENV PORT=9900
 
 CMD ["node", "--experimental-strip-types", "src/main.ts"]

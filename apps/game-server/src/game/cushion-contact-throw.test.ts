@@ -90,6 +90,20 @@ test('최대 반사각 상한을 넘지 않는다', () => {
   assert.equal(result.throwAngleDeg <= base.maxThrowAngleDeg + 1e-9, true);
 });
 
+test('보호 규칙: 쿠션 충돌 직후 속도 증가는 상한 배율 이내로 제한된다', () => {
+  const result = applyCushionContactThrow({
+    ...base,
+    vx: -0.05,
+    vy: 0,
+    spinZ: 0.615,
+    maxPostCollisionSpeedScale: 1.01,
+  });
+
+  const preSpeed = Math.hypot(-0.05, 0);
+  const postSpeed = Math.hypot(result.vx, result.vy);
+  assert.equal(postSpeed <= preSpeed * 1.01 + 1e-9, true);
+});
+
 test('고정 회전(0.8R) + 직각 입사에서 스트로크 10%->100% 증가 시 반사각은 단조 감소한다', () => {
   const spinZ = spinFromOffsetRatio(0.8);
   const angles: number[] = [];

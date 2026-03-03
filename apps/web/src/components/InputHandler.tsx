@@ -3,17 +3,13 @@ import { useGameStore } from '../hooks/useGameStore';
 import { INPUT_LIMITS } from '../lib/constants';
 
 /**
- * 새로운 입력 처리 컴포넌트
- * - 마우스 이동: 당구대 회전 (OrbitControls)
- * - 마우스 왼쪽 클릭 + 드래그: 큐 파워 조절 + 샷 실행
- * - 마우스 클릭 상태: WASD로 당점 조절 가능
- * - 마우스 클릭 상태: 당구대 회전 고정
+ * 입력 처리 컴포넌트
  */
 export function InputHandler() {
   const {
     phase,
-    shotInput,
     isDragging,
+    shotInput,
     setDragPower,
     setImpactOffset,
     setIsDragging,
@@ -27,23 +23,19 @@ export function InputHandler() {
     currentPower: 10,
   });
 
-  // 마우스 다운 - 드래그/샷 준비 시작
   const handleMouseDown = useCallback((e: MouseEvent) => {
     if (!isAiming || e.button !== 0) return;
     
-    // 드래그 모드 시작
     setIsDragging(true);
     dragState.current.startY = e.clientY;
     dragState.current.currentPower = 10;
     setDragPower(10);
   }, [isAiming, setIsDragging, setDragPower]);
 
-  // 마우스 이동 - 파워 조절 (드래그 중일 때만)
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (!isAiming || !isDragging) return;
       
-      // 드래그 중 - 파워 조절
       const deltaY = e.clientY - dragState.current.startY;
       const newPower = Math.max(
         INPUT_LIMITS.DRAG_MIN,
@@ -55,59 +47,53 @@ export function InputHandler() {
     [isAiming, isDragging, setDragPower]
   );
 
-  // 마우스 업 - 샷 실행
   const handleMouseUp = useCallback(() => {
     if (!isAiming || !isDragging) return;
     
-    console.log('[Input] Mouse up, power:', dragState.current.currentPower);
-    
     setIsDragging(false);
     
-    // 최소 파워 체크 (15px 이상 드래그했으면 실행)
     if (dragState.current.currentPower >= INPUT_LIMITS.DRAG_MIN + 5) {
-      console.log('[Input] Executing shot!');
       executeShot();
     } else {
-      // 취소 - 파워 리셋
-      console.log('[Input] Shot cancelled (power too low)');
       setDragPower(10);
     }
   }, [isAiming, isDragging, setIsDragging, executeShot, setDragPower]);
 
-  // 키보드 입력 - 당점 조절 (드래그 중일 때만 가능)
+  // 키보드 입력 - e.code로 물리적 키 위치 인식 (한글/영문 모드 무관)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isAiming) return;
       
-      const step = 0.002;
-      const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.9; // 미스큐 여유
+      const step = 0.005;
+      const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.9;
       
-      switch (e.key.toLowerCase()) {
-        case 'w':
+      // e.code로 물리적 키 위치 확인 (KeyW, KeyA, KeyS, KeyD)
+      switch (e.code) {
+        case 'KeyW':
           setImpactOffset(
             shotInput.impactOffsetX,
             Math.max(-maxOffset, shotInput.impactOffsetY - step)
           );
           break;
-        case 's':
+        case 'KeyS':
           setImpactOffset(
             shotInput.impactOffsetX,
             Math.min(maxOffset, shotInput.impactOffsetY + step)
           );
           break;
-        case 'a':
+        case 'KeyA':
           setImpactOffset(
             Math.max(-maxOffset, shotInput.impactOffsetX - step),
             shotInput.impactOffsetY
           );
           break;
-        case 'd':
+        case 'KeyD':
           setImpactOffset(
             Math.min(maxOffset, shotInput.impactOffsetX + step),
             shotInput.impactOffsetY
           );
           break;
-        case 'r':
+        case 'KeyR':
           resetShot();
           break;
       }
@@ -115,7 +101,6 @@ export function InputHandler() {
     [isAiming, shotInput, setImpactOffset, resetShot]
   );
 
-  // 이벤트 리스너 등록
   useEffect(() => {
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);

@@ -47,7 +47,7 @@ async function waitFirstSnapshotEvent(url: string, timeoutMs: number): Promise<n
 }
 
 async function run(): Promise<void> {
-  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9213';
+  const baseUrl = process.env.QA_BASE_URL ?? 'http://localhost:9900';
 
   const memberId = 'qa-recovery-member';
 
