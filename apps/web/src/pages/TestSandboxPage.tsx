@@ -1,7 +1,11 @@
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { DEFAULT_SANDBOX_INPUT } from '../test-sandbox/presets';
+import type { SandboxInput } from '../test-sandbox/types';
 
 export function TestSandboxPage() {
   const navigate = useNavigate();
+  const [input] = useState<SandboxInput>(DEFAULT_SANDBOX_INPUT);
 
   return (
     <div
@@ -32,6 +36,20 @@ export function TestSandboxPage() {
           <h1 style={{ margin: 0, fontSize: 24 }}>Sandbox</h1>
         </div>
         <p style={{ color: '#94a3b8' }}>샌드박스 편집 UI는 다음 태스크에서 이어서 구현됩니다.</p>
+        <pre
+          style={{
+            marginTop: 16,
+            padding: 12,
+            borderRadius: 8,
+            background: '#0b1220',
+            color: '#93c5fd',
+            border: '1px solid #1e293b',
+            fontSize: 12,
+            overflowX: 'auto',
+          }}
+        >
+          {JSON.stringify(input, null, 2)}
+        </pre>
       </div>
     </div>
   );
