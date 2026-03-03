@@ -108,6 +108,35 @@ export function TestListPage() {
             gap: 16,
           }}
         >
+          <div
+            onClick={() => navigate('/test/sandbox')}
+            style={{
+              background: '#0b3a2b',
+              border: '1px solid #0f766e',
+              borderRadius: 8,
+              padding: '16px 20px',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = '#2dd4bf';
+              (e.currentTarget as HTMLDivElement).style.background = '#114135';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = '#0f766e';
+              (e.currentTarget as HTMLDivElement).style.background = '#0b3a2b';
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#99f6e4', marginBottom: 6 }}>
+              Sandbox
+            </div>
+            <div style={{ fontSize: 13, color: '#99aeb6', marginBottom: 10, lineHeight: 1.5 }}>
+              공 초기 위치와 샷 파라미터를 자유 편집해 새 테스트 입력을 생성합니다
+            </div>
+            <div style={{ fontSize: 11, color: '#5eead4' }}>
+              JSON 내보내기 지원
+            </div>
+          </div>
           {scenarios.map((scenario) => (
             <ScenarioCard key={scenario.id} scenario={scenario} />
           ))}
