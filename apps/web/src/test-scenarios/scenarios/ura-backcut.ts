@@ -9,7 +9,7 @@ export const uraBackcut: TestScenario = {
   description: '우라 백컷 배치 테스트',
   balls: {
     cueBall: { x: 0.52675, z: 0.39175 },
-    objectBall1: { x: 1.69575, z: 0.40075 },
+    objectBall1: { x: 1.86750, z: 0.40075 },
     objectBall2: { x: 0.44475, z: 0.26975 },
   },
   shot: {
