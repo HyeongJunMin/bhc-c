@@ -1,12 +1,44 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { DEFAULT_SANDBOX_INPUT } from '../test-sandbox/presets';
 import type { SandboxInput } from '../test-sandbox/types';
 import { SandboxControlPanel } from '../components/test/SandboxControlPanel';
+import { simulateShot } from '@physics-core/standalone-simulator';
+import type { SimulationResult } from '@physics-core/standalone-simulator';
+import { TestScene } from '../components/test/TestScene';
+import { PlaybackSlider } from '../components/test/PlaybackSlider';
 
 export function TestSandboxPage() {
   const navigate = useNavigate();
   const [input, setInput] = useState<SandboxInput>(DEFAULT_SANDBOX_INPUT);
+  const [actual, setActual] = useState<SimulationResult | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [currentFrame, setCurrentFrame] = useState(0);
+
+  const handleExecute = useCallback(() => {
+    setIsRunning(true);
+    setTimeout(() => {
+      try {
+        const result = simulateShot({
+          balls: [
+            { id: 'cueBall', x: input.balls.cueBall.x, z: input.balls.cueBall.z },
+            { id: 'objectBall1', x: input.balls.objectBall1.x, z: input.balls.objectBall1.z },
+            { id: 'objectBall2', x: input.balls.objectBall2.x, z: input.balls.objectBall2.z },
+          ],
+          shot: input.shot,
+        });
+        setActual(result);
+        setCurrentFrame(Math.max(0, result.totalFrames - 1));
+      } finally {
+        setIsRunning(false);
+      }
+    }, 0);
+  }, [input]);
+
+  const handleReset = useCallback(() => {
+    setActual(null);
+    setCurrentFrame(0);
+  }, []);
 
   return (
     <div
@@ -38,22 +70,79 @@ export function TestSandboxPage() {
         </div>
         <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'minmax(320px, 420px) minmax(0, 1fr)' }}>
           <div style={{ border: '1px solid #1e293b', borderRadius: 8, background: '#0f1e35', padding: 14 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button
+                onClick={handleExecute}
+                disabled={isRunning}
+                style={{
+                  background: isRunning ? '#1e3a5f' : '#2563eb',
+                  color: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: isRunning ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isRunning ? '실행 중...' : 'Run'}
+              </button>
+              <button
+                onClick={handleReset}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#cbd5e1',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Reset
+              </button>
+            </div>
             <SandboxControlPanel input={input} onChange={setInput} />
           </div>
-          <pre
+          <div
             style={{
               margin: 0,
-              padding: 12,
-              borderRadius: 8,
-              background: '#0b1220',
-              color: '#93c5fd',
-              border: '1px solid #1e293b',
-              fontSize: 12,
-              overflowX: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
             }}
           >
-            {JSON.stringify(input, null, 2)}
-          </pre>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 360,
+                borderRadius: 8,
+                border: '1px solid #1e293b',
+                overflow: 'hidden',
+              }}
+            >
+              <TestScene actual={actual} baseline={null} analysis={null} currentFrame={currentFrame} />
+            </div>
+            <PlaybackSlider
+              currentFrame={currentFrame}
+              totalFrames={actual?.totalFrames ?? 0}
+              onFrameChange={setCurrentFrame}
+            />
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                borderRadius: 8,
+                background: '#0b1220',
+                color: '#93c5fd',
+                border: '1px solid #1e293b',
+                fontSize: 12,
+                overflowX: 'auto',
+              }}
+            >
+              {JSON.stringify(input, null, 2)}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
