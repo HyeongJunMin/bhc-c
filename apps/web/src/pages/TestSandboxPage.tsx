@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_SANDBOX_INPUT, SANDBOX_PRESETS } from '../test-sandbox/presets';
 import type { SandboxInput } from '../test-sandbox/types';
 import { SandboxControlPanel } from '../components/test/SandboxControlPanel';
@@ -51,6 +51,40 @@ export function TestSandboxPage() {
     setActual(null);
     setCurrentFrame(0);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase() ?? '';
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'r') {
+        event.preventDefault();
+        handleExecute();
+        return;
+      }
+      if (key === 'c') {
+        event.preventDefault();
+        handleReset();
+        return;
+      }
+
+      const presetIndex = Number(key);
+      if (Number.isInteger(presetIndex) && presetIndex >= 1 && presetIndex <= 5) {
+        const preset = SANDBOX_PRESETS[presetIndex - 1];
+        if (preset) {
+          event.preventDefault();
+          handlePreset(preset.id);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleExecute, handlePreset, handleReset]);
 
   return (
     <div
@@ -113,6 +147,9 @@ export function TestSandboxPage() {
               >
                 Reset
               </button>
+            </div>
+            <div style={{ marginBottom: 10, color: '#64748b', fontSize: 11 }}>
+              단축키: <code>R</code> 실행, <code>C</code> 리셋, <code>1~5</code> 프리셋
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>프리셋</div>
