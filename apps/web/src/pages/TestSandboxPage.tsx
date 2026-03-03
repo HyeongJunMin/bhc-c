@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useCallback, useState } from 'react';
-import { DEFAULT_SANDBOX_INPUT } from '../test-sandbox/presets';
+import { DEFAULT_SANDBOX_INPUT, SANDBOX_PRESETS } from '../test-sandbox/presets';
 import type { SandboxInput } from '../test-sandbox/types';
 import { SandboxControlPanel } from '../components/test/SandboxControlPanel';
 import { simulateShot } from '@physics-core/standalone-simulator';
@@ -14,6 +14,7 @@ export function TestSandboxPage() {
   const [actual, setActual] = useState<SimulationResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [activePresetId, setActivePresetId] = useState(SANDBOX_PRESETS[0]?.id ?? '');
 
   const handleExecute = useCallback(() => {
     setIsRunning(true);
@@ -36,6 +37,17 @@ export function TestSandboxPage() {
   }, [input]);
 
   const handleReset = useCallback(() => {
+    setActual(null);
+    setCurrentFrame(0);
+  }, []);
+
+  const handlePreset = useCallback((presetId: string) => {
+    const preset = SANDBOX_PRESETS.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+    setInput(preset.input);
+    setActivePresetId(preset.id);
     setActual(null);
     setCurrentFrame(0);
   }, []);
@@ -101,6 +113,29 @@ export function TestSandboxPage() {
               >
                 Reset
               </button>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>프리셋</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {SANDBOX_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => handlePreset(preset.id)}
+                    style={{
+                      background: preset.id === activePresetId ? '#0f766e' : '#1e293b',
+                      border: `1px solid ${preset.id === activePresetId ? '#14b8a6' : '#334155'}`,
+                      color: preset.id === activePresetId ? '#ccfbf1' : '#cbd5e1',
+                      borderRadius: 4,
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                    title={preset.description}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
             </div>
             <SandboxControlPanel input={input} onChange={setInput} />
           </div>
