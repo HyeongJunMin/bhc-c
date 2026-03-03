@@ -9,6 +9,9 @@ type Props = {
 type BallMetrics = {
   linear: number;
   angular: number;
+  spinX: number;
+  spinY: number;
+  spinZ: number;
 };
 
 function signedDirection(value: number, axis: 'X' | 'Y' | 'Z'): string {
@@ -24,6 +27,9 @@ function metricsByBall(frame: SimulationResult['frames'][number]): Record<string
     map[ball.id] = {
       linear: Math.hypot(ball.vx, ball.vz),
       angular: Math.hypot(ball.spinX, ball.spinY, ball.spinZ),
+      spinX: ball.spinX,
+      spinY: ball.spinY,
+      spinZ: ball.spinZ,
     };
   }
   return map;
@@ -73,6 +79,9 @@ export function FrameKinematicsPanel({ result, currentFrame, onFrameSelect }: Pr
             </div>
             <div style={{ color: '#e2e8f0', fontSize: 11, fontFamily: 'monospace' }}>
               w {item?.angular.toFixed(4) ?? '0.0000'} rad/s
+            </div>
+            <div style={{ color: '#93c5fd', fontSize: 11, fontFamily: 'monospace' }}>
+              {signedDirection(item?.spinX ?? 0, 'X')} {signedDirection(item?.spinY ?? 0, 'Y')} {signedDirection(item?.spinZ ?? 0, 'Z')}
             </div>
           </div>
         ))}
