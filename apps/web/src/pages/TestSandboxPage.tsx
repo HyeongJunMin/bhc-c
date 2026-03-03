@@ -212,7 +212,17 @@ export function TestSandboxPage() {
                 overflow: 'hidden',
               }}
             >
-              <TestScene actual={actual} baseline={null} analysis={null} currentFrame={currentFrame} />
+              <TestScene
+                actual={actual}
+                baseline={null}
+                analysis={null}
+                currentFrame={currentFrame}
+                initialBalls={[
+                  { id: 'cueBall', x: input.balls.cueBall.x, z: input.balls.cueBall.z },
+                  { id: 'objectBall1', x: input.balls.objectBall1.x, z: input.balls.objectBall1.z },
+                  { id: 'objectBall2', x: input.balls.objectBall2.x, z: input.balls.objectBall2.z },
+                ]}
+              />
             </div>
             <PlaybackSlider
               currentFrame={currentFrame}

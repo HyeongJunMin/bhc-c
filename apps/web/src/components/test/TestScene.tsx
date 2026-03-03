@@ -5,7 +5,7 @@ import { BilliardTable } from '../BilliardTable';
 import { TrajectoryLine } from './TrajectoryLine';
 import { CueBallSegmentedTrajectory } from './CueBallSegmentedTrajectory';
 import { DeviationMarkers } from './DeviationMarkers';
-import type { SimulationResult } from '@physics-core/standalone-simulator';
+import type { SimulationResult, TrajectoryFrameBall } from '@physics-core/standalone-simulator';
 import type { TrajectoryAnalysis } from '../../physics-sim/trajectory-analyzer';
 import { PHYSICS, COLORS } from '../../lib/constants';
 
@@ -23,18 +23,38 @@ const BALL_COLORS: Record<string, number> = {
   objectBall2: COLORS.OBJECT_BALL_2,
 };
 
+export type InitialBall = {
+  id: string;
+  x: number;
+  z: number;
+};
+
 type Props = {
   actual: SimulationResult | null;
   baseline: SimulationResult | null;
   analysis: TrajectoryAnalysis | null;
   currentFrame: number;
+  initialBalls?: InitialBall[];
 };
 
-function SceneContent({ actual, baseline, analysis, currentFrame }: Props) {
+function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls }: Props) {
   const ballIds = ['cueBall', 'objectBall1', 'objectBall2'];
 
   // Current ball positions from actual simulation at the playback frame
-  const currentBalls = actual?.frames[currentFrame]?.balls ?? [];
+  // If no simulation result, fall back to initialBalls for preview
+  const currentBalls: TrajectoryFrameBall[] = actual?.frames[currentFrame]?.balls
+    ?? initialBalls?.map((b) => ({
+        id: b.id,
+        x: b.x,
+        z: b.z,
+        vx: 0,
+        vz: 0,
+        spinX: 0,
+        spinY: 0,
+        spinZ: 0,
+        speed: 0,
+      }))
+    ?? [];
 
   return (
     <>
@@ -100,7 +120,7 @@ function SceneContent({ actual, baseline, analysis, currentFrame }: Props) {
   );
 }
 
-export function TestScene({ actual, baseline, analysis, currentFrame }: Props) {
+export function TestScene({ actual, baseline, analysis, currentFrame, initialBalls }: Props) {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
@@ -123,6 +143,7 @@ export function TestScene({ actual, baseline, analysis, currentFrame }: Props) {
           baseline={baseline}
           analysis={analysis}
           currentFrame={currentFrame}
+          initialBalls={initialBalls}
         />
       </Canvas>
 

@@ -6,6 +6,7 @@ import { validateRoomTitle } from './validate-room-title.ts';
 import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
+import type { PhysicsEvent } from '../../../../packages/physics-core/src/physics-events.ts';
 import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
 import { applyCushionContactThrow } from '../../../../packages/physics-core/src/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
@@ -84,6 +85,7 @@ type LobbyRoom = {
   memberGameStates: Record<string, 'IN_ROOM' | 'PLAYING' | 'WIN' | 'LOSE' | 'KICKED'>;
   balls: SnapshotBallFrame[];
   shotEndTracker: ShotEndTracker;
+  turnEvents: PhysicsEvent[];
 };
 
 type LobbyState = {
