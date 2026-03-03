@@ -14,7 +14,7 @@ export const uraBackcut: TestScenario = {
   },
   shot: {
     directionDeg: 0,
-    dragPx: 200,
+    dragPx: 206,
     impactOffsetX: 0,
     impactOffsetY: 0,
   },

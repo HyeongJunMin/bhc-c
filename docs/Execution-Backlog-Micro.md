@@ -624,3 +624,6 @@
 
 #### SBX-017 ura_backcut 입사각 목표 보정
 - `SBX-017`: `/test/ura_backcut` 제1적구 x좌표를 보정해 구간2→3 쿠션 입사각(법선 기준)을 50도 근처로 맞춤
+
+#### SBX-018 ura_backcut 시작속도 조정
+- `SBX-018`: `/test/ura_backcut` 시작속도(`dragPx`)를 206으로 조정해 구간4 제1적구 재충돌을 회피
