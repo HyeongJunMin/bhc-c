@@ -7,6 +7,7 @@ import { simulateShot } from '@physics-core/standalone-simulator';
 import type { SimulationResult } from '@physics-core/standalone-simulator';
 import { TestScene } from '../components/test/TestScene';
 import { PlaybackSlider } from '../components/test/PlaybackSlider';
+import { exportSandboxInputJson } from '../test-sandbox/export';
 
 export function TestSandboxPage() {
   const navigate = useNavigate();
@@ -147,9 +148,26 @@ export function TestSandboxPage() {
               >
                 Reset
               </button>
+              <button
+                onClick={() => exportSandboxInputJson(input)}
+                style={{
+                  background: '#0f3a2a',
+                  border: '1px solid #166534',
+                  color: '#86efac',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Export JSON
+              </button>
             </div>
             <div style={{ marginBottom: 10, color: '#64748b', fontSize: 11 }}>
               단축키: <code>R</code> 실행, <code>C</code> 리셋, <code>1~5</code> 프리셋
+            </div>
+            <div style={{ marginBottom: 10, color: '#fca5a5', fontSize: 11 }}>
+              물리 상수는 샌드박스에서 변경할 수 없습니다. (위치/샷 파라미터만 편집)
             </div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>프리셋</div>
