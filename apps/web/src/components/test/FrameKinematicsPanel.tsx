@@ -21,6 +21,13 @@ function signedDirection(value: number, axis: 'X' | 'Y' | 'Z'): string {
   return value > 0 ? `${axis}:+` : `${axis}:-`;
 }
 
+function signedValue(value: number): string {
+  if (!Number.isFinite(value) || Math.abs(value) < 1e-6) {
+    return '0.0000';
+  }
+  return `${value >= 0 ? '+' : ''}${value.toFixed(4)}`;
+}
+
 function metricsByBall(frame: SimulationResult['frames'][number]): Record<string, BallMetrics> {
   const map: Record<string, BallMetrics> = {};
   for (const ball of frame.balls) {
@@ -81,7 +88,7 @@ export function FrameKinematicsPanel({ result, currentFrame, onFrameSelect }: Pr
               w {item?.angular.toFixed(4) ?? '0.0000'} rad/s
             </div>
             <div style={{ color: '#93c5fd', fontSize: 11, fontFamily: 'monospace' }}>
-              {signedDirection(item?.spinX ?? 0, 'X')} {signedDirection(item?.spinY ?? 0, 'Y')} {signedDirection(item?.spinZ ?? 0, 'Z')}
+              X {signedValue(item?.spinX ?? 0)} | Y {signedValue(item?.spinY ?? 0)} | Z {signedValue(item?.spinZ ?? 0)}
             </div>
           </div>
         ))}
