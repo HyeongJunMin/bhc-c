@@ -11,6 +11,13 @@ type BallMetrics = {
   angular: number;
 };
 
+function signedDirection(value: number, axis: 'X' | 'Y' | 'Z'): string {
+  if (Math.abs(value) < 1e-6) {
+    return `${axis}:0`;
+  }
+  return value > 0 ? `${axis}:+` : `${axis}:-`;
+}
+
 function metricsByBall(frame: SimulationResult['frames'][number]): Record<string, BallMetrics> {
   const map: Record<string, BallMetrics> = {};
   for (const ball of frame.balls) {
@@ -98,6 +105,44 @@ export function FrameKinematicsPanel({ result, currentFrame, onFrameSelect }: Pr
             <span>w {row.maxAngular.toFixed(4)}</span>
           </button>
         ))}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        수구 프레임별 회전방향 (X/Y/Z)
+      </div>
+      <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #1e293b', borderRadius: 6, marginTop: 6 }}>
+        {result.frames.map((frame, index) => {
+          const cue = frame.balls.find((ball) => ball.id === 'cueBall');
+          const spinX = cue?.spinX ?? 0;
+          const spinY = cue?.spinY ?? 0;
+          const spinZ = cue?.spinZ ?? 0;
+          return (
+            <button
+              key={`cue-spin-${index}`}
+              onClick={() => onFrameSelect(index)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                display: 'grid',
+                gridTemplateColumns: '56px 1fr 1fr 1fr',
+                gap: 8,
+                padding: '5px 8px',
+                border: 'none',
+                borderBottom: '1px solid #1e293b',
+                cursor: 'pointer',
+                background: index === safeFrameIndex ? '#13233d' : '#0b1220',
+                color: '#cbd5e1',
+                fontSize: 11,
+                fontFamily: 'monospace',
+              }}
+            >
+              <span>#{index}</span>
+              <span>{signedDirection(spinX, 'X')} ({spinX.toFixed(4)})</span>
+              <span>{signedDirection(spinY, 'Y')} ({spinY.toFixed(4)})</span>
+              <span>{signedDirection(spinZ, 'Z')} ({spinZ.toFixed(4)})</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
