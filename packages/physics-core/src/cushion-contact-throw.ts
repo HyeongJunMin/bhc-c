@@ -154,17 +154,28 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
   }
   spinY -= conversion;
 
-  // Friction-driven damping of rolling spin parallel to the cushion face.
-  // Cushion contact friction dissipates the rolling spin that drives ball along the cushion surface.
-  // Applied after contactTorque so the torque-boosted spin is also subject to damping.
-  const frictionSpinDamping = input.frictionSpinDamping ?? 0;
-  if (frictionSpinDamping > 0) {
+  // Blend rolling spin toward the new rolling condition after velocity reversal.
+  // After a cushion bounce the normal velocity reverses, but rolling spin retains its
+  // pre-collision direction. Pure multiplicative damping (×0.88) can only reduce spin
+  // toward zero — it cannot reverse it toward the new rolling target. This causes
+  // massive slip and unrealistic post-bounce curvature.
+  //
+  // Fix: interpolate the parallel rolling spin toward the target rolling value
+  // derived from the post-collision tangential velocity.
+  //   Rolling condition: spinX = vz/R (for z-axis cushion), spinZ = -vx/R (for x-axis cushion)
+  // frictionSpinDamping is reused as the blend factor (0 = no blend, 1 = snap to rolling).
+  const rollingBlend = input.frictionSpinDamping ?? 0;
+  if (rollingBlend > 0) {
     if (input.axis === 'x') {
-      // x-axis cushion: ball rolls along z → spinZ is the parallel rolling axis
-      spinZ *= (1 - frictionSpinDamping);
+      // x-axis cushion: vx reverses (normal), spinZ must adapt.
+      // Rolling condition: spinZ = -vx/R → target = -postVn / R
+      const targetSpinZ = -postVn / ballRadiusM;
+      spinZ = spinZ + (targetSpinZ - spinZ) * rollingBlend;
     } else {
-      // z-axis cushion: ball rolls along x → spinX is the parallel rolling axis
-      spinX *= (1 - frictionSpinDamping);
+      // z-axis cushion: vy reverses (normal), spinX must adapt.
+      // Rolling condition: spinX = vy/R → target = postVn / R
+      const targetSpinX = postVn / ballRadiusM;
+      spinX = spinX + (targetSpinX - spinX) * rollingBlend;
     }
   }
 

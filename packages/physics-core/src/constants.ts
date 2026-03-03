@@ -34,10 +34,11 @@ export const CUSHION_MAX_SPEED_SCALE = 5.0;
 // Scale factor applied to the rolling-spin (spinZ/spinX) contribution in effectiveSpin.
 // Reduces throw caused by natural rolling; does not affect intentional english (spinY·d term).
 export const CUSHION_ROLLING_SPIN_HEIGHT_FACTOR = 0.1;
-// Friction-driven damping factor applied to the rolling spin axis parallel to the cushion face.
-// Each cushion contact dissipates a fraction of rolling spin via contact friction.
-// (x-axis cushion → spinZ damped; z-axis cushion → spinX damped)
-export const CUSHION_FRICTION_SPIN_DAMPING = 0.12;
+// Blend factor for interpolating rolling spin toward the new rolling condition after cushion bounce.
+// After velocity reversal, rolling spin must adapt to match the new travel direction.
+// 0 = no adaptation (old multiplicative damping), 1 = snap to perfect rolling immediately.
+// 0.80 blends 80% toward the target rolling spin, preventing massive slip and post-bounce curvature.
+export const CUSHION_FRICTION_SPIN_DAMPING = 0.80;
 // Damping factor for angular impulse (torque) transferred to the ball during cushion contact.
 // Real cushion rubber absorbs energy during deformation, reducing torque transmission.
 // Value < 1.0 prevents unrealistic spinX spikes from contact height geometry.

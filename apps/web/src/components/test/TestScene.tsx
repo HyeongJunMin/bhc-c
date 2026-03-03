@@ -3,6 +3,7 @@ import { OrthographicCamera, Environment } from '@react-three/drei';
 import { Sphere } from '@react-three/drei';
 import { BilliardTable } from '../BilliardTable';
 import { TrajectoryLine } from './TrajectoryLine';
+import { CueBallSegmentedTrajectory } from './CueBallSegmentedTrajectory';
 import { DeviationMarkers } from './DeviationMarkers';
 import type { SimulationResult } from '@physics-core/standalone-simulator';
 import type { TrajectoryAnalysis } from '../../physics-sim/trajectory-analyzer';
@@ -55,8 +56,8 @@ function SceneContent({ actual, baseline, analysis, currentFrame }: Props) {
         />
       ))}
 
-      {/* Actual trajectories (solid) */}
-      {actual && ballIds.map((id) => (
+      {/* Actual trajectories (solid) — cue ball uses segmented trajectory */}
+      {actual && ballIds.filter((id) => id !== 'cueBall').map((id) => (
         <TrajectoryLine
           key={`actual-${id}`}
           frames={actual.frames}
@@ -66,6 +67,13 @@ function SceneContent({ actual, baseline, analysis, currentFrame }: Props) {
           currentFrame={currentFrame}
         />
       ))}
+      {actual && (
+        <CueBallSegmentedTrajectory
+          frames={actual.frames}
+          events={actual.events}
+          currentFrame={currentFrame}
+        />
+      )}
 
       {/* Deviation markers */}
       {analysis && actual && (

@@ -350,17 +350,27 @@ function stepPhysics(balls: SimBall[], events: SimEvent[], frameIndex: number): 
       x += vx * substepDtSec;
       z += vz * substepDtSec;
 
+      const xMin = CUSHION_THICKNESS_M + BALL_RADIUS_M;
+      const xMax = TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M;
+      const zMin = CUSHION_THICKNESS_M + BALL_RADIUS_M;
+      const zMax = TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M;
+
+      // Track the start of the current linear movement segment.
+      // Updated after each collision so that the next collision's
+      // interpolation uses the correct origin.
+      let moveFromX = ball.x;
+      let moveFromZ = ball.z;
+
       // X-axis cushion collision
-      if (
-        x <= CUSHION_THICKNESS_M + BALL_RADIUS_M ||
-        x >= TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M
-      ) {
+      if (x <= xMin || x >= xMax) {
         const speedBefore = Math.hypot(vx, vz);
-        x = clampNumber(
-          x,
-          CUSHION_THICKNESS_M + BALL_RADIUS_M,
-          TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M,
-        );
+        const xBoundary = x <= xMin ? xMin : xMax;
+        const dx = x - moveFromX;
+        const tHit = Math.abs(dx) > 1e-12
+          ? clampNumber((xBoundary - moveFromX) / dx, 0, 1) : 0;
+        const collZ = moveFromZ + (z - moveFromZ) * tHit;
+        x = xBoundary;
+        z = collZ;
         const collision = applyCushionContactThrow({
           axis: 'x',
           vx,
@@ -397,23 +407,28 @@ function stepPhysics(balls: SimBall[], events: SimEvent[], frameIndex: number): 
           timeSec: frameIndex * PHYSICS_DT_SEC,
           ballId: ball.id,
           axis: 'x',
-          position: { x, z },
+          position: { x: xBoundary, z: collZ },
           speedBefore,
           speedAfter: Math.hypot(vx, vz),
         });
+        // Advance remaining substep time with post-collision velocity
+        const remainDt = substepDtSec * (1 - tHit);
+        moveFromX = xBoundary;
+        moveFromZ = collZ;
+        x = moveFromX + vx * remainDt;
+        z = moveFromZ + vz * remainDt;
       }
 
       // Z-axis cushion collision
-      if (
-        z <= CUSHION_THICKNESS_M + BALL_RADIUS_M ||
-        z >= TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M
-      ) {
+      if (z <= zMin || z >= zMax) {
         const speedBefore = Math.hypot(vx, vz);
-        z = clampNumber(
-          z,
-          CUSHION_THICKNESS_M + BALL_RADIUS_M,
-          TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M,
-        );
+        const zBoundary = z <= zMin ? zMin : zMax;
+        const dz = z - moveFromZ;
+        const tHit = Math.abs(dz) > 1e-12
+          ? clampNumber((zBoundary - moveFromZ) / dz, 0, 1) : 0;
+        const collX = moveFromX + (x - moveFromX) * tHit;
+        x = collX;
+        z = zBoundary;
         const collision = applyCushionContactThrow({
           axis: 'y',
           vx,
@@ -450,10 +465,14 @@ function stepPhysics(balls: SimBall[], events: SimEvent[], frameIndex: number): 
           timeSec: frameIndex * PHYSICS_DT_SEC,
           ballId: ball.id,
           axis: 'z',
-          position: { x, z },
+          position: { x: collX, z: zBoundary },
           speedBefore,
           speedAfter: Math.hypot(vx, vz),
         });
+        // Advance remaining substep time with post-collision velocity
+        const remainDt = substepDtSec * (1 - tHit);
+        x = collX + vx * remainDt;
+        z = zBoundary + vz * remainDt;
       }
 
       ball.x = x;

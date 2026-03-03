@@ -52,6 +52,11 @@ When any spec document changes, related documents must be updated in the same ta
   3. validation command results
   4. next recommended task ID
 
+## Approval Rule (Mandatory)
+- Do not edit code files before explicit user approval.
+- For analysis/questions/planning requests, provide findings and plan only.
+- Start file edits only after the user clearly requests implementation (for example: "수정해", "적용해", "바꿔").
+
 ## Mandatory Commit Granularity
 - Exactly one micro task per commit.
 - Commit title must use the exact micro task ID (for example, `[PHY-AXIS-001A] ...`).
