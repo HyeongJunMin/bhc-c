@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 /**
  * 당점 시각화
- * - 수구 위에 반투명 원으로 표시
+ * - 수구의 타격면(큐 진행방향에 직각인 면)에 표시
  * - WASD로 당점 이동 시 실시간 업데이트
  * - 미스큐 위험 경고
  */
@@ -15,6 +15,7 @@ export class ImpactPoint {
   private marker!: THREE.Mesh;
   private warningRing!: THREE.Mesh;
   private guideLines!: THREE.Group;
+  private connectorLine!: THREE.Mesh;
   
   constructor(scene: THREE.Scene, ballRadius: number) {
     this.scene = scene;
@@ -38,8 +39,7 @@ export class ImpactPoint {
       side: THREE.DoubleSide,
     });
     const guide = new THREE.Mesh(guideGeometry, guideMaterial);
-    guide.rotation.x = -Math.PI / 2;
-    guide.position.y = this.cueBallRadius + 0.001;
+    guide.position.z = 0.001;
     this.mesh.add(guide);
     
     // 2. 십자가 가이드 라인
@@ -55,8 +55,7 @@ export class ImpactPoint {
       new THREE.PlaneGeometry(this.cueBallRadius * 2, 0.005),
       lineMaterial
     );
-    hLine.rotation.x = -Math.PI / 2;
-    hLine.position.y = this.cueBallRadius + 0.002;
+    hLine.position.z = 0.002;
     this.guideLines.add(hLine);
     
     // 수직선
@@ -64,8 +63,7 @@ export class ImpactPoint {
       new THREE.PlaneGeometry(0.005, this.cueBallRadius * 2),
       lineMaterial
     );
-    vLine.rotation.x = -Math.PI / 2;
-    vLine.position.y = this.cueBallRadius + 0.002;
+    vLine.position.z = 0.002;
     this.guideLines.add(vLine);
     
     this.mesh.add(this.guideLines);
@@ -78,8 +76,7 @@ export class ImpactPoint {
       opacity: 0.9,
     });
     this.marker = new THREE.Mesh(markerGeometry, markerMaterial);
-    this.marker.rotation.x = -Math.PI / 2;
-    this.marker.position.y = this.cueBallRadius + 0.003;
+    this.marker.position.z = 0.003;
     this.mesh.add(this.marker);
     
     // 4. 미스큐 경고 링
@@ -95,8 +92,7 @@ export class ImpactPoint {
       side: THREE.DoubleSide,
     });
     this.warningRing = new THREE.Mesh(warningGeometry, warningMaterial);
-    this.warningRing.rotation.x = -Math.PI / 2;
-    this.warningRing.position.y = this.cueBallRadius + 0.002;
+    this.warningRing.position.z = 0.002;
     this.mesh.add(this.warningRing);
     
     // 5. 미스큐 임계치 표시 (점선 느낌의 링)
@@ -114,9 +110,20 @@ export class ImpactPoint {
       side: THREE.DoubleSide,
     });
     const threshold = new THREE.Mesh(thresholdGeometry, thresholdMaterial);
-    threshold.rotation.x = -Math.PI / 2;
-    threshold.position.y = this.cueBallRadius + 0.0015;
+    threshold.position.z = 0.0015;
     this.mesh.add(threshold);
+
+    // 6. 수구-당점 평면 연결 라인 (시각 분리 보조)
+    const connectorGeometry = new THREE.PlaneGeometry(0.0025, this.cueBallRadius * 1.2);
+    const connectorMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+    });
+    this.connectorLine = new THREE.Mesh(connectorGeometry, connectorMaterial);
+    this.connectorLine.position.z = -this.cueBallRadius * 0.45;
+    this.mesh.add(this.connectorLine);
   }
   
   /**
@@ -128,14 +135,24 @@ export class ImpactPoint {
   update(
     offsetX: number,
     offsetY: number,
-    cueBallPos: THREE.Vector3
+    cueBallPos: THREE.Vector3,
+    shotDirectionDeg: number,
+    cueElevationDeg: number
   ): void {
-    // 위치 업데이트
-    this.mesh.position.copy(cueBallPos);
+    const directionRad = (shotDirectionDeg * Math.PI) / 180;
+    const elevationRad = (cueElevationDeg * Math.PI) / 180;
+    const cueEuler = new THREE.Euler(-elevationRad, directionRad, 0, 'YXZ');
+    const cueQuat = new THREE.Quaternion().setFromEuler(cueEuler);
+    const cueAxisForward = new THREE.Vector3(0, 0, 1).applyQuaternion(cueQuat);
+    const faceOffset = this.cueBallRadius + 0.0008;
+
+    // 큐-수구 축에 직각인 타격면으로 이동 (큐가 있는 뒤쪽 면)
+    this.mesh.position.copy(cueBallPos).addScaledVector(cueAxisForward, -faceOffset);
+    this.mesh.quaternion.copy(cueQuat);
     
     // 당점 마커 위치
     this.marker.position.x = offsetX;
-    this.marker.position.z = -offsetY; // Y가 상하인데 Z가 전후
+    this.marker.position.y = offsetY;
     
     // 미스큐 위험 체크
     const offsetDistance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
@@ -143,6 +160,11 @@ export class ImpactPoint {
     
     const warningMat = this.warningRing.material as THREE.MeshBasicMaterial;
     const markerMat = this.marker.material as THREE.MeshBasicMaterial;
+    const connectorMat = this.connectorLine.material as THREE.MeshBasicMaterial;
+    const guideLineMaterials = this.guideLines.children
+      .map((child) => (child as THREE.Mesh).material)
+      .filter((material): material is THREE.MeshBasicMaterial => material instanceof THREE.MeshBasicMaterial);
+    const changed = offsetDistance > this.cueBallRadius * 0.08;
     
     if (dangerRatio > 0.8) {
       // 경고 표시
@@ -157,6 +179,14 @@ export class ImpactPoint {
     } else {
       warningMat.opacity = 0;
       markerMat.color.setHex(0xff3333);
+    }
+
+    // 당점 이동 시 시각 강조
+    this.marker.scale.setScalar(changed ? 1.35 : 1.0);
+    markerMat.opacity = changed ? 1 : 0.88;
+    connectorMat.opacity = changed ? 0.55 : 0.25;
+    for (const mat of guideLineMaterials) {
+      mat.opacity = changed ? 0.35 : 0.2;
     }
   }
   

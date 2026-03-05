@@ -1,22 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../stores/gameStore';
 import { INPUT_LIMITS, PHYSICS, RULES } from '../lib/constants';
 
 export function GameUI() {
-  const [showGlossary, setShowGlossary] = useState(false);
+  const TURN_DURATION_MS = 20_000;
   const gameStore = useGameStore();
   const { 
     phase, 
     shotInput, 
     isDragging,
     currentPlayer, 
+    activeCueBallId,
     scores, 
     turnMessage,
+    turnStartedAtMs,
     cushionContacts,
     objectBallsHit,
-    setAimControlMode,
     resetGame,
   } = gameStore;
+  const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
   
   // 파워 계산
   const powerPercent = Math.round(
@@ -36,29 +38,9 @@ export function GameUI() {
   );
   const offsetPercent = Math.round((offsetDistance / PHYSICS.BALL_RADIUS) * 100);
   const isMiscueRisk = offsetPercent > 85;
-  const inputConstraintCode =
-    phase !== 'AIMING' ? 'SHOT_LOCKED_PHASE' : isDragging ? 'SHOT_LOCKED_DRAGGING' : 'SHOT_READY';
-  const normalizedX = shotInput.impactOffsetX / PHYSICS.BALL_RADIUS;
-  const normalizedY = shotInput.impactOffsetY / PHYSICS.BALL_RADIUS;
-
-  const zoneX = normalizedX < -0.33 ? -1 : normalizedX > 0.33 ? 1 : 0;
-  const zoneY = normalizedY < -0.33 ? -1 : normalizedY > 0.33 ? 1 : 0;
-  const activeZoneKey = `${zoneX},${zoneY}`;
-
-  const spinGuideLabel =
-    zoneX < 0 && zoneY > 0 ? '좌상(좌회전 + 밀어치기)'
-    : zoneX === 0 && zoneY > 0 ? '상(밀어치기)'
-    : zoneX > 0 && zoneY > 0 ? '우상(우회전 + 밀어치기)'
-    : zoneX < 0 && zoneY === 0 ? '좌(좌회전)'
-    : zoneX === 0 && zoneY === 0 ? '중앙(무회전)'
-    : zoneX > 0 && zoneY === 0 ? '우(우회전)'
-    : zoneX < 0 && zoneY < 0 ? '좌하(좌회전 + 끌어치기)'
-    : zoneX === 0 && zoneY < 0 ? '하(끌어치기)'
-    : '우하(우회전 + 끌어치기)';
-
   const overlapRows = useMemo(() => {
-    const cueBall = gameStore.balls.find((ball) => ball.id === 'cueBall');
-    const objectBalls = gameStore.balls.filter((ball) => ball.id !== 'cueBall');
+    const cueBall = gameStore.balls.find((ball) => ball.id === activeCueBallId);
+    const objectBalls = gameStore.balls.filter((ball) => ball.id !== activeCueBallId);
     if (!cueBall) return [];
 
     const dirRad = (shotInput.shotDirectionDeg * Math.PI) / 180;
@@ -70,28 +52,50 @@ export function GameUI() {
       const relX = ball.position.x - cueBall.position.x;
       const relZ = ball.position.z - cueBall.position.z;
       const along = relX * dirX + relZ * dirZ;
-      const perp = Math.abs(relX * dirZ - relZ * dirX);
+      const signedPerp = relX * dirZ - relZ * dirX;
+      const perp = Math.abs(signedPerp);
       const overlap = along <= 0 ? 0 : Math.max(0, Math.min(1, (diameter - perp) / diameter));
       return {
         id: ball.id,
-        overlapPct: Math.round(overlap * 100),
+        overlap,
         hittable: along > 0 && perp <= diameter,
+        signedPerp,
       };
     });
-  }, [gameStore.balls, shotInput.shotDirectionDeg]);
+  }, [gameStore.balls, shotInput.shotDirectionDeg, activeCueBallId]);
 
-  const glossaryRows = [
-    { term: '회전주기', meaning: '공의 좌/우를 쳐 회전을 주는 타법' },
-    { term: '두번치기', meaning: '매우 근접한 배치에서 큐팁이 수구를 2회 접촉하는 반칙' },
-    { term: '끌어치기', meaning: '공의 아래를 쳐 백스핀을 주는 타법' },
-    { term: '밀어치기', meaning: '공의 위를 쳐 탑스핀을 주는 타법' },
-    { term: '빈쿠션', meaning: '목적구보다 쿠션을 먼저 맞추는 플레이' },
-    { term: '대회전', meaning: '여러 쿠션을 활용해 궤적을 크게 돌리는 공략' },
-  ] as const;
-  
+  const ballColorMap: Record<string, string> = {
+    cueBall: '#ffffff',
+    objectBall1: '#ff3b30',
+    objectBall2: '#ffd60a',
+  };
+  const overlappingRows = overlapRows.filter((row) => row.hittable && row.overlap > 0);
+  const overlayBallSize = 34;
+  const overlayTrackWidth = 112;
+  const cueBall = gameStore.balls.find((ball) => ball.id === 'cueBall');
+  const objectBall1 = gameStore.balls.find((ball) => ball.id === 'objectBall1');
+  const objectBall2 = gameStore.balls.find((ball) => ball.id === 'objectBall2');
+  const isMissTurnOver = turnMessage.trim().toUpperCase().includes('MISS - TURN OVER');
+  const isScoreTurnMessage = turnMessage.trim().toUpperCase().includes('SCORE');
+  const isCompactTurnMessage = isMissTurnOver || isScoreTurnMessage;
+
+  useEffect(() => {
+    const update = () => {
+      if (phase !== 'AIMING') {
+        setTurnRemainMs(TURN_DURATION_MS);
+        return;
+      }
+      setTurnRemainMs(Math.max(0, TURN_DURATION_MS - (Date.now() - turnStartedAtMs)));
+    };
+    update();
+    const timer = window.setInterval(update, 100);
+    return () => window.clearInterval(timer);
+  }, [phase, turnStartedAtMs]);
+
   // 3쿠션 상태
+  const secondTargetId = activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
   const hitObject1 = objectBallsHit.has('objectBall1');
-  const hitObject2 = objectBallsHit.has('objectBall2');
+  const hitObject2 = objectBallsHit.has(secondTargetId);
   
   return (
     <div
@@ -153,80 +157,14 @@ export function GameUI() {
             ))}
           </div>
         </div>
+
+        <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.85 }}>
+          TURN: <span style={{ color: '#ffd700', fontWeight: 700 }}>{(turnRemainMs / 1000).toFixed(1)}s</span>
+        </div>
         
         {/* 게임 상태 */}
         <div style={{ fontSize: 11, opacity: 0.6, marginTop: 10 }}>
           Phase: <span style={{ color: '#ffd700' }}>{phase}</span>
-        </div>
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, opacity: 0.8 }}>Aim Mode</span>
-          <button
-            type="button"
-            onClick={() =>
-              setAimControlMode(shotInput.aimControlMode === 'AUTO_SYNC' ? 'MANUAL_AIM' : 'AUTO_SYNC')
-            }
-            style={{
-              pointerEvents: 'auto',
-              border: '1px solid rgba(255,255,255,0.25)',
-              background: 'rgba(20,20,20,0.85)',
-              color: '#fff',
-              borderRadius: 8,
-              fontSize: 11,
-              padding: '4px 8px',
-              cursor: 'pointer',
-            }}
-          >
-            {shotInput.aimControlMode}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGlossary((value) => !value)}
-            style={{
-              pointerEvents: 'auto',
-              border: '1px solid rgba(255,255,255,0.25)',
-              background: 'rgba(20,20,20,0.85)',
-              color: '#fff',
-              borderRadius: 8,
-              fontSize: 11,
-              padding: '4px 8px',
-              cursor: 'pointer',
-            }}
-          >
-            용어
-          </button>
-        </div>
-        {showGlossary && (
-          <div
-            style={{
-              marginTop: 10,
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 8,
-              overflow: 'hidden',
-              fontSize: 11,
-              lineHeight: 1.4,
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', background: 'rgba(255,255,255,0.08)' }}>
-              <div style={{ padding: '6px 8px', fontWeight: 'bold' }}>용어</div>
-              <div style={{ padding: '6px 8px', fontWeight: 'bold' }}>의미</div>
-            </div>
-            {glossaryRows.map((row) => (
-              <div
-                key={row.term}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '80px 1fr',
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <div style={{ padding: '6px 8px', color: '#ffd700', fontWeight: 'bold' }}>{row.term}</div>
-                <div style={{ padding: '6px 8px', opacity: 0.92 }}>{row.meaning}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.8 }}>
-          회전 가이드: {spinGuideLabel}
         </div>
       </div>
       
@@ -295,7 +233,7 @@ export function GameUI() {
                 gap: 6,
                 opacity: hitObject2 ? 1 : 0.4,
               }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ffd700' }} />
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: ballColorMap[secondTargetId] ?? '#ffd700' }} />
                 <span style={{ color: hitObject2 ? '#00ff88' : 'white' }}>
                   {hitObject2 ? '✓' : '○'}
                 </span>
@@ -325,7 +263,7 @@ export function GameUI() {
         <div
           style={{
             position: 'absolute',
-            top: '35%',
+            top: isCompactTurnMessage ? '13%' : '35%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             background: turnMessage.includes('SCORE') 
@@ -333,9 +271,9 @@ export function GameUI() {
               : turnMessage.includes('WINS')
               ? 'rgba(255, 215, 0, 0.95)'
               : 'rgba(255, 100, 100, 0.9)',
-            padding: '25px 50px',
-            borderRadius: 16,
-            fontSize: 32,
+            padding: isCompactTurnMessage ? '10px 18px' : '25px 50px',
+            borderRadius: isCompactTurnMessage ? 10 : 16,
+            fontSize: isCompactTurnMessage ? 18 : 32,
             fontWeight: 'bold',
             color: turnMessage.includes('SCORE') || turnMessage.includes('WINS') ? '#000' : '#fff',
             animation: 'pulse 0.5s ease-in-out',
@@ -346,7 +284,7 @@ export function GameUI() {
         </div>
       )}
 
-      {phase === 'AIMING' && (
+      {phase === 'AIMING' && overlappingRows.length > 0 && (
         <div
           style={{
             position: 'absolute',
@@ -355,29 +293,62 @@ export function GameUI() {
             transform: 'translateY(-50%)',
             background: 'rgba(0,0,0,0.82)',
             borderRadius: 12,
-            padding: '12px 14px',
-            minWidth: 220,
+            padding: '14px 16px',
+            minWidth: 120,
           }}
         >
-          <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>큐-수구-목적구 겹침량</div>
-          {overlapRows.map((row) => (
-            <div key={row.id} style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                <span>{row.id}</span>
-                <span style={{ color: row.hittable ? '#00ff88' : '#ff6666' }}>{row.overlapPct}%</span>
-              </div>
-              <div style={{ height: 8, background: 'rgba(255,255,255,0.12)', borderRadius: 999, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    width: `${row.overlapPct}%`,
-                    height: '100%',
-                    background: row.hittable ? 'linear-gradient(90deg, #00d084, #00ff88)' : '#ff6666',
-                  }}
-                />
-              </div>
+          {overlappingRows.map((row) => (
+            <div key={row.id} style={{ marginBottom: 10 }}>
+              {(() => {
+                const overlapPx = overlayBallSize;
+                const centerDistancePx = (1 - row.overlap) * overlapPx;
+                const sideSign = row.signedPerp >= 0 ? -1 : 1;
+                const centerX = (overlayTrackWidth - overlayBallSize) / 2;
+                const cueLeft = Math.round(centerX - (sideSign * centerDistancePx) / 2);
+                const objectLeft = Math.round(centerX + (sideSign * centerDistancePx) / 2);
+
+                return (
+                  <div
+                    style={{
+                      position: 'relative',
+                      height: overlayBallSize,
+                      width: overlayTrackWidth,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: `${cueLeft}px`,
+                        width: overlayBallSize,
+                        height: overlayBallSize,
+                        borderRadius: '50%',
+                        background: ballColorMap[activeCueBallId] ?? '#ffffff',
+                        border: '1px solid rgba(0,0,0,0.35)',
+                        zIndex: 2,
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.15) inset',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: `${objectLeft}px`,
+                        width: overlayBallSize,
+                        height: overlayBallSize,
+                        borderRadius: '50%',
+                        background: ballColorMap[row.id] ?? '#00bcd4',
+                        border: '1px solid rgba(0,0,0,0.35)',
+                        opacity: 0.95,
+                        zIndex: 1,
+                        boxShadow: '0 0 10px rgba(0,255,136,0.35)',
+                      }}
+                    />
+                  </div>
+                );
+              })()}
             </div>
           ))}
-          <div style={{ fontSize: 11, opacity: 0.65 }}>값이 높을수록 정면(얇기↓), 낮을수록 얇은 두께</div>
         </div>
       )}
 
@@ -444,13 +415,10 @@ export function GameUI() {
             bottom: 20,
             left: 20,
             background: 'rgba(0,0,0,0.85)',
-            padding: '15px 20px',
+            padding: '12px',
             borderRadius: 12,
-            minWidth: 180,
           }}
         >
-          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>IMPACT (WASD / ㅈㅁㄴㅇ)</div>
-          
           {/* 당점 시각화 */}
           <div style={{ 
             width: 60, 
@@ -516,117 +484,7 @@ export function GameUI() {
               height: 1,
               background: 'rgba(255,255,255,0.25)',
             }} />
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              fontSize: 8,
-              color: 'rgba(255,255,255,0.7)',
-              pointerEvents: 'none',
-            }}>
-              {[
-                { key: '-1,1', x: '17%', y: '17%', label: '좌상' },
-                { key: '0,1', x: '50%', y: '17%', label: '상' },
-                { key: '1,1', x: '83%', y: '17%', label: '우상' },
-                { key: '-1,0', x: '17%', y: '50%', label: '좌' },
-                { key: '0,0', x: '50%', y: '50%', label: '중' },
-                { key: '1,0', x: '83%', y: '50%', label: '우' },
-                { key: '-1,-1', x: '17%', y: '83%', label: '좌하' },
-                { key: '0,-1', x: '50%', y: '83%', label: '하' },
-                { key: '1,-1', x: '83%', y: '83%', label: '우하' },
-              ].map((zone) => (
-                <div
-                  key={zone.key}
-                  style={{
-                    position: 'absolute',
-                    left: zone.x,
-                    top: zone.y,
-                    transform: 'translate(-50%, -50%)',
-                    color: zone.key === activeZoneKey ? '#ffd700' : 'rgba(255,255,255,0.65)',
-                    fontWeight: zone.key === activeZoneKey ? 'bold' : 'normal',
-                  }}
-                >
-                  {zone.label}
-                </div>
-              ))}
-            </div>
           </div>
-          
-          <div style={{ fontSize: 12 }}>
-            <div>X: {(shotInput.impactOffsetX * 1000).toFixed(1)}mm</div>
-            <div>Y: {(shotInput.impactOffsetY * 1000).toFixed(1)}mm</div>
-            <div style={{ 
-              color: isMiscueRisk ? '#ff4444' : '#00ff88',
-              fontWeight: 'bold',
-              marginTop: 4,
-            }}>
-              {offsetPercent}% {isMiscueRisk && 'WARN_MISCUE_RISK'}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 6 }}>
-              LIMIT_OFFSET: ±{(PHYSICS.BALL_RADIUS * 0.9 * 1000).toFixed(1)}mm
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>
-              LIMIT_DRAG: {INPUT_LIMITS.DRAG_MIN}~{INPUT_LIMITS.DRAG_MAX}px
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8 }}>
-              {inputConstraintCode}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
-              W/ㅈ: 상단 당점, S/ㄴ: 하단 당점
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 방향/고각 정보 */}
-      {phase === 'AIMING' && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 20,
-            right: 20,
-            background: 'rgba(0,0,0,0.85)',
-            padding: '15px 20px',
-            borderRadius: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>DIRECTION</div>
-          <div style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>
-            {shotInput.shotDirectionDeg.toFixed(0)}°
-          </div>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>
-            {shotInput.aimControlMode === 'MANUAL_AIM'
-              ? '←/→로 방향 조절'
-              : '카메라 회전에 자동 동기화'}
-          </div>
-        </div>
-      )}
-
-      {/* 하단 조작 가이드 */}
-      {phase === 'AIMING' && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0,0,0,0.7)',
-            padding: '12px 24px',
-            borderRadius: 20,
-            fontSize: 13,
-            display: 'flex',
-            gap: 14,
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            maxWidth: 'min(92vw, 860px)',
-            lineHeight: 1.4,
-            textAlign: 'center',
-          }}
-        >
-          <span>1) 마우스 드래그 후 놓기: 샷</span>
-          <span>2) WASD/ㅈㅁㄴㅇ: 당점</span>
-          <span>3) M: 조준 모드 전환</span>
-          {shotInput.aimControlMode === 'MANUAL_AIM' && <span>4) ←/→: 방향</span>}
-          <span>R: 초기화</span>
         </div>
       )}
 

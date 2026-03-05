@@ -22,6 +22,8 @@ export interface ShotInput {
   impactOffsetY: number;
 }
 
+export type CueBallId = 'cueBall' | 'objectBall2';
+
 export type TurnEvent = 
   | { type: 'cushion'; railId: string; timestamp: number }
   | { type: 'ball'; ballId: string; timestamp: number };
@@ -50,11 +52,13 @@ interface GameStore {
   
   // 게임 로직
   currentPlayer: string;
+  activeCueBallId: CueBallId;
   players: string[];
   scores: Record<string, number>;
   cushionContacts: number;
   objectBallsHit: Set<string>;
   turnMessage: string;
+  turnStartedAtMs: number;
   turnEvents: TurnEvent[];
   
   // 액션
@@ -124,11 +128,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   isDragging: false,
   currentPlayer: 'player1',
+  activeCueBallId: 'cueBall',
   players: ['player1', 'player2'],
   scores: { player1: 0, player2: 0 },
   cushionContacts: 0,
   objectBallsHit: new Set(),
   turnMessage: '',
+  turnStartedAtMs: Date.now(),
   turnEvents: [],
 
   // 기본 액션
@@ -204,6 +210,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
     isDragging: false,
     turnMessage: '',
+    turnStartedAtMs: Date.now(),
   })),
   
   resetGame: () => set(() => ({
@@ -211,7 +218,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     balls: createInitialBalls(),
     scores: { player1: 0, player2: 0 },
     currentPlayer: 'player1',
+    activeCueBallId: 'cueBall',
     turnMessage: '',
+    turnStartedAtMs: Date.now(),
     isDragging: false,
     turnEvents: [],
     cushionContacts: 0,
@@ -269,7 +278,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         .map(e => e.ballId)
     );
     
-    return cushionCount >= 3 && hitBalls.has('objectBall1') && hitBalls.has('objectBall2');
+    const requiredTargets = state.activeCueBallId === 'cueBall'
+      ? ['objectBall1', 'objectBall2']
+      : ['objectBall1', 'cueBall'];
+    return cushionCount >= 3 && requiredTargets.every((id) => hitBalls.has(id));
   },
 
   handleTurnEnd: () => {
@@ -296,23 +308,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // 득점 시 턴 유지
       set({ 
         scores: newScores,
+        currentPlayer: state.currentPlayer,
+        activeCueBallId: state.activeCueBallId,
         turnMessage: 'SCORE! +1 Point',
         phase: 'AIMING',
+        turnStartedAtMs: Date.now(),
         turnEvents: [],
         cushionContacts: 0,
         objectBallsHit: new Set(),
+        shotInput: {
+          ...state.shotInput,
+          dragPx: 10,
+          impactOffsetX: 0,
+          impactOffsetY: 0,
+        },
       });
     } else {
       // 실패 시 턴 전환
       const currentIndex = state.players.indexOf(state.currentPlayer);
       const nextPlayer = state.players[(currentIndex + 1) % state.players.length];
+      const nextCueBallId: CueBallId = state.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
       set({ 
         currentPlayer: nextPlayer,
+        activeCueBallId: nextCueBallId,
         turnMessage: 'MISS - Turn Over',
         phase: 'AIMING',
+        turnStartedAtMs: Date.now(),
         turnEvents: [],
         cushionContacts: 0,
         objectBallsHit: new Set(),
+        shotInput: {
+          ...state.shotInput,
+          dragPx: 10,
+          impactOffsetX: 0,
+          impactOffsetY: 0,
+        },
       });
     }
   },

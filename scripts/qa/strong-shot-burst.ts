@@ -1,6 +1,5 @@
 import { createRoomPhysicsStepConfig } from '../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld, type PhysicsBallState } from '../../packages/physics-core/src/room-physics-step.ts';
-import { applyCushionContactThrow } from '../../apps/game-server/src/game/cushion-contact-throw.ts';
 
 const cfg = createRoomPhysicsStepConfig();
 
@@ -32,7 +31,7 @@ function runBurstScenario(): { shots: number; maxPeakSpeed: number; maxTicksToSe
     let ticks = 0;
     let localPeak = 0;
     while (ticks < 700 && !isSettled(balls)) {
-      const stats = stepRoomPhysicsWorld(balls, cfg, { applyCushionContactThrow });
+      const stats = stepRoomPhysicsWorld(balls, cfg, {});
       localPeak = Math.max(localPeak, stats.maxObservedSpeedMps);
       ticks += 1;
     }
@@ -57,4 +56,3 @@ if (result.maxTicksToSettle >= 700) {
 }
 
 console.log(`QA-PLAY-001A pass: shots=${result.shots}, maxPeakSpeed=${result.maxPeakSpeed.toFixed(6)}, maxTicksToSettle=${result.maxTicksToSettle}`);
-

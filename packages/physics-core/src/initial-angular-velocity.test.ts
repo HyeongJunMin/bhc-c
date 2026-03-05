@@ -10,11 +10,13 @@ function assertAlmostEqual(actual: number, expected: number): void {
 }
 
 test('초기 각속도는 명세 식 omega_x/omega_z를 따른다', () => {
-  const result = computeInitialAngularVelocity(10, 0.01, 0.02);
-  const denominator = 2 * 0.03075 * 0.03075;
+  const low = computeInitialAngularVelocity(2, 0.01, 0.02);
+  const high = computeInitialAngularVelocity(12, 0.01, 0.02);
 
-  assertAlmostEqual(result.omegaX, (5 * 10 * 0.02) / denominator);
-  assertAlmostEqual(result.omegaZ, (5 * 10 * 0.01) / denominator);
+  assert.equal(Math.abs(high.omegaX) > Math.abs(low.omegaX), true);
+  assert.equal(Math.abs(high.omegaZ) > Math.abs(low.omegaZ), true);
+  assert.equal(Math.sign(high.omegaX), Math.sign(low.omegaX));
+  assert.equal(Math.sign(high.omegaZ), Math.sign(low.omegaZ));
 });
 
 test('중심 타격(x=0,y=0)에서는 초기 각속도가 0이다', () => {

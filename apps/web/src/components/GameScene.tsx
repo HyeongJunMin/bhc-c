@@ -13,12 +13,63 @@ import { createRoomPhysicsStepConfig } from '../../../../packages/physics-core/s
 import { stepRoomPhysicsWorld, type PhysicsBallState, type CushionId } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
 import { isMiscue } from '../../../../packages/physics-core/src/miscue.ts';
-import { applyCushionContactThrow } from '../../../game-server/src/game/cushion-contact-throw.ts';
+import { solveBallCushionImpulse } from '../../../../packages/physics-core/src/solver/impulse-solver.ts';
 
 // 테이블 스펙 (Unit: meters)
 const TABLE_WIDTH = PHYSICS.TABLE_WIDTH;
 const TABLE_HEIGHT = PHYSICS.TABLE_HEIGHT;
 const BALL_RADIUS = PHYSICS.BALL_RADIUS;
+const DIAMOND_STEP_X = TABLE_WIDTH / 8;
+const DIAMOND_STEP_Z = TABLE_HEIGHT / 4;
+const MAX_DEBUG_TRACE_EVENTS = 40;
+const MAX_DEBUG_TRACE_CHARS = 2000;
+const CUSHION_TRACE_DEDUPE_WINDOW_MS = 120;
+const CUE_DEBUG_X = -TABLE_WIDTH / 2 + DIAMOND_STEP_X * 3;
+const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
+const DEBUG_PRESET_ENABLED = false;
+const TURN_DURATION_MS = 20_000;
+const DEBUG_PRESETS = {
+  CENTER: {
+    cueX: CUE_DEBUG_X,
+    cueZ: CUE_DEBUG_Z,
+    obj1X: 0.0,
+    obj1Z: 0.0,
+    obj2X: 0.7110,
+    obj2Z: -0.45,
+    directionDeg: 180.0,
+    dragPx: 400.0,
+    impactOffsetX: 0.0,
+    impactOffsetY: 0.0,
+    cueElevationDeg: 0,
+  },
+  TOPSPIN: {
+    cueX: CUE_DEBUG_X,
+    cueZ: CUE_DEBUG_Z,
+    obj1X: 0.0,
+    obj1Z: 0.0,
+    obj2X: 0.7110,
+    obj2Z: -0.45,
+    directionDeg: 180.0,
+    dragPx: 400.0,
+    impactOffsetX: 0.0,
+    impactOffsetY: 0.0180,
+    cueElevationDeg: 0,
+  },
+  BACKSPIN: {
+    cueX: CUE_DEBUG_X,
+    cueZ: CUE_DEBUG_Z,
+    obj1X: 0.0,
+    obj1Z: 0.0,
+    obj2X: 0.7110,
+    obj2Z: -0.45,
+    directionDeg: 180.0,
+    dragPx: 400.0,
+    impactOffsetX: 0.0,
+    impactOffsetY: -0.0180,
+    cueElevationDeg: 0,
+  },
+} as const;
+type DebugPresetName = keyof typeof DEBUG_PRESETS;
 
 function readCaptureParams(): { capture: boolean; cam: 'play' | 'top' | 'side' } {
   if (typeof window === 'undefined') {
@@ -47,6 +98,25 @@ function physicsToWorldXZ(x: number, y: number): { x: number; z: number } {
   };
 }
 
+function headingDeg(vx: number, vy: number): number {
+  const deg = (Math.atan2(vy, vx) * 180) / Math.PI;
+  return deg >= 0 ? deg : deg + 360;
+}
+
+function signedDeltaDeg(beforeDeg: number, afterDeg: number): number {
+  let delta = afterDeg - beforeDeg;
+  while (delta > 180) delta -= 360;
+  while (delta <= -180) delta += 360;
+  return delta;
+}
+
+function directionDegFromCueToTarget(cue: THREE.Vector3, target: THREE.Vector3): number {
+  const dx = target.x - cue.x;
+  const dz = target.z - cue.z;
+  const deg = (Math.atan2(dx, dz) * 180) / Math.PI;
+  return (deg + 360) % 360;
+}
+
 /**
  * 3D 게임 월드
  */
@@ -64,6 +134,11 @@ function GameWorld() {
   const guideCuePathRef = useRef<THREE.Line | null>(null);
   const guidePostCuePathRef = useRef<THREE.Line | null>(null);
   const guideObjectPathRef = useRef<THREE.Line | null>(null);
+  const debugTracePartsRef = useRef<string[]>([]);
+  const traceEventIndexRef = useRef(0);
+  const traceWasTruncatedRef = useRef(false);
+  const lastCueCushionEventRef = useRef<{ cushionId: CushionId; atMs: number } | null>(null);
+  const turnEndHandledRef = useRef(false);
 
   const dragState = useRef<{
     isDragging: boolean;
@@ -76,10 +151,16 @@ function GameWorld() {
   });
 
   const tempDir = useRef(new THREE.Vector3());
+  const prevPhaseRef = useRef(gameStore.phase);
+  const activeDebugPresetRef = useRef<DebugPresetName>('CENTER');
+
 
   useEffect(() => {
     createVisualTable(scene);
     createBalls();
+    if (DEBUG_PRESET_ENABLED) {
+      applyDebugPreset();
+    }
 
     cueStickRef.current = new CueStick(scene);
     impactPointRef.current = new ImpactPoint(scene, BALL_RADIUS);
@@ -118,6 +199,112 @@ function GameWorld() {
       guideObjectPathRef.current = null;
     };
   }, [scene]);
+
+  useEffect(() => {
+    if (gameStore.phase === 'SHOOTING') {
+      turnEndHandledRef.current = false;
+    }
+  }, [gameStore.phase]);
+
+  useEffect(() => {
+    if (gameStore.phase !== 'AIMING') {
+      return;
+    }
+    const timerId = window.setInterval(() => {
+      if (gameStore.phase !== 'AIMING') {
+        return;
+      }
+      const elapsedMs = Date.now() - gameStore.turnStartedAtMs;
+      if (elapsedMs >= TURN_DURATION_MS) {
+        gameStore.handleTurnEnd();
+      }
+    }, 120);
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [gameStore.phase, gameStore.turnStartedAtMs, gameStore.currentPlayer]);
+
+  useEffect(() => {
+    const message = gameStore.turnMessage.trim();
+    if (!message) {
+      return;
+    }
+    if (message.includes('WINS')) {
+      return;
+    }
+    const timerId = window.setTimeout(() => {
+      if (useGameStore.getState().turnMessage === message) {
+        useGameStore.getState().setTurnMessage('');
+      }
+    }, 5000);
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [gameStore.turnMessage]);
+
+  const applyDebugPreset = (presetName?: DebugPresetName) => {
+    const name = presetName ?? activeDebugPresetRef.current;
+    const preset = DEBUG_PRESETS[name];
+    activeDebugPresetRef.current = name;
+    const cuePos = new THREE.Vector3(preset.cueX, BALL_RADIUS, preset.cueZ);
+    const obj1Pos = new THREE.Vector3(preset.obj1X, BALL_RADIUS, preset.obj1Z);
+    const obj2Pos = new THREE.Vector3(preset.obj2X, BALL_RADIUS, preset.obj2Z);
+
+    const setBall = (id: 'cueBall' | 'objectBall1' | 'objectBall2', pos: THREE.Vector3) => {
+      const meshRef = ballsRef.current.get(id);
+      if (meshRef) {
+        meshRef.mesh.position.copy(pos);
+      }
+      const physicsPos = worldToPhysicsXY(pos.x, pos.z);
+      const physicsBall = physicsBallsRef.current.find((ball) => ball.id === id);
+      if (physicsBall) {
+        physicsBall.x = physicsPos.x;
+        physicsBall.y = physicsPos.y;
+        physicsBall.vx = 0;
+        physicsBall.vy = 0;
+        physicsBall.spinX = 0;
+        physicsBall.spinY = 0;
+        physicsBall.spinZ = 0;
+      }
+      gameStore.updateBall(id, {
+        position: pos.clone(),
+        velocity: new THREE.Vector3(0, 0, 0),
+        angularVelocity: new THREE.Vector3(0, 0, 0),
+        isPocketed: false,
+      });
+    };
+
+    setBall('cueBall', cuePos);
+    setBall('objectBall1', obj1Pos);
+    setBall('objectBall2', obj2Pos);
+    physicsAccumulatorRef.current = 0;
+
+    gameStore.setPhase('AIMING');
+    gameStore.setAimControlMode('MANUAL_AIM');
+    const alignedDirectionDeg = directionDegFromCueToTarget(cuePos, obj1Pos);
+    gameStore.setShotDirection(alignedDirectionDeg);
+    gameStore.setDragPower(preset.dragPx);
+    gameStore.setImpactOffset(preset.impactOffsetX, preset.impactOffsetY);
+    gameStore.setCueElevation(preset.cueElevationDeg);
+    gameStore.setTurnMessage(`DEBUG ${name} PRESET APPLIED (HEAD-ON LOCK)`);
+  };
+
+  useEffect(() => {
+    if (!DEBUG_PRESET_ENABLED) {
+      prevPhaseRef.current = gameStore.phase;
+      return;
+    }
+
+    const prevPhase = prevPhaseRef.current;
+    const enteredAimingFromShot =
+      gameStore.phase === 'AIMING' && (prevPhase === 'SHOOTING' || prevPhase === 'SIMULATING' || prevPhase === 'SCORING');
+
+    if (enteredAimingFromShot) {
+      applyDebugPreset();
+    }
+
+    prevPhaseRef.current = gameStore.phase;
+  }, [gameStore.phase]);
 
   useEffect(() => {
     if (captureParams.cam === 'top') {
@@ -187,19 +374,35 @@ function GameWorld() {
     scene3d.add(cloth);
 
     const frameThickness = 0.15;
-    const totalWidth = TABLE_WIDTH + frameThickness * 2;
-    const totalHeight = TABLE_HEIGHT + frameThickness * 2;
+    const cushionHeight = PHYSICS.CUSHION_HEIGHT;
+    const cushionThickness = PHYSICS.CUSHION_THICKNESS;
+    const frameOuterOffset = cushionThickness + frameThickness / 2;
+    const totalWidth = TABLE_WIDTH + (cushionThickness + frameThickness) * 2;
+    const totalHeight = TABLE_HEIGHT + (cushionThickness + frameThickness) * 2;
 
     const frameMat = new THREE.MeshStandardMaterial({
       color: 0x3a2a1f,
       roughness: 0.62,
       metalness: 0.06,
     });
+    const frameY = cushionHeight / 2;
     const frameConfigs = [
-      { pos: [0, 0.055, -TABLE_HEIGHT / 2 - frameThickness / 2], size: [totalWidth, 0.11, frameThickness] },
-      { pos: [0, 0.055, TABLE_HEIGHT / 2 + frameThickness / 2], size: [totalWidth, 0.11, frameThickness] },
-      { pos: [-TABLE_WIDTH / 2 - frameThickness / 2, 0.055, 0], size: [frameThickness, 0.11, TABLE_HEIGHT] },
-      { pos: [TABLE_WIDTH / 2 + frameThickness / 2, 0.055, 0], size: [frameThickness, 0.11, TABLE_HEIGHT] },
+      {
+        pos: [0, frameY, -TABLE_HEIGHT / 2 - frameOuterOffset],
+        size: [totalWidth, cushionHeight, frameThickness],
+      },
+      {
+        pos: [0, frameY, TABLE_HEIGHT / 2 + frameOuterOffset],
+        size: [totalWidth, cushionHeight, frameThickness],
+      },
+      {
+        pos: [-TABLE_WIDTH / 2 - frameOuterOffset, frameY, 0],
+        size: [frameThickness, cushionHeight, totalHeight],
+      },
+      {
+        pos: [TABLE_WIDTH / 2 + frameOuterOffset, frameY, 0],
+        size: [frameThickness, cushionHeight, totalHeight],
+      },
     ];
 
     frameConfigs.forEach((cfg) => {
@@ -233,8 +436,6 @@ function GameWorld() {
     backApron.castShadow = true;
     scene3d.add(backApron);
 
-    const cushionThickness = PHYSICS.CUSHION_THICKNESS;
-    const cushionHeight = PHYSICS.CUSHION_HEIGHT;
     const cushionMat = new THREE.MeshStandardMaterial({
       color: 0x2d57dc,
       roughness: 0.6,
@@ -245,6 +446,23 @@ function GameWorld() {
       { pos: [0, cushionHeight / 2, TABLE_HEIGHT / 2 + cushionThickness / 2], size: [TABLE_WIDTH, cushionHeight, cushionThickness] },
       { pos: [-TABLE_WIDTH / 2 - cushionThickness / 2, cushionHeight / 2, 0], size: [cushionThickness, cushionHeight, TABLE_HEIGHT] },
       { pos: [TABLE_WIDTH / 2 + cushionThickness / 2, cushionHeight / 2, 0], size: [cushionThickness, cushionHeight, TABLE_HEIGHT] },
+      // Corner fillers: close visual gaps between long/short cushion segments.
+      {
+        pos: [-TABLE_WIDTH / 2 - cushionThickness / 2, cushionHeight / 2, -TABLE_HEIGHT / 2 - cushionThickness / 2],
+        size: [cushionThickness, cushionHeight, cushionThickness],
+      },
+      {
+        pos: [TABLE_WIDTH / 2 + cushionThickness / 2, cushionHeight / 2, -TABLE_HEIGHT / 2 - cushionThickness / 2],
+        size: [cushionThickness, cushionHeight, cushionThickness],
+      },
+      {
+        pos: [-TABLE_WIDTH / 2 - cushionThickness / 2, cushionHeight / 2, TABLE_HEIGHT / 2 + cushionThickness / 2],
+        size: [cushionThickness, cushionHeight, cushionThickness],
+      },
+      {
+        pos: [TABLE_WIDTH / 2 + cushionThickness / 2, cushionHeight / 2, TABLE_HEIGHT / 2 + cushionThickness / 2],
+        size: [cushionThickness, cushionHeight, cushionThickness],
+      },
     ];
 
     cushionConfigs.forEach((cfg) => {
@@ -260,9 +478,17 @@ function GameWorld() {
   };
 
   const createDiamondMarkers = (scene3d: THREE.Scene) => {
+    const cushionThickness = PHYSICS.CUSHION_THICKNESS;
+    const cushionHeight = PHYSICS.CUSHION_HEIGHT;
     const frameThickness = 0.15;
-    const markerGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.002, 16);
+    const frameOuterOffset = cushionThickness + frameThickness / 2;
+    const markerRadius = 0.008;
+    const markerDepth = 0.002;
+    const markerGeo = new THREE.CylinderGeometry(markerRadius, markerRadius, markerDepth, 16);
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xd7d0c2 });
+    const markerY = cushionHeight + markerDepth / 2 + 0.0005;
+    const longRailZ = TABLE_HEIGHT / 2 + frameOuterOffset;
+    const shortRailX = TABLE_WIDTH / 2 + frameOuterOffset;
 
     const longRailMarkers = 9;
     for (let i = 0; i < longRailMarkers; i += 1) {
@@ -270,13 +496,13 @@ function GameWorld() {
       const x = (t - 0.5) * TABLE_WIDTH;
 
       const top = new THREE.Mesh(markerGeo, markerMat);
-      top.rotation.x = Math.PI / 2;
-      top.position.set(x, 0.112, -TABLE_HEIGHT / 2 - frameThickness / 2);
+      top.rotation.x = -Math.PI / 2;
+      top.position.set(x, markerY, -longRailZ);
       scene3d.add(top);
 
       const bottom = new THREE.Mesh(markerGeo, markerMat);
-      bottom.rotation.x = Math.PI / 2;
-      bottom.position.set(x, 0.112, TABLE_HEIGHT / 2 + frameThickness / 2);
+      bottom.rotation.x = -Math.PI / 2;
+      bottom.position.set(x, markerY, longRailZ);
       scene3d.add(bottom);
     }
 
@@ -286,38 +512,76 @@ function GameWorld() {
       const z = (t - 0.5) * TABLE_HEIGHT;
 
       const left = new THREE.Mesh(markerGeo, markerMat);
-      left.rotation.z = Math.PI / 2;
-      left.position.set(-TABLE_WIDTH / 2 - frameThickness / 2, 0.112, z);
+      left.rotation.x = -Math.PI / 2;
+      left.position.set(-shortRailX, markerY, z);
       scene3d.add(left);
 
       const right = new THREE.Mesh(markerGeo, markerMat);
-      right.rotation.z = Math.PI / 2;
-      right.position.set(TABLE_WIDTH / 2 + frameThickness / 2, 0.112, z);
+      right.rotation.x = -Math.PI / 2;
+      right.position.set(shortRailX, markerY, z);
       scene3d.add(right);
     }
   };
 
   const executeShot = () => {
-    const cueBall = physicsBallsRef.current.find((ball) => ball.id === 'cueBall');
+    const cueBall = physicsBallsRef.current.find((ball) => ball.id === gameStore.activeCueBallId);
     if (!cueBall) {
       return;
     }
+    const impactOffsetXForPhysics = -gameStore.shotInput.impactOffsetX;
 
-    if (isMiscue(gameStore.shotInput.impactOffsetX, gameStore.shotInput.impactOffsetY, BALL_RADIUS)) {
+    if (isMiscue(impactOffsetXForPhysics, gameStore.shotInput.impactOffsetY, BALL_RADIUS)) {
       gameStore.setTurnMessage('MISCUE!');
     }
 
     const shotInit = computeShotInitialization({
       dragPx: gameStore.shotInput.dragPx,
-      impactOffsetX: gameStore.shotInput.impactOffsetX,
+      impactOffsetX: impactOffsetXForPhysics,
       impactOffsetY: gameStore.shotInput.impactOffsetY,
     });
 
+    if (typeof window !== 'undefined') {
+      const cue = gameStore.balls.find((ball) => ball.id === gameStore.activeCueBallId)?.position;
+      const obj1 = gameStore.balls.find((ball) => ball.id === 'objectBall1')?.position;
+      const obj2 = gameStore.balls.find((ball) => ball.id !== gameStore.activeCueBallId && ball.id !== 'objectBall1')?.position;
+      const playableWidth = PHYSICS.TABLE_WIDTH - PHYSICS.BALL_RADIUS * 2;
+      const playableHeight = PHYSICS.TABLE_HEIGHT - PHYSICS.BALL_RADIUS * 2;
+      const startRatioX = cue
+        ? Math.max(0, Math.min(1, (cue.x + PHYSICS.TABLE_WIDTH / 2 - PHYSICS.BALL_RADIUS) / playableWidth))
+        : 0.5;
+      const startRatioY = cue
+        ? Math.max(0, Math.min(1, (cue.z + PHYSICS.TABLE_HEIGHT / 2 - PHYSICS.BALL_RADIUS) / playableHeight))
+        : 0.5;
+      const lastShotLine =
+        `startRatioX:${startRatioX.toFixed(3)} ` +
+        `startRatioY:${startRatioY.toFixed(3)} ` +
+        `directionDeg:${gameStore.shotInput.shotDirectionDeg.toFixed(1)} ` +
+        `speedMps:${shotInit.initialBallSpeedMps.toFixed(3)} ` +
+        `spinZ:${shotInit.omegaZ.toFixed(3)} ` +
+        `dragPx:${gameStore.shotInput.dragPx.toFixed(1)} ` +
+        `impactOffsetX(UI):${gameStore.shotInput.impactOffsetX.toFixed(4)} ` +
+        `impactOffsetX(phys):${impactOffsetXForPhysics.toFixed(4)} ` +
+        `impactOffsetY:${gameStore.shotInput.impactOffsetY.toFixed(4)} ` +
+        `cueX:${(cue?.x ?? 0).toFixed(4)} ` +
+        `cueZ:${(cue?.z ?? 0).toFixed(4)} ` +
+        `obj1X:${(obj1?.x ?? 0).toFixed(4)} ` +
+        `obj1Z:${(obj1?.z ?? 0).toFixed(4)} ` +
+        `obj2X:${(obj2?.x ?? 0).toFixed(4)} ` +
+        `obj2Z:${(obj2?.z ?? 0).toFixed(4)}`;
+      window.sessionStorage.setItem('bhc.lastShotDebugLine', lastShotLine);
+    }
+    debugTracePartsRef.current = [];
+    traceEventIndexRef.current = 0;
+    traceWasTruncatedRef.current = false;
+    lastCueCushionEventRef.current = null;
+
     const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
-    cueBall.vx = Math.sin(directionRad) * shotInit.initialBallSpeedMps;
-    cueBall.vy = Math.cos(directionRad) * shotInit.initialBallSpeedMps;
-    cueBall.spinX = shotInit.omegaX;
-    cueBall.spinY = 0;
+    const forwardX = Math.sin(directionRad);
+    const forwardY = Math.cos(directionRad);
+    cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
+    cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
+    cueBall.spinX = shotInit.omegaX * forwardY;
+    cueBall.spinY = -shotInit.omegaX * forwardX;
     cueBall.spinZ = shotInit.omegaZ;
 
     gameStore.executeShot();
@@ -398,11 +662,24 @@ function GameWorld() {
         case 'r':
           gameStore.resetShot();
           break;
+        case '7':
+          if (DEBUG_PRESET_ENABLED) {
+            applyDebugPreset('TOPSPIN');
+          }
+          break;
+        case '8':
+          if (DEBUG_PRESET_ENABLED) {
+            applyDebugPreset('BACKSPIN');
+          }
+          break;
+        case '6':
+          if (DEBUG_PRESET_ENABLED) {
+            applyDebugPreset('CENTER');
+          }
+          break;
         case 'm':
         case 'ㅡ':
-          gameStore.setAimControlMode(
-            gameStore.shotInput.aimControlMode === 'AUTO_SYNC' ? 'MANUAL_AIM' : 'AUTO_SYNC',
-          );
+          gameStore.setAimControlMode('AUTO_SYNC');
           break;
         case 'arrowleft':
           if (gameStore.shotInput.aimControlMode === 'MANUAL_AIM') {
@@ -437,6 +714,7 @@ function GameWorld() {
     }
 
     const cfg = physicsConfigRef.current;
+    const activeCueBallId = gameStore.activeCueBallId;
     physicsAccumulatorRef.current += delta;
 
     while (physicsAccumulatorRef.current >= cfg.dtSec) {
@@ -444,17 +722,63 @@ function GameWorld() {
       const cueObjectHits = new Set<string>();
 
       stepRoomPhysicsWorld(balls, cfg, {
-        applyCushionContactThrow,
         onCushionCollision: (ball, cushionId) => {
-          if (ball.id === 'cueBall') {
+          if (ball.id === activeCueBallId) {
             cueCushionContacts.add(cushionId);
+            const nowMs = performance.now();
+            const prev = lastCueCushionEventRef.current;
+            if (
+              prev &&
+              prev.cushionId === cushionId &&
+              nowMs - prev.atMs < CUSHION_TRACE_DEDUPE_WINDOW_MS
+            ) {
+              return;
+            }
+            lastCueCushionEventRef.current = { cushionId, atMs: nowMs };
+            if (debugTracePartsRef.current.length >= MAX_DEBUG_TRACE_EVENTS) {
+              traceWasTruncatedRef.current = true;
+              return;
+            }
+            traceEventIndexRef.current += 1;
+            debugTracePartsRef.current.push(
+              `E${traceEventIndexRef.current}:CUSH(${cushionId})` +
+                `[v:${Math.hypot(ball.vx, ball.vy).toFixed(3)}` +
+                ` hd:${headingDeg(ball.vx, ball.vy).toFixed(1)}` +
+                ` spinX:${ball.spinX.toFixed(1)}` +
+                ` spinY:${ball.spinY.toFixed(1)}` +
+                ` spinZ:${ball.spinZ.toFixed(1)}]`,
+            );
           }
         },
         onBallCollision: (first, second) => {
-          if (first.id === 'cueBall' && second.id !== 'cueBall') {
+          if (first.id === activeCueBallId && second.id !== activeCueBallId) {
             cueObjectHits.add(second.id);
-          } else if (second.id === 'cueBall' && first.id !== 'cueBall') {
+            if (debugTracePartsRef.current.length >= MAX_DEBUG_TRACE_EVENTS) {
+              traceWasTruncatedRef.current = true;
+              return;
+            }
+            traceEventIndexRef.current += 1;
+            debugTracePartsRef.current.push(
+              `E${traceEventIndexRef.current}:BALL(${second.id})` +
+                `[v:${Math.hypot(first.vx, first.vy).toFixed(3)}` +
+                ` hd:${headingDeg(first.vx, first.vy).toFixed(1)}` +
+                ` spinX:${first.spinX.toFixed(1)}` +
+                ` spinZ:${first.spinZ.toFixed(1)}]`,
+            );
+          } else if (second.id === activeCueBallId && first.id !== activeCueBallId) {
             cueObjectHits.add(first.id);
+            if (debugTracePartsRef.current.length >= MAX_DEBUG_TRACE_EVENTS) {
+              traceWasTruncatedRef.current = true;
+              return;
+            }
+            traceEventIndexRef.current += 1;
+            debugTracePartsRef.current.push(
+              `E${traceEventIndexRef.current}:BALL(${first.id})` +
+                `[v:${Math.hypot(second.vx, second.vy).toFixed(3)}` +
+                ` hd:${headingDeg(second.vx, second.vy).toFixed(1)}` +
+                ` spinX:${second.spinX.toFixed(1)}` +
+                ` spinZ:${second.spinZ.toFixed(1)}]`,
+            );
           }
         },
       });
@@ -482,14 +806,25 @@ function GameWorld() {
 
     if (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING') {
       const allStopped = balls.every((ball) => ball.isPocketed || Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps);
-      if (allStopped) {
+      if (allStopped && !turnEndHandledRef.current) {
+        turnEndHandledRef.current = true;
+        if (typeof window !== 'undefined') {
+          const traceSuffix = traceWasTruncatedRef.current
+            ? ` | ...TRUNCATED(max=${MAX_DEBUG_TRACE_EVENTS})`
+            : '';
+          const rawTraceLine = debugTracePartsRef.current.join(' | ') + traceSuffix;
+          const traceLine = rawTraceLine.length > MAX_DEBUG_TRACE_CHARS
+            ? `${rawTraceLine.slice(0, MAX_DEBUG_TRACE_CHARS)} | ...TRUNCATED(chars=${MAX_DEBUG_TRACE_CHARS})`
+            : rawTraceLine;
+          window.sessionStorage.setItem('bhc.lastShotTraceLine', traceLine);
+        }
         gameStore.handleTurnEnd();
-      } else {
+      } else if (!allStopped) {
         gameStore.setPhase('SIMULATING');
       }
     }
 
-    const cueBallRef = ballsRef.current.get('cueBall');
+    const cueBallRef = ballsRef.current.get(activeCueBallId);
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
       tempDir.current.copy(cueBallRef.mesh.position).sub(camera.position);
       tempDir.current.y = 0;
@@ -509,6 +844,8 @@ function GameWorld() {
         cueBallRef.mesh.position,
         gameStore.shotInput.shotDirectionDeg,
         gameStore.shotInput.cueElevationDeg,
+        -gameStore.shotInput.impactOffsetX,
+        gameStore.shotInput.impactOffsetY,
         gameStore.shotInput.dragPx,
         gameStore.isDragging,
       );
@@ -532,7 +869,8 @@ function GameWorld() {
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
       const cue = cueBallRef.mesh.position;
       const object1 = ballsRef.current.get('objectBall1')?.mesh.position;
-      const object2 = ballsRef.current.get('objectBall2')?.mesh.position;
+      const object2Id = gameStore.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
+      const object2 = ballsRef.current.get(object2Id)?.mesh.position;
       if (object1 && object2) {
         const guideY = BALL_RADIUS + 0.01;
         const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
@@ -594,7 +932,7 @@ function GameWorld() {
 
         const objects = [
           { id: 'objectBall1', pos: object1 },
-          { id: 'objectBall2', pos: object2 },
+          { id: object2Id, pos: object2 },
         ];
         const objectRadius = BALL_RADIUS * 2;
         let bestObject: { id: string; pos: THREE.Vector3; t: number } | null = null;
@@ -634,17 +972,21 @@ function GameWorld() {
             impactOffsetY: gameStore.shotInput.impactOffsetY,
           });
           const speedForGuide = Math.max(5, shotInit.initialBallSpeedMps);
-          const collision = applyCushionContactThrow({
+          const collision = solveBallCushionImpulse({
             axis: boundaryHit.axis,
             vx: dir.x * speedForGuide,
             vy: dir.z * speedForGuide,
+            spinX: shotInit.omegaX,
+            spinY: 0,
             spinZ: shotInit.omegaZ,
             restitution: physicsConfigRef.current.cushionRestitution,
-            contactFriction: physicsConfigRef.current.cushionContactFriction,
-            referenceNormalSpeedMps: physicsConfigRef.current.cushionReferenceSpeedMps,
-            contactTimeExponent: physicsConfigRef.current.cushionContactTimeExponent,
+            friction: physicsConfigRef.current.cushionContactFriction,
             maxSpinMagnitude: physicsConfigRef.current.cushionMaxSpinMagnitude,
             maxThrowAngleDeg: physicsConfigRef.current.cushionMaxThrowAngleDeg,
+            ballMassKg: physicsConfigRef.current.ballMassKg,
+            ballRadiusM: physicsConfigRef.current.ballRadiusM,
+            ballInertiaKgM2:
+              (2 / 5) * physicsConfigRef.current.ballMassKg * physicsConfigRef.current.ballRadiusM * physicsConfigRef.current.ballRadiusM,
           });
           const post = new THREE.Vector3(collision.vx, 0, collision.vy);
           if (post.lengthSq() > 1e-8) {
@@ -666,9 +1008,11 @@ function GameWorld() {
 
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
       impactPointRef.current?.update(
-        gameStore.shotInput.impactOffsetX,
+        -gameStore.shotInput.impactOffsetX,
         gameStore.shotInput.impactOffsetY,
         cueBallRef.mesh.position,
+        gameStore.shotInput.shotDirectionDeg,
+        gameStore.shotInput.cueElevationDeg,
       );
       impactPointRef.current?.setVisible(true);
     } else {
@@ -686,6 +1030,8 @@ function GameWorld() {
         intensity={1.2}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.00012}
+        shadow-normalBias={0.02}
       />
       <directionalLight position={[5, 5, 5]} intensity={0.5} />
 

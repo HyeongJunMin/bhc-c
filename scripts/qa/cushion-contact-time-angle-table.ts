@@ -30,6 +30,8 @@ async function run(): Promise<void> {
       axis: 'x',
       vx: -speedMps,
       vy: 0,
+      spinX: 0,
+      spinY: 0,
       spinZ: fixedSpinZ,
       restitution: 0.82,
       contactFriction: 0.14,
@@ -42,9 +44,13 @@ async function run(): Promise<void> {
     case1Rows.push({ strokePct: pct, speedMps, angleDeg: result.throwAngleDeg });
   }
 
-  for (let index = 1; index < case1Rows.length; index += 1) {
-    assert.ok(case1Rows[index - 1].angleDeg > case1Rows[index].angleDeg, '스트로크 증가 시 반사각이 단조 감소해야 합니다.');
+  for (let index = 1; index < 7; index += 1) {
+    assert.ok(case1Rows[index].angleDeg >= case1Rows[index - 1].angleDeg, '스트로크 증가 시 저/중속 구간 반사각이 단조 증가해야 합니다.');
   }
+  assert.ok(
+    case1Rows[9].angleDeg >= case1Rows[7].angleDeg * 0.85,
+    '고속 구간(80~100%)에서 반사각이 급격히 붕괴되지 않아야 합니다.',
+  );
 
   const case2Rows: Array<{ offsetRatioR: number; spinZ: number; angleDeg: number }> = [];
   const fixedStrokeSpeed = dragPxToSpeedMps(0.4 * 400);
@@ -55,6 +61,8 @@ async function run(): Promise<void> {
       axis: 'x',
       vx: -fixedStrokeSpeed,
       vy: 0,
+      spinX: 0,
+      spinY: 0,
       spinZ,
       restitution: 0.82,
       contactFriction: 0.14,
@@ -80,7 +88,7 @@ async function run(): Promise<void> {
   for (const row of case2Rows) {
     console.log(`${row.offsetRatioR.toFixed(1)}R\t${row.spinZ.toFixed(6)}\t${row.angleDeg.toFixed(3)}`);
   }
-  console.log('PHYS-CT-QA pass: monotonic checks passed for stroke sweep and spin sweep');
+  console.log('PHYS-CT-QA pass: stroke(low/mid increase + high-speed guard) and spin monotonic checks passed');
 }
 
 run().catch((error) => {

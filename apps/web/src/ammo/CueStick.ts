@@ -15,6 +15,7 @@ export class CueStick {
   private readonly CUE_LENGTH = 1.5; // 1.5m
   private readonly CUE_RADIUS = 0.012; // 12mm
   private readonly TIP_LENGTH = 0.02;
+  private readonly IMPACT_FACE_OFFSET = 0.031;
   
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -118,6 +119,8 @@ export class CueStick {
    * @param cueBallPos 수구 위치
    * @param directionDeg 수평 방향 (도)
    * @param elevationDeg 고각 (도)
+   * @param impactOffsetX 좌우 당점 오프셋 (m)
+   * @param impactOffsetY 상하 당점 오프셋 (m)
    * @param dragPx 드래그 거리 (파워)
    * @param isDragging 드래그 중 여부
    */
@@ -125,6 +128,8 @@ export class CueStick {
     cueBallPos: THREE.Vector3,
     directionDeg: number,
     elevationDeg: number,
+    impactOffsetX: number,
+    impactOffsetY: number,
     dragPx: number,
     isDragging: boolean
   ): void {
@@ -133,9 +138,19 @@ export class CueStick {
     // 라디안 변환
     const directionRad = (directionDeg * Math.PI) / 180;
     const elevationRad = (elevationDeg * Math.PI) / 180;
+
+    // 큐 회전 기준(당점/큐 축 동기화용)
+    const cueEuler = new THREE.Euler(-elevationRad, directionRad, 0, 'YXZ');
+    const cueQuat = new THREE.Quaternion().setFromEuler(cueEuler);
     
-    // 큐 위치 계산
-    this.mesh.position.copy(cueBallPos);
+    // 큐 위치 계산: 당점(수구 타격면) 기준으로 큐 축을 이동
+    const localImpactOffset = new THREE.Vector3(impactOffsetX, impactOffsetY, 0);
+    const worldImpactOffset = localImpactOffset.applyQuaternion(cueQuat);
+    const cueAxisForward = new THREE.Vector3(0, 0, 1).applyQuaternion(cueQuat);
+    this.mesh.position
+      .copy(cueBallPos)
+      .add(worldImpactOffset)
+      .addScaledVector(cueAxisForward, -this.IMPACT_FACE_OFFSET);
     
     // 회전 적용
     this.mesh.rotation.y = directionRad;

@@ -7,7 +7,6 @@ import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
-import { applyCushionContactThrow } from '../game/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
 import { evaluateChatRateLimit, recordLastChatSentAt, type UserLastSentAtStore } from '../chat/rate-limit.ts';
 import { increaseScoreAndCheckGameEnd } from '../game/score-policy.ts';
@@ -18,6 +17,7 @@ import {
   createRoomPhysicsStepConfig,
 } from '../../../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld } from '../../../../packages/physics-core/src/room-physics-step.ts';
+import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
 
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
@@ -371,16 +371,6 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function dragPxToSpeedMps(dragPx: number): number {
-  const minPx = 10;
-  const maxPx = 400;
-  const minSpeed = 1;
-  const maxSpeed = 13.89;
-  const clamped = clampNumber(dragPx, minPx, maxPx);
-  const alpha = (clamped - minPx) / (maxPx - minPx);
-  return minSpeed + (maxSpeed - minSpeed) * alpha;
-}
-
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
   const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
   if (!cueBall) {
@@ -391,12 +381,18 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   const impactOffsetX = clampNumber(Number(payload.impactOffsetX), -0.9, 0.9);
   const impactOffsetY = clampNumber(Number(payload.impactOffsetY), -0.9, 0.9);
   const directionRad = (directionDeg * Math.PI) / 180;
-  const speed = dragPxToSpeedMps(dragPx);
-  cueBall.vx = Math.cos(directionRad) * speed;
-  cueBall.vy = Math.sin(directionRad) * speed;
-  cueBall.spinX = impactOffsetY * 20;
-  cueBall.spinY = 0;
-  cueBall.spinZ = impactOffsetX * 20;
+  const shotInit = computeShotInitialization({
+    dragPx,
+    impactOffsetX,
+    impactOffsetY,
+  });
+  const forwardX = Math.cos(directionRad);
+  const forwardY = Math.sin(directionRad);
+  cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
+  cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
+  cueBall.spinX = shotInit.omegaX * forwardY;
+  cueBall.spinY = -shotInit.omegaX * forwardX;
+  cueBall.spinZ = shotInit.omegaZ;
 }
 
 function getCurrentShotAtMs(room: LobbyRoom): number {
@@ -447,7 +443,6 @@ function updateShotEnergyReport(room: LobbyRoom): void {
 
 function stepRoomPhysics(room: LobbyRoom): void {
   const stats = stepRoomPhysicsWorld(room.balls, ROOM_PHYSICS_STEP_CONFIG, {
-    applyCushionContactThrow,
     onCushionCollision: (ball, cushionId) => {
       appendShotEvent(room, {
         type: 'CUSHION_COLLISION',

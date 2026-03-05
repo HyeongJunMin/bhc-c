@@ -2,9 +2,9 @@ import type { StepRoomPhysicsConfig } from './room-physics-step.ts';
 import { TABLE_GEOMETRY } from '../../shared-types/src/table-geometry.ts';
 
 export const ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS = 50;
-export const ROOM_PHYSICS_SUBSTEPS = 4;
+export const ROOM_PHYSICS_SUBSTEPS = 12;
 export const ROOM_PHYSICS_LINEAR_DAMPING_PER_TICK = 0.975;
-export const ROOM_PHYSICS_SPIN_DAMPING_PER_TICK = 0.97;
+export const ROOM_PHYSICS_SPIN_DAMPING_PER_TICK = 0.985;
 export const ROOM_PHYSICS_TABLE_WIDTH_M = TABLE_GEOMETRY.tableInnerWidthM;
 export const ROOM_PHYSICS_TABLE_HEIGHT_M = TABLE_GEOMETRY.tableInnerHeightM;
 export const ROOM_PHYSICS_BALL_RADIUS_M = TABLE_GEOMETRY.ballRadiusM;
@@ -17,9 +17,13 @@ export const ROOM_PHYSICS_CUSHION_RESTITUTION = 0.72;
 export const ROOM_PHYSICS_CUSHION_CONTACT_FRICTION = 0.14;
 export const ROOM_PHYSICS_CUSHION_REFERENCE_SPEED_MPS = 5.957692307692308;
 export const ROOM_PHYSICS_CUSHION_CONTACT_TIME_EXPONENT = 1.2;
-export const ROOM_PHYSICS_CUSHION_MAX_SPIN_MAGNITUDE = 0.615;
+// Runtime spinZ is angular velocity(rad/s), not normalized offset.
+// Use a realistic angular-speed scale so throw does not saturate at all times.
+export const ROOM_PHYSICS_CUSHION_MAX_SPIN_MAGNITUDE = 320;
 export const ROOM_PHYSICS_CUSHION_MAX_THROW_ANGLE_DEG = 55;
 export const ROOM_PHYSICS_CUSHION_POST_COLLISION_SPEED_SCALE = 0.95;
+export const ROOM_PHYSICS_CLOTH_LINEAR_SPIN_COUPLING_PER_SEC = 4.2;
+export const ROOM_PHYSICS_CLOTH_ANGULAR_SPIN_COUPLING_PER_SEC = 0;
 export const ROOM_PHYSICS_RECOVERY_FALLBACK_ENABLED = true;
 export const ROOM_PHYSICS_MAX_SUBSTEP_ENERGY_GAIN_J = 0.03;
 
@@ -43,6 +47,8 @@ export function createRoomPhysicsStepConfig(): StepRoomPhysicsConfig {
     cushionMaxSpinMagnitude: ROOM_PHYSICS_CUSHION_MAX_SPIN_MAGNITUDE,
     cushionMaxThrowAngleDeg: ROOM_PHYSICS_CUSHION_MAX_THROW_ANGLE_DEG,
     cushionPostCollisionSpeedScale: ROOM_PHYSICS_CUSHION_POST_COLLISION_SPEED_SCALE,
+    clothLinearSpinCouplingPerSec: ROOM_PHYSICS_CLOTH_LINEAR_SPIN_COUPLING_PER_SEC,
+    clothAngularSpinCouplingPerSec: ROOM_PHYSICS_CLOTH_ANGULAR_SPIN_COUPLING_PER_SEC,
     recoveryFallbackEnabled: ROOM_PHYSICS_RECOVERY_FALLBACK_ENABLED,
     maxSubstepEnergyGainJ: ROOM_PHYSICS_MAX_SUBSTEP_ENERGY_GAIN_J,
   };
