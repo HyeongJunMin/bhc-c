@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber';
-import { OrthographicCamera, Environment } from '@react-three/drei';
+import { OrthographicCamera, Environment, Line } from '@react-three/drei';
 import { Sphere } from '@react-three/drei';
 import { BilliardTable } from '../BilliardTable';
 import { TrajectoryLine } from './TrajectoryLine';
@@ -35,9 +35,10 @@ type Props = {
   analysis: TrajectoryAnalysis | null;
   currentFrame: number;
   initialBalls?: InitialBall[];
+  directionDeg?: number;
 };
 
-function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls }: Props) {
+function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls, directionDeg }: Props) {
   const ballIds = ['cueBall', 'objectBall1', 'objectBall2'];
 
   // Current ball positions from actual simulation at the playback frame
@@ -55,6 +56,20 @@ function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls }
         speed: 0,
       }))
     ?? [];
+
+  // Direction preview line (only when no simulation result)
+  const cueBall = currentBalls.find((b) => b.id === 'cueBall');
+  const showDirectionLine = !actual && cueBall && directionDeg !== undefined;
+  const directionPoints: [number, number, number][] = [];
+  if (showDirectionLine) {
+    const start = toThree(cueBall.x, cueBall.z);
+    const rad = (directionDeg * Math.PI) / 180;
+    const lineLength = 2.5; // meters
+    const endX = cueBall.x + Math.cos(rad) * lineLength;
+    const endZ = cueBall.z + Math.sin(rad) * lineLength;
+    const end = toThree(endX, endZ);
+    directionPoints.push(start, end);
+  }
 
   return (
     <>
@@ -100,6 +115,21 @@ function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls }
         <DeviationMarkers analysis={analysis} actual={actual} />
       )}
 
+      {/* Direction preview line (dashed) */}
+      {showDirectionLine && directionPoints.length === 2 && (
+        <Line
+          points={directionPoints}
+          color="#fbbf24"
+          lineWidth={2}
+          dashed
+          dashScale={10}
+          dashSize={0.05}
+          gapSize={0.03}
+          transparent
+          opacity={0.7}
+        />
+      )}
+
       {/* Current frame ball positions */}
       {currentBalls.map((ball) => {
         const pos = toThree(ball.x, ball.z);
@@ -120,7 +150,7 @@ function SceneContent({ actual, baseline, analysis, currentFrame, initialBalls }
   );
 }
 
-export function TestScene({ actual, baseline, analysis, currentFrame, initialBalls }: Props) {
+export function TestScene({ actual, baseline, analysis, currentFrame, initialBalls, directionDeg }: Props) {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
@@ -144,6 +174,7 @@ export function TestScene({ actual, baseline, analysis, currentFrame, initialBal
           analysis={analysis}
           currentFrame={currentFrame}
           initialBalls={initialBalls}
+          directionDeg={directionDeg}
         />
       </Canvas>
 

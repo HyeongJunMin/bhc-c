@@ -7,6 +7,8 @@ import { evaluateRoomJoin } from '../room/join-policy.ts';
 import { startGameRequest } from '../game/start-policy.ts';
 import { transitionShotLifecycleState, type ShotLifecycleState } from '../game/shot-state-machine.ts';
 import type { PhysicsEvent } from '../../../../packages/physics-core/src/physics-events.ts';
+import { adaptPhysicsEventsToScore } from '../../../../packages/physics-core/src/score-adapter.ts';
+import { resolveTurnAfterShot } from '../../../../packages/physics-core/src/turn-resolution.ts';
 import { serializeRoomSnapshot, type SnapshotBallFrame } from '../game/snapshot-serializer.ts';
 import { applyCushionContactThrow } from '../../../../packages/physics-core/src/cushion-contact-throw.ts';
 import { handleShotInputEntry } from '../input/shot-input-entry.ts';
@@ -334,6 +336,7 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
   }, {});
   room.balls = createInitialRoomBalls();
   room.shotEndTracker = initShotEndTracker();
+  room.turnEvents = [];
 }
 
 function createInitialRoomBalls(): SnapshotBallFrame[] {
@@ -449,6 +452,7 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   cueBall.spinZ = 0;
   cueBall.motionState = 'SLIDING';
   room.shotEndTracker = initShotEndTracker();
+  room.turnEvents = [];
   if (ENABLE_SHOT_DEBUG_LOG) {
     console.log('[ShotDebug][server] shot_initialized', {
       roomId: room.roomId,
@@ -505,6 +509,13 @@ function stepRoomPhysics(room: LobbyRoom): void {
         const preSpinY = spinY;
         const preSpinZ = spinZ;
         x = clampNumber(x, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_WIDTH_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
+        const cushionId = x <= CUSHION_THICKNESS_M + BALL_RADIUS_M ? 'left' : 'right';
+        room.turnEvents.push({
+          type: 'CUSHION_COLLISION',
+          atMs: Date.now(),
+          sourceBallId: ball.id,
+          cushionId,
+        });
         const collision = applyCushionContactThrow({
           axis: 'x',
           vx,
@@ -583,6 +594,13 @@ function stepRoomPhysics(room: LobbyRoom): void {
         const preSpinY = spinY;
         const preSpinZ = spinZ;
         z = clampNumber(z, CUSHION_THICKNESS_M + BALL_RADIUS_M, TABLE_HEIGHT_M - CUSHION_THICKNESS_M - BALL_RADIUS_M);
+        const cushionId = z <= CUSHION_THICKNESS_M + BALL_RADIUS_M ? 'bottom' : 'top';
+        room.turnEvents.push({
+          type: 'CUSHION_COLLISION',
+          atMs: Date.now(),
+          sourceBallId: ball.id,
+          cushionId,
+        });
         const collision = applyCushionContactThrow({
           axis: 'y',
           vx,
@@ -664,7 +682,7 @@ function stepRoomPhysics(room: LobbyRoom): void {
       ball.spinZ = spinZ;
     }
 
-    resolveBallBallCollisions(room.balls, prevPositions, substepDtSec);
+    resolveBallBallCollisions(room, prevPositions, substepDtSec);
 
     for (const ball of room.balls) {
       if (ball.isPocketed) {
@@ -708,10 +726,11 @@ function stepRoomPhysics(room: LobbyRoom): void {
 }
 
 function resolveBallBallCollisions(
-  balls: SnapshotBallFrame[],
+  room: LobbyRoom,
   prevPositions: Array<{ x: number; z: number }>,
   substepDtSec: number,
 ): void {
+  const balls = room.balls;
   const minDistance = BALL_RADIUS_M * 2;
   const minDistanceSq = minDistance * minDistance;
   const epsilon = 1e-8;
@@ -796,6 +815,12 @@ function resolveBallBallCollisions(
           const normalY = hitDistance > epsilon ? hitDeltaZ / hitDistance : 0;
           const collided = applyImpulse(first, second, normalX, normalY);
           if (collided) {
+            room.turnEvents.push({
+              type: 'BALL_COLLISION',
+              atMs: Date.now(),
+              sourceBallId: first.id,
+              targetBallId: second.id,
+            });
             first.x = firstHitX;
             setBallZ(first, firstHitZ);
             second.x = secondHitX;
@@ -815,7 +840,15 @@ function resolveBallBallCollisions(
         const distance = Math.sqrt(Math.max(distanceSq, epsilon));
         const normalX = distance > epsilon ? deltaX / distance : 1;
         const normalY = distance > epsilon ? deltaZ / distance : 0;
-        applyImpulse(first, second, normalX, normalY);
+        const collided = applyImpulse(first, second, normalX, normalY);
+        if (collided) {
+          room.turnEvents.push({
+            type: 'BALL_COLLISION',
+            atMs: Date.now(),
+            sourceBallId: first.id,
+            targetBallId: second.id,
+          });
+        }
         const penetration = minDistance - distance;
         if (penetration > 0) {
           const correction = (Math.max(penetration - PENETRATION_SLOP_M, 0) / 2) * POSITION_CORRECTION_SCALE;
@@ -863,20 +896,31 @@ function areRoomBallsSettled(room: LobbyRoom): boolean {
 
 function finalizeShotLifecycle(state: LobbyState, room: LobbyRoom, actorMemberId: string): void {
   room.shotEndTracker = initShotEndTracker();
+  // 3쿠션 득점 판정
+  const scoreAdapterResult = adaptPhysicsEventsToScore({
+    cueBallId: 'cueBall',
+    objectBallIds: ['objectBall1', 'objectBall2'],
+    events: room.turnEvents,
+  });
+  const scored = scoreAdapterResult.scored;
   const resolved = transitionShotLifecycleState(room.shotState, 'SHOT_RESOLVED');
   if (resolved) {
     room.shotState = resolved;
-    const scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId);
+    // 득점 성공 시에만 점수 증가
+    let scoreResult: ReturnType<typeof increaseScoreAndCheckGameEnd> | null = null;
     let isGameFinished = false;
-    if (scoreResult.ok && scoreResult.gameEnded) {
-      room.state = 'FINISHED';
-      room.winnerMemberId = scoreResult.winnerPlayerId;
-      const winnerMemberId = scoreResult.winnerPlayerId;
-      room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
-        acc[member.memberId] = member.memberId === winnerMemberId ? 'WIN' : 'LOSE';
-        return acc;
-      }, {});
-      isGameFinished = true;
+    if (scored) {
+      scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId);
+      if (scoreResult.ok && scoreResult.gameEnded) {
+        room.state = 'FINISHED';
+        room.winnerMemberId = scoreResult.winnerPlayerId;
+        const winnerMemberId = scoreResult.winnerPlayerId;
+        room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
+          acc[member.memberId] = member.memberId === winnerMemberId ? 'WIN' : 'LOSE';
+          return acc;
+        }, {});
+        isGameFinished = true;
+      }
     }
     broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
       roomId: room.roomId,
@@ -903,13 +947,17 @@ function finalizeShotLifecycle(state: LobbyState, room: LobbyRoom, actorMemberId
       return;
     }
   }
+  // 턴 해결: 득점 실패 시에만 턴 전환
+  const turnResolution = resolveTurnAfterShot(scored);
   const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
   if (turnChanged) {
     room.shotState = turnChanged;
-    if (room.members.length > 0) {
-      room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
-    } else {
-      room.currentTurnIndex = 0;
+    if (turnResolution.shouldSwitchTurn) {
+      if (room.members.length > 0) {
+        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+      } else {
+        room.currentTurnIndex = 0;
+      }
     }
     room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
     broadcastRoomEvent(state, room.roomId, 'turn_changed', {

@@ -759,3 +759,98 @@ test('HUD 동기화: 샷 종료 후 turnDeadlineMs가 갱신되고 currentTurnIn
   assert.equal(created.room.members[created.room.currentTurnIndex]?.memberId, 'u2');
   assert.ok((created.room.turnDeadlineMs ?? 0) > previousDeadlineMs);
 });
+
+test('3쿠션 득점 성공 시 점수 증가 및 턴 유지', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'score-test' });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) return;
+
+  const initialScore = created.room.scoreBoard['u1'] ?? 0;
+  const initialTurnIndex = created.room.currentTurnIndex;
+
+  // 샷 제출 (turnEvents가 초기화됨)
+  submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 0,
+    cueElevationDeg: 0,
+    dragPx: 100,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+
+  // 샷 제출 후 3쿠션 이벤트 주입 (Mock)
+  created.room.turnEvents = [
+    { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cueBall', targetBallId: 'objectBall1' },
+    { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cueBall', cushionId: 'top' },
+    { type: 'CUSHION_COLLISION', atMs: 30, sourceBallId: 'cueBall', cushionId: 'left' },
+    { type: 'CUSHION_COLLISION', atMs: 40, sourceBallId: 'cueBall', cushionId: 'bottom' },
+    { type: 'BALL_COLLISION', atMs: 50, sourceBallId: 'cueBall', targetBallId: 'objectBall2' },
+  ];
+
+  forceBallsSettled(created.room);
+
+  // 득점 성공 확인
+  assert.equal(created.room.scoreBoard['u1'], initialScore + 1);
+  // 턴 유지 확인 (현재 턴 인덱스가 변경되지 않음)
+  assert.equal(created.room.currentTurnIndex, initialTurnIndex);
+});
+
+test('3쿠션 미충족(쿠션 2회) 시 득점 실패 및 턴 전환', async () => {
+  const { state } = createLobbyHttpServer();
+  const created = createRoom(state, { title: 'no-score-test' });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+
+  joinRoom(state, created.room.roomId, { memberId: 'u1', displayName: 'host' });
+  joinRoom(state, created.room.roomId, { memberId: 'u2', displayName: 'guest' });
+  const started = startRoomGame(state, created.room.roomId, 'u1');
+  assert.equal(started.ok, true);
+  if (!started.ok) return;
+
+  const initialScore = created.room.scoreBoard['u1'] ?? 0;
+
+  submitRoomShot(state, created.room.roomId, 'u1', {
+    schemaName: 'shot_input',
+    schemaVersion: '1.0.0',
+    roomId: created.room.roomId,
+    matchId: 'match-1',
+    turnId: 'turn-1',
+    playerId: 'u1',
+    clientTsMs: 1,
+    shotDirectionDeg: 0,
+    cueElevationDeg: 0,
+    dragPx: 100,
+    impactOffsetX: 0,
+    impactOffsetY: 0,
+  });
+
+  // 샷 제출 후 쿠션 2회만 이벤트 주입 (3쿠션 미충족)
+  created.room.turnEvents = [
+    { type: 'BALL_COLLISION', atMs: 10, sourceBallId: 'cueBall', targetBallId: 'objectBall1' },
+    { type: 'CUSHION_COLLISION', atMs: 20, sourceBallId: 'cueBall', cushionId: 'top' },
+    { type: 'CUSHION_COLLISION', atMs: 30, sourceBallId: 'cueBall', cushionId: 'left' },
+    { type: 'BALL_COLLISION', atMs: 40, sourceBallId: 'cueBall', targetBallId: 'objectBall2' },
+  ];
+
+  forceBallsSettled(created.room);
+  await waitUntil(() => created.room.currentTurnIndex === 1);
+
+  // 득점 실패 확인 (점수 변화 없음)
+  assert.equal(created.room.scoreBoard['u1'], initialScore);
+  // 턴 전환 확인 (다음 플레이어로 이동)
+  assert.equal(created.room.currentTurnIndex, 1);
+  assert.equal(created.room.members[created.room.currentTurnIndex]?.memberId, 'u2');
+});

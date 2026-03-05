@@ -222,6 +222,7 @@ export function TestSandboxPage() {
                   { id: 'objectBall1', x: input.balls.objectBall1.x, z: input.balls.objectBall1.z },
                   { id: 'objectBall2', x: input.balls.objectBall2.x, z: input.balls.objectBall2.z },
                 ]}
+                directionDeg={input.shot.directionDeg}
               />
             </div>
             <PlaybackSlider
