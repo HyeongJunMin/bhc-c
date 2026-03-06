@@ -25,7 +25,7 @@ export const CUSHION_CONTACT_REFERENCE_SPEED_MPS = 5.957692307692308;
 export const CUSHION_CONTACT_TIME_EXPONENT = 0.7;
 // Maximum effective spin (m/s) at cushion contact point for full throw scaling.
 // Computed as ω × r_contact tangential component; ~3.0 m/s corresponds to strong intentional english (~100 rad/s spinY).
-export const CUSHION_MAX_SPIN_MAGNITUDE = 3.0;
+export const CUSHION_MAX_SPIN_MAGNITUDE = 1.0;
 // Realistic max throw angle from cushion contact (intentional english at slow speed).
 export const CUSHION_MAX_THROW_ANGLE_DEG = 15;
 // Hard cap on speedScale to prevent throw divergence at very low post-collision speeds.

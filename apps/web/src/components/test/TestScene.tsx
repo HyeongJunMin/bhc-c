@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber';
 import { OrthographicCamera, Line } from '@react-three/drei';
 import type { SimResult, SimFrame } from '../../../../../packages/physics-core/src/standalone-simulator.ts';
+import { computeSquirtAngleRad } from '../../../../../packages/physics-core/src/squirt.ts';
 import { TrajectoryLine } from './TrajectoryLine.tsx';
 import { DeviationMarkers } from './DeviationMarkers.tsx';
 
@@ -40,10 +41,15 @@ type DirectionLineProps = {
   cueBallX: number;
   cueBallY: number;
   directionDeg: number;
+  impactOffsetX?: number;
 };
 
-function DirectionLine({ cueBallX, cueBallY, directionDeg }: DirectionLineProps) {
-  const rad = (directionDeg * Math.PI) / 180;
+function DirectionLine({ cueBallX, cueBallY, directionDeg, impactOffsetX }: DirectionLineProps) {
+  const squirtRad = computeSquirtAngleRad({
+    impactOffsetX: -(impactOffsetX ?? 0),
+    ballRadiusM: BALL_RADIUS,
+  });
+  const rad = (directionDeg * Math.PI) / 180 - squirtRad;
   const dx = Math.sin(rad);
   const dz = Math.cos(rad);
   const tx = cueBallX - TABLE_WIDTH / 2;
@@ -112,7 +118,7 @@ type SceneContentProps = {
   showBaseline: boolean;
   showDeviation: boolean;
   initialBalls?: Array<{ id: string; x: number; y: number }>;
-  shotDirection?: { directionDeg: number; cueBallId: string };
+  shotDirection?: { directionDeg: number; cueBallId: string; impactOffsetX?: number };
 };
 
 function SceneContent({ result, baselineResult, currentFrame, showBaseline, showDeviation, initialBalls, shotDirection }: SceneContentProps) {
@@ -166,7 +172,7 @@ function SceneContent({ result, baselineResult, currentFrame, showBaseline, show
       {/* Direction line before run */}
       {!result && initialBalls && shotDirection && (() => {
         const cb = initialBalls.find((b) => b.id === shotDirection.cueBallId);
-        return cb ? <DirectionLine cueBallX={cb.x} cueBallY={cb.y} directionDeg={shotDirection.directionDeg} /> : null;
+        return cb ? <DirectionLine cueBallX={cb.x} cueBallY={cb.y} directionDeg={shotDirection.directionDeg} impactOffsetX={shotDirection.impactOffsetX} /> : null;
       })()}
 
       {/* Deviation markers */}
@@ -191,7 +197,7 @@ type Props = {
   showDeviation?: boolean;
   height?: string;
   initialBalls?: Array<{ id: string; x: number; y: number }>;
-  shotDirection?: { directionDeg: number; cueBallId: string };
+  shotDirection?: { directionDeg: number; cueBallId: string; impactOffsetX?: number };
 };
 
 export function TestScene({

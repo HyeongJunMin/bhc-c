@@ -114,7 +114,7 @@ export function TestSandboxPage() {
             currentFrame={currentFrame}
             height="420px"
             initialBalls={config.balls}
-            shotDirection={{ directionDeg: config.shot.directionDeg, cueBallId: config.shot.cueBallId }}
+            shotDirection={{ directionDeg: config.shot.directionDeg, cueBallId: config.shot.cueBallId, impactOffsetX: config.shot.impactOffsetX }}
           />
 
           {result && (
