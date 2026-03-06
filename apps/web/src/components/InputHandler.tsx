@@ -72,13 +72,13 @@ export function InputHandler() {
         case 'KeyW':
           setImpactOffset(
             shotInput.impactOffsetX,
-            Math.max(-maxOffset, shotInput.impactOffsetY - step)
+            Math.min(maxOffset, shotInput.impactOffsetY + step)
           );
           break;
         case 'KeyS':
           setImpactOffset(
             shotInput.impactOffsetX,
-            Math.min(maxOffset, shotInput.impactOffsetY + step)
+            Math.max(-maxOffset, shotInput.impactOffsetY - step)
           );
           break;
         case 'KeyA':
