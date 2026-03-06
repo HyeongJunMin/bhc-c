@@ -18,6 +18,7 @@ import {
 } from '../../../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
+import { computeSquirtAngleRad } from '../../../../packages/physics-core/src/squirt.ts';
 
 const TURN_DURATION_MS = 10_000;
 const DISCONNECT_GRACE_MS = 10_000;
@@ -386,13 +387,16 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
     impactOffsetX,
     impactOffsetY,
   });
-  const forwardX = Math.cos(directionRad);
-  const forwardY = Math.sin(directionRad);
-  cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
-  cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
-  cueBall.spinX = shotInit.omegaX * forwardY;
-  cueBall.spinY = -shotInit.omegaX * forwardX;
-  cueBall.spinZ = shotInit.omegaZ;
+  const squirtAngleRad = computeSquirtAngleRad({
+    impactOffsetX,
+    ballRadiusM: 0.03075,
+  });
+  const finalDirectionRad = directionRad - squirtAngleRad;
+  cueBall.vx = Math.cos(finalDirectionRad) * shotInit.initialBallSpeedMps;
+  cueBall.vy = Math.sin(finalDirectionRad) * shotInit.initialBallSpeedMps;
+  cueBall.spinX = shotInit.omegaX;
+  cueBall.spinY = shotInit.omegaY;
+  cueBall.spinZ = 0;
 }
 
 function getCurrentShotAtMs(room: LobbyRoom): number {

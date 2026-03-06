@@ -13,7 +13,8 @@ import { createRoomPhysicsStepConfig } from '../../../../packages/physics-core/s
 import { stepRoomPhysicsWorld, type PhysicsBallState, type CushionId } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
 import { isMiscue } from '../../../../packages/physics-core/src/miscue.ts';
-import { solveBallCushionImpulse } from '../../../../packages/physics-core/src/solver/impulse-solver.ts';
+import { applyCushionContactThrow } from '../../../../packages/physics-core/src/cushion-contact-throw.ts';
+import { computeSquirtAngleRad } from '../../../../packages/physics-core/src/squirt.ts';
 
 // 테이블 스펙 (Unit: meters)
 const TABLE_WIDTH = PHYSICS.TABLE_WIDTH;
@@ -557,7 +558,7 @@ function GameWorld() {
         `startRatioY:${startRatioY.toFixed(3)} ` +
         `directionDeg:${gameStore.shotInput.shotDirectionDeg.toFixed(1)} ` +
         `speedMps:${shotInit.initialBallSpeedMps.toFixed(3)} ` +
-        `spinZ:${shotInit.omegaZ.toFixed(3)} ` +
+        `spinY:${shotInit.omegaY.toFixed(3)} ` +
         `dragPx:${gameStore.shotInput.dragPx.toFixed(1)} ` +
         `impactOffsetX(UI):${gameStore.shotInput.impactOffsetX.toFixed(4)} ` +
         `impactOffsetX(phys):${impactOffsetXForPhysics.toFixed(4)} ` +
@@ -576,13 +577,16 @@ function GameWorld() {
     lastCueCushionEventRef.current = null;
 
     const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
-    const forwardX = Math.sin(directionRad);
-    const forwardY = Math.cos(directionRad);
-    cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
-    cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
-    cueBall.spinX = shotInit.omegaX * forwardY;
-    cueBall.spinY = -shotInit.omegaX * forwardX;
-    cueBall.spinZ = shotInit.omegaZ;
+    const squirtAngleRad = computeSquirtAngleRad({
+      impactOffsetX: impactOffsetXForPhysics,
+      ballRadiusM: BALL_RADIUS,
+    });
+    const finalDirectionRad = directionRad - squirtAngleRad;
+    cueBall.vx = Math.sin(finalDirectionRad) * shotInit.initialBallSpeedMps;
+    cueBall.vy = Math.cos(finalDirectionRad) * shotInit.initialBallSpeedMps;
+    cueBall.spinX = shotInit.omegaX;
+    cueBall.spinY = shotInit.omegaY;
+    cueBall.spinZ = 0;
 
     gameStore.executeShot();
     cueStickRef.current?.animateShot();
@@ -972,21 +976,19 @@ function GameWorld() {
             impactOffsetY: gameStore.shotInput.impactOffsetY,
           });
           const speedForGuide = Math.max(5, shotInit.initialBallSpeedMps);
-          const collision = solveBallCushionImpulse({
+          const collision = applyCushionContactThrow({
             axis: boundaryHit.axis,
             vx: dir.x * speedForGuide,
             vy: dir.z * speedForGuide,
             spinX: shotInit.omegaX,
-            spinY: 0,
-            spinZ: shotInit.omegaZ,
+            spinY: shotInit.omegaY,
+            spinZ: 0,
             restitution: physicsConfigRef.current.cushionRestitution,
-            friction: physicsConfigRef.current.cushionContactFriction,
+            contactFriction: physicsConfigRef.current.cushionContactFriction,
+            referenceNormalSpeedMps: physicsConfigRef.current.cushionReferenceSpeedMps,
+            contactTimeExponent: physicsConfigRef.current.cushionContactTimeExponent,
             maxSpinMagnitude: physicsConfigRef.current.cushionMaxSpinMagnitude,
             maxThrowAngleDeg: physicsConfigRef.current.cushionMaxThrowAngleDeg,
-            ballMassKg: physicsConfigRef.current.ballMassKg,
-            ballRadiusM: physicsConfigRef.current.ballRadiusM,
-            ballInertiaKgM2:
-              (2 / 5) * physicsConfigRef.current.ballMassKg * physicsConfigRef.current.ballRadiusM * physicsConfigRef.current.ballRadiusM,
           });
           const post = new THREE.Vector3(collision.vx, 0, collision.vy);
           if (post.lengthSq() > 1e-8) {
