@@ -6,7 +6,8 @@ export const MIN_DRAG_PX = 10;
 export const MAX_DRAG_PX = 400;
 export const MIN_BALL_SPEED_MPS = 1;
 export const MAX_BALL_SPEED_MPS = MAX_SPEED_MPS;
-export const MAX_IMPACT_OFFSET_M = BALL_RADIUS_M;
+// Limit to 70% of ball radius to avoid miscue territory (>70% is physically unrealistic)
+export const MAX_IMPACT_OFFSET_M = BALL_RADIUS_M * 0.7;
 
 export type ShotInitInput = {
   dragPx: number;

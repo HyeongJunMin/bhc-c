@@ -5,7 +5,17 @@ import type { PresetName } from '../../test-sandbox/presets.ts';
 const TABLE_WIDTH = 2.844;
 const TABLE_HEIGHT = 1.422;
 const BALL_RADIUS = 0.03075;
-const MAX_IMPACT_OFFSET = BALL_RADIUS;
+const MAX_IMPACT_OFFSET = BALL_RADIUS * 0.7; // 70%: beyond this is miscue territory
+
+function estimateSpinY(dragPx: number, impactOffsetX: number): number {
+  const speed = 1 + ((Math.min(400, Math.max(10, dragPx)) - 10) / 390) * (13.89 - 1);
+  return (5 * speed * -impactOffsetX) / (2 * BALL_RADIUS * BALL_RADIUS);
+}
+
+function estimateSpinX(dragPx: number, impactOffsetY: number): number {
+  const speed = 1 + ((Math.min(400, Math.max(10, dragPx)) - 10) / 390) * (13.89 - 1);
+  return (5 * speed * impactOffsetY) / (2 * BALL_RADIUS * BALL_RADIUS);
+}
 
 const styles = {
   container: {
@@ -192,6 +202,13 @@ export function SandboxControlPanel({ config, onConfigChange, onRun, onExport }:
           step={0.001}
           onChange={(v) => updateShot({ impactOffsetX: v })}
         />
+        <div style={{ ...styles.row, fontSize: '0.72rem', color: '#888', marginTop: '-0.2rem' }}>
+          <span style={{ minWidth: '80px' }} />
+          <span>
+            spinY ≈ {estimateSpinY(config.shot.dragPx, config.shot.impactOffsetX).toFixed(1)} rad/s
+            {' '}({(Math.abs(config.shot.impactOffsetX) / BALL_RADIUS * 100).toFixed(0)}% R)
+          </span>
+        </div>
         <SliderRow
           label="impactY"
           value={config.shot.impactOffsetY}
@@ -200,6 +217,13 @@ export function SandboxControlPanel({ config, onConfigChange, onRun, onExport }:
           step={0.001}
           onChange={(v) => updateShot({ impactOffsetY: v })}
         />
+        <div style={{ ...styles.row, fontSize: '0.72rem', color: '#888', marginTop: '-0.2rem' }}>
+          <span style={{ minWidth: '80px' }} />
+          <span>
+            spinX ≈ {estimateSpinX(config.shot.dragPx, config.shot.impactOffsetY).toFixed(1)} rad/s
+            {' '}({(Math.abs(config.shot.impactOffsetY) / BALL_RADIUS * 100).toFixed(0)}% R)
+          </span>
+        </div>
       </div>
 
       <hr style={styles.divider} />
