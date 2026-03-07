@@ -6,16 +6,16 @@ const scenario: TestScenario = {
   description: '역각(우라) 컷 샷: 절단각으로 적구를 맞히면 큐볼이 역방향으로 튐',
   tags: ['cut', 'angle'],
   balls: [
-    { id: 'cueBall', x: 0.5, y: 0.711 },
-    { id: 'objectBall1', x: 1.5, y: 0.35 },
-    { id: 'objectBall2', x: 2.3, y: 1.0 },
+    { id: 'cueBall', x: 1.39075, y: 0.43075 },
+    { id: 'objectBall1', x: 2.07075, y: 0.47075 },
+    { id: 'objectBall2', x: 0.09075, y: 0.10075 },
   ],
   shot: {
     cueBallId: 'cueBall',
-    directionDeg: 70,
-    dragPx: 200,
-    impactOffsetX: 0,
-    impactOffsetY: -0.015,
+    directionDeg: 90,
+    dragPx: 115,
+    impactOffsetX: 0.003475,
+    impactOffsetY: 0.003475,
   },
 };
 

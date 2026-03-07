@@ -17,7 +17,7 @@ import { ControlPanel } from '../components/test/ControlPanel.tsx';
 import { AnalysisPanel } from '../components/test/AnalysisPanel.tsx';
 import { FrameKinematicsPanel } from '../components/test/FrameKinematicsPanel.tsx';
 
-const PHYSICS_DT_SEC = 0.05;
+const PHYSICS_DT_SEC = 0.05 / 4;
 
 const styles = {
   container: {
@@ -92,7 +92,7 @@ export function TestRunPage() {
 
   const handleRun = useCallback(() => {
     if (!scenario) return;
-    const simResult = runSimulation(scenario.balls, scenario.shot);
+    const simResult = runSimulation(scenario.balls, scenario.shot, { dtSec: 0.0125, substeps: 3 });
     setResult(simResult);
     setCurrentFrame(0);
     setAnalysis(null);

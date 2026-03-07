@@ -10,7 +10,7 @@ import { SANDBOX_PRESETS } from '../test-sandbox/presets.ts';
 import { exportSandboxJson } from '../test-sandbox/export.ts';
 import type { SandboxConfig } from '../test-sandbox/types.ts';
 
-const PHYSICS_DT_SEC = 0.05;
+const PHYSICS_DT_SEC = 0.05 / 4;
 
 const DEFAULT_CONFIG: SandboxConfig = SANDBOX_PRESETS['straight'];
 
@@ -66,7 +66,7 @@ export function TestSandboxPage() {
   const handleRun = useCallback(() => {
     const activeBalls = config.balls.filter((b) => b.enabled);
     if (activeBalls.length === 0) return;
-    const simResult = runSimulation(activeBalls, config.shot);
+    const simResult = runSimulation(activeBalls, config.shot, { dtSec: 0.0125, substeps: 3 });
     setResult(simResult);
     setCurrentFrame(0);
   }, [config]);
