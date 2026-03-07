@@ -7,7 +7,7 @@ const scenario: TestScenario = {
   tags: ['cut', 'angle'],
   balls: [
     { id: 'cueBall', x: 1.39075, y: 0.43075 },
-    { id: 'objectBall1', x: 2.07075, y: 0.47075 },
+    { id: 'objectBall1', x: 1.82075, y: 0.47075 },
     { id: 'objectBall2', x: 0.09075, y: 0.10075 },
   ],
   shot: {
@@ -15,7 +15,7 @@ const scenario: TestScenario = {
     directionDeg: 90,
     dragPx: 115,
     impactOffsetX: 0.003475,
-    impactOffsetY: 0.003475,
+    impactOffsetY: -0.004525,
   },
 };
 
