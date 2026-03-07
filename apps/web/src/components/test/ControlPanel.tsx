@@ -1,5 +1,16 @@
 import type { TestScenario } from '../../test-scenarios/types.ts';
 import type { SimResult } from '../../../../../packages/physics-core/src/standalone-simulator.ts';
+import { SliderRow } from './SliderRow.tsx';
+
+const TABLE_WIDTH = 2.844;
+const TABLE_HEIGHT = 1.422;
+const BALL_RADIUS = 0.03075;
+const MAX_IMPACT_OFFSET = BALL_RADIUS * 0.7;
+
+export type TestConfig = {
+  balls: Array<{ id: string; x: number; y: number }>;
+  shot: TestScenario['shot'];
+};
 
 const styles = {
   container: {
@@ -44,11 +55,22 @@ const styles = {
     cursor: 'pointer',
     fontSize: '0.8rem',
   } as React.CSSProperties,
+  btnReset: {
+    background: '#5a4000',
+    border: 'none',
+    color: '#ffd700',
+    padding: '0.4rem 0.8rem',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+  } as React.CSSProperties,
   sectionTitle: { color: '#888', fontSize: '0.75rem', marginBottom: '0.4rem' } as React.CSSProperties,
 };
 
 type Props = {
   scenario: TestScenario;
+  config: TestConfig;
+  onConfigChange: (config: TestConfig) => void;
   result: SimResult | null;
   hasBaseline: boolean;
   onRun: () => void;
@@ -60,6 +82,8 @@ type Props = {
 
 export function ControlPanel({
   scenario,
+  config,
+  onConfigChange,
   result,
   hasBaseline,
   onRun,
@@ -68,6 +92,21 @@ export function ControlPanel({
   onCompare,
   onDownload,
 }: Props) {
+  const updateBall = (id: string, field: 'x' | 'y', v: number) => {
+    onConfigChange({
+      ...config,
+      balls: config.balls.map((b) => (b.id === id ? { ...b, [field]: v } : b)),
+    });
+  };
+
+  const updateShot = (patch: Partial<TestConfig['shot']>) => {
+    onConfigChange({ ...config, shot: { ...config.shot, ...patch } });
+  };
+
+  const handleReset = () => {
+    onConfigChange({ balls: scenario.balls, shot: scenario.shot });
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.sectionTitle}>Scenario</div>
@@ -76,19 +115,62 @@ export function ControlPanel({
       <hr style={styles.divider} />
 
       <div style={styles.sectionTitle}>Balls</div>
-      {scenario.balls.map((b) => (
-        <div key={b.id} style={styles.row}>
-          <span style={styles.label}>{b.id}</span>
-          <span style={styles.value}>({b.x.toFixed(3)}, {b.y.toFixed(3)})</span>
+      {config.balls.map((b) => (
+        <div key={b.id}>
+          <div style={{ ...styles.label, marginBottom: '0.2rem', fontSize: '0.75rem' }}>{b.id}</div>
+          <SliderRow
+            label="x"
+            value={b.x}
+            min={BALL_RADIUS}
+            max={TABLE_WIDTH - BALL_RADIUS}
+            step={0.01}
+            onChange={(v) => updateBall(b.id, 'x', v)}
+          />
+          <SliderRow
+            label="y"
+            value={b.y}
+            min={BALL_RADIUS}
+            max={TABLE_HEIGHT - BALL_RADIUS}
+            step={0.01}
+            onChange={(v) => updateBall(b.id, 'y', v)}
+          />
         </div>
       ))}
       <hr style={styles.divider} />
 
       <div style={styles.sectionTitle}>Shot</div>
-      <div style={styles.row}><span style={styles.label}>direction</span><span style={styles.value}>{scenario.shot.directionDeg}°</span></div>
-      <div style={styles.row}><span style={styles.label}>drag</span><span style={styles.value}>{scenario.shot.dragPx}px</span></div>
-      <div style={styles.row}><span style={styles.label}>impactX</span><span style={styles.value}>{scenario.shot.impactOffsetX.toFixed(4)}</span></div>
-      <div style={styles.row}><span style={styles.label}>impactY</span><span style={styles.value}>{scenario.shot.impactOffsetY.toFixed(4)}</span></div>
+      <SliderRow
+        label="direction"
+        value={config.shot.directionDeg}
+        min={0}
+        max={360}
+        step={1}
+        onChange={(v) => updateShot({ directionDeg: v })}
+      />
+      <SliderRow
+        label="drag"
+        value={config.shot.dragPx}
+        min={10}
+        max={400}
+        step={5}
+        onChange={(v) => updateShot({ dragPx: v })}
+      />
+      <SliderRow
+        label="impactX"
+        value={config.shot.impactOffsetX}
+        min={-MAX_IMPACT_OFFSET}
+        max={MAX_IMPACT_OFFSET}
+        step={0.001}
+        onChange={(v) => updateShot({ impactOffsetX: v })}
+      />
+      <SliderRow
+        label="impactY"
+        value={config.shot.impactOffsetY}
+        min={-MAX_IMPACT_OFFSET}
+        max={MAX_IMPACT_OFFSET}
+        step={0.001}
+        onChange={(v) => updateShot({ impactOffsetY: v })}
+      />
       <hr style={styles.divider} />
 
       {result && (
@@ -103,6 +185,7 @@ export function ControlPanel({
 
       <div style={styles.btnRow}>
         <button style={styles.btnPrimary} onClick={onRun}>Run</button>
+        <button style={styles.btnReset} onClick={handleReset}>Reset</button>
         {result && <button style={styles.btn} onClick={onSaveBaseline}>Save Baseline</button>}
         {result && <button style={styles.btn} onClick={onDownload}>Download</button>}
         {result && hasBaseline && <button style={styles.btn} onClick={onCompare}>Compare</button>}

@@ -1,6 +1,7 @@
 import type { SandboxConfig, SandboxBallConfig } from '../../test-sandbox/types.ts';
 import { SANDBOX_PRESETS, PRESET_NAMES } from '../../test-sandbox/presets.ts';
 import type { PresetName } from '../../test-sandbox/presets.ts';
+import { SliderRow } from './SliderRow.tsx';
 
 const TABLE_WIDTH = 2.844;
 const TABLE_HEIGHT = 1.422;
@@ -32,18 +33,6 @@ const styles = {
   } as React.CSSProperties,
   sectionTitle: { color: '#888', fontSize: '0.75rem', marginBottom: '0.3rem' } as React.CSSProperties,
   row: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' } as React.CSSProperties,
-  label: { color: '#aaa', minWidth: '80px' } as React.CSSProperties,
-  slider: { flex: 1, accentColor: '#00d4ff' } as React.CSSProperties,
-  numberInput: {
-    width: '60px',
-    background: 'transparent',
-    border: '1px solid #0f3460',
-    borderRadius: '3px',
-    color: '#00d4ff',
-    fontSize: '0.75rem',
-    textAlign: 'right' as const,
-    padding: '0.1rem 0.2rem',
-  } as React.CSSProperties,
   divider: { borderColor: '#0f3460', margin: '0.25rem 0' } as React.CSSProperties,
   btnRow: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' as const } as React.CSSProperties,
   btn: {
@@ -66,51 +55,6 @@ const styles = {
     fontWeight: 'bold',
   } as React.CSSProperties,
 };
-
-function SliderRow({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  format,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => string;
-}) {
-  return (
-    <div style={styles.row}>
-      <span style={styles.label}>{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        style={styles.slider}
-      />
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
-        }}
-        style={styles.numberInput}
-      />
-    </div>
-  );
-}
 
 type Props = {
   config: SandboxConfig;
@@ -183,7 +127,6 @@ export function SandboxControlPanel({ config, onConfigChange, onRun, onExport }:
           max={360}
           step={1}
           onChange={(v) => updateShot({ directionDeg: v })}
-          format={(v) => `${v.toFixed(0)}°`}
         />
         <SliderRow
           label="drag"
@@ -192,7 +135,6 @@ export function SandboxControlPanel({ config, onConfigChange, onRun, onExport }:
           max={400}
           step={5}
           onChange={(v) => updateShot({ dragPx: v })}
-          format={(v) => `${v.toFixed(0)}px`}
         />
         <SliderRow
           label="impactX"

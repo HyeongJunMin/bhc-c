@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getScenario } from '../test-scenarios/index.ts';
 import { runSimulation } from '../../../../packages/physics-core/src/standalone-simulator.ts';
@@ -14,6 +14,7 @@ import type { AnalysisResult } from '../test-scenarios/trajectory-analyzer.ts';
 import { TestScene } from '../components/test/TestScene.tsx';
 import { PlaybackSlider } from '../components/test/PlaybackSlider.tsx';
 import { ControlPanel } from '../components/test/ControlPanel.tsx';
+import type { TestConfig } from '../components/test/ControlPanel.tsx';
 import { AnalysisPanel } from '../components/test/AnalysisPanel.tsx';
 import { FrameKinematicsPanel } from '../components/test/FrameKinematicsPanel.tsx';
 
@@ -79,6 +80,15 @@ export function TestRunPage() {
   const { id } = useParams<{ id: string }>();
   const scenario = id ? getScenario(id) : undefined;
 
+  const [config, setConfig] = useState<TestConfig>(() => ({
+    balls: scenario?.balls ?? [],
+    shot: scenario?.shot ?? { cueBallId: 'cueBall', directionDeg: 0, dragPx: 100, impactOffsetX: 0, impactOffsetY: 0 },
+  }));
+
+  useEffect(() => {
+    if (scenario) setConfig({ balls: scenario.balls, shot: scenario.shot });
+  }, [scenario]);
+
   const [result, setResult] = useState<SimResult | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [showBaseline, setShowBaseline] = useState(false);
@@ -92,11 +102,11 @@ export function TestRunPage() {
 
   const handleRun = useCallback(() => {
     if (!scenario) return;
-    const simResult = runSimulation(scenario.balls, scenario.shot, { dtSec: 0.0125, substeps: 3 });
+    const simResult = runSimulation(config.balls, config.shot, { dtSec: 0.0125, substeps: 3 });
     setResult(simResult);
     setCurrentFrame(0);
     setAnalysis(null);
-  }, [scenario]);
+  }, [scenario, config]);
 
   const handleSaveBaseline = useCallback(() => {
     if (!scenario || !result) return;
@@ -144,6 +154,8 @@ export function TestRunPage() {
         <div style={styles.sidebar}>
           <ControlPanel
             scenario={scenario}
+            config={config}
+            onConfigChange={setConfig}
             result={result}
             hasBaseline={!!baselineLoaded}
             onRun={handleRun}
@@ -163,6 +175,8 @@ export function TestRunPage() {
             showBaseline={showBaseline}
             showDeviation={showDeviation}
             height="420px"
+            initialBalls={config.balls}
+            shotDirection={{ directionDeg: config.shot.directionDeg, cueBallId: config.shot.cueBallId, impactOffsetX: config.shot.impactOffsetX }}
           />
 
           {result && (
