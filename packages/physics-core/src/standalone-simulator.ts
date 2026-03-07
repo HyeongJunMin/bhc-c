@@ -137,22 +137,14 @@ export function runSimulation(
     captureFrame(frameIndex);
 
     let maxLinearSpeed = 0;
-    let maxAngularSpeed = 0;
     for (const ball of balls) {
       if (!ball.isPocketed) {
         maxLinearSpeed = Math.max(maxLinearSpeed, Math.hypot(ball.vx, ball.vy));
-        maxAngularSpeed = Math.max(
-          maxAngularSpeed,
-          Math.abs(ball.spinX),
-          Math.abs(ball.spinY),
-          Math.abs(ball.spinZ),
-        );
       }
     }
 
     const { isShotEnded } = evaluateShotEndWithFrames(tracker, {
       linearSpeedMps: maxLinearSpeed,
-      angularSpeedRadps: maxAngularSpeed,
     });
 
     if (isShotEnded) {
