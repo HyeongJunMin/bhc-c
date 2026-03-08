@@ -1,6 +1,6 @@
 import { computeInitialAngularVelocity } from './initial-angular-velocity.ts';
 import { computeInitialBallSpeed, solveCueSpeedForTargetBallSpeed } from './initial-velocity.ts';
-import { BALL_RADIUS_M, MAX_BALL_SPEED_MPS as MAX_SPEED_MPS } from './constants.ts';
+import { BALL_RADIUS_M, CUE_ELEVATION_RAD, MAX_BALL_SPEED_MPS as MAX_SPEED_MPS } from './constants.ts';
 
 export const MIN_DRAG_PX = 10;
 export const MAX_DRAG_PX = 400;
@@ -19,6 +19,7 @@ export type ShotInitResult = {
   initialBallSpeedMps: number;
   omegaX: number;
   omegaY: number;
+  omegaZ: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -57,5 +58,6 @@ export function computeShotInitialization(input: ShotInitInput): ShotInitResult 
     initialBallSpeedMps,
     omegaX: angularVelocity.omegaX,
     omegaY: angularVelocity.omegaY,
+    omegaZ: angularVelocity.omegaY * Math.sin(CUE_ELEVATION_RAD),
   };
 }

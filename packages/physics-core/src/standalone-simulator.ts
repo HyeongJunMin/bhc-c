@@ -94,7 +94,7 @@ export function runSimulation(
   cueBall.vy = Math.cos(finalDirectionRad) * shotInit.initialBallSpeedMps;
   cueBall.spinX = shotInit.omegaX;
   cueBall.spinY = shotInit.omegaY;
-  cueBall.spinZ = 0;
+  cueBall.spinZ = shotInit.omegaZ;
 
   const frames: SimFrame[] = [];
   const events: SimEvent[] = [];

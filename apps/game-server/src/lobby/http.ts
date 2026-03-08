@@ -396,7 +396,7 @@ function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>)
   cueBall.vy = Math.sin(finalDirectionRad) * shotInit.initialBallSpeedMps;
   cueBall.spinX = shotInit.omegaX;
   cueBall.spinY = shotInit.omegaY;
-  cueBall.spinZ = 0;
+  cueBall.spinZ = shotInit.omegaZ;
 }
 
 function getCurrentShotAtMs(room: LobbyRoom): number {

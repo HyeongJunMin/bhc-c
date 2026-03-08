@@ -45,6 +45,8 @@ export const CUSHION_FRICTION_SPIN_DAMPING = 0.80;
 export const CUSHION_TORQUE_DAMPING = 0.35;
 export const CUSHION_HEIGHT_M = 0.037;
 
+export const CUE_ELEVATION_RAD = (3 * Math.PI) / 180; // 3° cue elevation — converts spinY to spinZ (swerve)
+
 export const SLIDING_FRICTION_COEFFICIENT = 0.2;
 export const ROLLING_FRICTION_COEFFICIENT = 0.012;
 export const GRAVITY_ACCELERATION_MPS2 = 9.81;
