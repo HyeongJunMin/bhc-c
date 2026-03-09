@@ -281,7 +281,8 @@ export function GameUI() {
 
   useEffect(() => {
     if (fahTestAutoCorrectionEnabled) {
-      setFahTestCorrectionOffset(tenPointCalibrationStats.recommendedOffset);
+      const bounded = Math.max(-20, Math.min(20, tenPointCalibrationStats.recommendedOffset));
+      setFahTestCorrectionOffset(Number.isFinite(bounded) ? bounded : 0);
     }
   }, [
     fahTestAutoCorrectionEnabled,

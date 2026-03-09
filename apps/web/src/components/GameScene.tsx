@@ -41,6 +41,7 @@ const CUE_DEBUG_X = -TABLE_WIDTH / 2 + DIAMOND_STEP_X * 3;
 const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
+const FAH_MAX_CORRECTION_ABS = 20;
 const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
 const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
 const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
@@ -134,6 +135,9 @@ function signedDeltaDeg(beforeDeg: number, afterDeg: number): number {
 }
 
 function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
   return Math.max(min, Math.min(max, value));
 }
 
@@ -829,14 +833,13 @@ function GameWorld() {
       isPocketed: false,
     });
 
-    const correctedTargetPoint = Math.round(
-      clamp(
-        targetPoint +
-          (gameStore.fahTestAutoCorrectionEnabled ? gameStore.fahTestCorrectionOffset : 0),
-        0,
-        110,
-      ),
-    );
+    const safeTargetPoint = Number.isFinite(targetPoint) ? targetPoint : 10;
+    const rawCorrection =
+      gameStore.fahTestAutoCorrectionEnabled && Number.isFinite(gameStore.fahTestCorrectionOffset)
+        ? gameStore.fahTestCorrectionOffset
+        : 0;
+    const boundedCorrection = clamp(rawCorrection, -FAH_MAX_CORRECTION_ABS, FAH_MAX_CORRECTION_ABS);
+    const correctedTargetPoint = Math.round(clamp(safeTargetPoint + boundedCorrection, 0, 110));
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
     fahLastIndexModelRef.current = indexModel;
@@ -850,7 +853,7 @@ function GameWorld() {
     // 10시 방향 2팁
     gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${targetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex}`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex}`,
     );
 
     executeShot({
@@ -859,7 +862,7 @@ function GameWorld() {
       cueElevationDeg: 0,
       impactOffsetX: -FAH_FIXED_TWO_TIP_OFFSET,
       impactOffsetY: FAH_FIXED_TWO_TIP_OFFSET,
-      requestedTargetPoint: targetPoint,
+      requestedTargetPoint: safeTargetPoint,
       correctedTargetPoint: correctedTargetIndex,
     });
   };
