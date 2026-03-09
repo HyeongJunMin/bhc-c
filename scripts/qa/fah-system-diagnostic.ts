@@ -41,6 +41,7 @@ const FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
 const FIXED_DRAG_PX = 127;
 const FIXED_IMPACT_OFFSET_X = -BALL_RADIUS * 0.4;
 const FIXED_IMPACT_OFFSET_Y = BALL_RADIUS * 0.4;
+const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
 
 const DEFAULT_ANCHORS: AnchorTarget[] = [
   { first: 0, second: 5, third: 40, fourth: 20 },
@@ -127,7 +128,7 @@ function computeFahFirstRailTarget(firstSide: 'left' | 'right', firstIndex: numb
   const bottomRailZ = -TABLE_HEIGHT / 2;
   const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
   const sideXSign = firstSide === 'right' ? 1 : -1;
-  const targetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS);
+  const targetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
   return { x: targetX, z: targetZ };
 }
 

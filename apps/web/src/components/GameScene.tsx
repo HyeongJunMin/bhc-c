@@ -50,6 +50,7 @@ const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
 const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
 // INPUT drag range(10..400) 기준 30%
 const FAH_FIXED_DRAG_PX = 127;
+const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
 // FAH 좌표계 기준(화면 기준 가로 테이블):
 // - 하단/상단은 단쿠션, 좌측/우측은 장쿠션으로만 표기한다.
 // - 1쿠션 인덱스는 0,10,20,30,40,50,70,90,110 스케일 + 구간별 반칸 인덱스 규칙을 사용한다.
@@ -940,7 +941,7 @@ function GameWorld() {
     const bottomRailZ = -TABLE_HEIGHT / 2;
     const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
     const sideXSign = side === 'right' ? 1 : -1;
-    const aimTargetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS);
+    const aimTargetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
     const markerTargetX = sideXSign * (TABLE_WIDTH / 2 + PHYSICS.CUSHION_THICKNESS / 2);
 
     return new THREE.Vector3(
