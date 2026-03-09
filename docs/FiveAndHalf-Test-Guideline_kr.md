@@ -42,27 +42,34 @@
 ## 5) 실험 실행
 - 배치 실행:
   - `npm run qa:fah-system-batch`
-- 원클릭 실행(서버 자동 기동 + 배치 실행):
+- 원클릭 실행(동일한 물리 진단 경로 실행):
   - `npm run qa:fah-live-run`
+- 중요:
+  - FAH 튜닝 QA는 `packages/physics-core` 기반 스크립트만 사용한다.
+  - `apps/game-server`의 `/v1/systems/five-and-half/*` API는 물리 튜닝 기준으로 사용하지 않는다.
 - 주요 환경변수:
-  - `FAH_BASE_URL` (기본 `http://localhost:9900`)
-  - `FAH_PORT` (`qa:fah-live-run`에서 서버 기동 포트, 기본 `9900`)
-  - `FAH_REPEATS` (기본 `10`)
-  - `FAH_TARGET_POINTS` (기본 `10,20,30,40,50,60,70,80,90`)
+  - `FAH_DIAG_POINTS` (예: `0,10,20,30,40,45`)
+  - `FAH_SPEED_BOOST`
+  - `FAH_CUSHION_RESTITUTION`
+  - `FAH_CUSHION_CONTACT_FRICTION`
+  - `FAH_CLOTH_SPIN_COUPLING`
+  - `FAH_SPIN_DAMPING`
+  - `FAH_LINEAR_DAMPING`
+  - `FAH_CUSHION_POST_SPEED_SCALE`
+  - `FAH_SPIN_RETENTION`
+  - `FAH_MAX_TICKS`
 - 산출물:
-  - `tmp/fah/<runId>.ndjson` (샷별 원시 로그)
-  - `tmp/fah/<runId>.summary.json` (요약 + correctionTable + `s11Estimate`)
-  - `tmp/fah/<runId>.point-stats.csv` (포인트별 통계)
+  - `tmp/fah/fah-diagnose-*.diagnostic.json` (쿠션별 히트/인덱스/오차)
 
 ## 5-2) 사용자 실행 예시
 ```bash
-# 기본 10회 반복
+# 기본 실행
 npm run qa:fah-live-run
 
-# 반복/포인트 지정 실행
-FAH_REPEATS=20 FAH_TARGET_POINTS=10,20,30,40,50 npm run qa:fah-live-run
+# 포인트 지정 실행
+FAH_DIAG_POINTS=0,10,20,30,40,45 npm run qa:fah-live-run
 ```
-- 실행 완료 후 콘솔의 `summaryPath`, `pointStatsCsvPath`를 확인한다.
+- 실행 완료 후 콘솔의 `outputPath`를 확인한다.
 
 ## 5-1) S_11 자동 추정
 - 각 샷에서 아래로 `estimatedS11`을 계산한다.

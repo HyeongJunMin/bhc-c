@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 
 import { createRoomPhysicsStepConfig } from '../../packages/physics-core/src/room-physics-config.ts';
 
+console.warn('[deprecated] scripts/qa/five-and-half-system-batch.ts 는 FAH 물리 튜닝 경로가 아닙니다.');
+console.warn('[deprecated] qa:fah-system-batch 는 scripts/qa/fah-physics-batch.ts 를 사용하세요.');
+
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
 type FahEnvelope = {

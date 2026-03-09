@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 
 async function run(): Promise<void> {
-  console.log('[fah-live-run] 3쿠션 물리엔진 기반 FAH 진단을 실행합니다.');
-  console.log('[fah-live-run] game-server /v1/systems/five-and-half API 경로는 FAH 물리 튜닝에 사용하지 않습니다.');
+  console.log('[fah-physics-batch] 3쿠션 물리엔진 기반 FAH 배치 진단 실행');
+  console.log('[fah-physics-batch] FAH 튜닝 계수는 FAH 전용 오버라이드만 사용');
 
   const child = spawn(
     'node',
@@ -24,6 +24,6 @@ async function run(): Promise<void> {
 }
 
 run().catch((error) => {
-  console.error('[fah-live-run] failed:', error);
+  console.error('[fah-physics-batch] failed:', error);
   process.exit(1);
 });

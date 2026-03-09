@@ -17,7 +17,7 @@
     "qa:table-responsive": "node --experimental-strip-types scripts/qa/room-responsive-viewport.ts",
     "qa:cushion-contact-time": "node --experimental-strip-types scripts/qa/cushion-contact-time-angle-table.ts",
     "qa:cushion-spin-flow": "node --experimental-strip-types scripts/qa/cushion-spin-flow-sandbox.ts",
-    "qa:fah-system-batch": "node --experimental-strip-types scripts/qa/five-and-half-system-batch.ts",
+    "qa:fah-system-batch": "node --experimental-strip-types scripts/qa/fah-physics-batch.ts",
     "qa:fah-live-run": "node --experimental-strip-types scripts/qa/five-and-half-live-run.ts",
     "qa:team-loop-summary": "MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_team_loop.sh | node --experimental-strip-types scripts/qa/parse-team-loop-summary.ts",
     "qa:test-agent-summary": "SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_test_agent.sh | node --experimental-strip-types scripts/qa/parse-test-agent-summary.ts",
