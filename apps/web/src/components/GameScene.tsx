@@ -11,10 +11,12 @@ import { GameUI } from './GameUI';
 import {
   buildFahIndexModel,
   inferFahStartSide,
+  mapFahCushionContactToIndex,
   mapFahIndexToRailRatio,
   mapFahRailRatioToIndex,
   quantizeFahIndexToNearestHalfStep,
   type FahIndexModel,
+  type FahCushionSide,
   type FahRailSide,
 } from '../lib/fah-index-system';
 import {
@@ -95,6 +97,14 @@ const DEBUG_PRESETS = {
   },
 } as const;
 type DebugPresetName = keyof typeof DEBUG_PRESETS;
+
+type FahCushionHitEvent = {
+  order: number;
+  cushion: FahCushionSide;
+  x: number;
+  z: number;
+  atMs: number;
+};
 
 function readCaptureParams(): { capture: boolean; cam: 'play' | 'top' | 'side' } {
   if (typeof window === 'undefined') {
@@ -185,6 +195,7 @@ function GameWorld() {
       correctedTargetPoint: number | null;
     };
     indexModel: FahIndexModel;
+    cushionHits: FahCushionHitEvent[];
     points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>;
   } | null>(null);
   const fahLastIndexModelRef = useRef<FahIndexModel | null>(null);
@@ -467,7 +478,7 @@ function GameWorld() {
       return;
     }
     const indexModel = computeFahShotIndexModel(cue.position, gameStore.fahTestTargetPoint);
-    const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'aim');
+    const firstRailTarget = computeFahCompensatedAimTarget(cue.position, indexModel.firstCushionSide, indexModel.firstCushionIndex);
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
     if (Math.abs(shotDirectionDeg - gameStore.shotInput.shotDirectionDeg) > 0.05) {
       gameStore.setShotDirection(shotDirectionDeg);
@@ -804,6 +815,7 @@ function GameWorld() {
             typeof shotInput.correctedTargetPoint === 'number' ? shotInput.correctedTargetPoint : null,
         },
         indexModel,
+        cushionHits: [],
         points: [],
       };
     } else {
@@ -849,7 +861,7 @@ function GameWorld() {
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
     fahLastIndexModelRef.current = indexModel;
-    const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'aim');
+    const firstRailTarget = computeFahCompensatedAimTarget(cue.position, indexModel.firstCushionSide, indexModel.firstCushionIndex);
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
     const baseFahConfig = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
     const dynamicProfile = deriveFahDynamicPhysicsProfile(
@@ -872,7 +884,7 @@ function GameWorld() {
     // 10시 방향 2팁
     gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | aimX=${firstRailTarget.x.toFixed(3)} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
     );
 
     executeShot({
@@ -928,21 +940,43 @@ function GameWorld() {
     );
   };
 
-  const estimateObservedFirstCushionIndex = (
-    points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>,
-    firstCushionSide: FahRailSide,
+  // 표시 포인트(다이아 기준)와 실제 충돌면 깊이 차이를 반영해
+  // 요청 포인트를 맞추기 위한 조준점을 계산한다.
+  const computeFahCompensatedAimTarget = (
+    cue: THREE.Vector3,
+    side: FahRailSide,
+    requestedFirstCushionIndex: number,
+  ): THREE.Vector3 => {
+    const markerPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'marker');
+    const collisionPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'aim');
+    const markerDepth = markerPoint.z - cue.z;
+    const collisionDepth = collisionPoint.z - cue.z;
+    if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
+      return collisionPoint;
+    }
+    const depthScale = markerDepth / collisionDepth;
+    const compensatedX = cue.x + (collisionPoint.x - cue.x) * depthScale;
+    const clampedX = clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2);
+    return new THREE.Vector3(clampedX, BALL_RADIUS + 0.008, markerPoint.z);
+  };
+
+  const estimateObservedCushionIndex = (
+    cushion: FahCushionSide,
+    x: number,
+    z: number,
+  ): number => {
+    return mapFahCushionContactToIndex(cushion, { x, z }, TABLE_WIDTH, TABLE_HEIGHT);
+  };
+
+  const estimateObservedCushionIndexFromShotTrace = (
+    hits: FahCushionHitEvent[],
+    cushionOrder: number,
   ): number | null => {
-    const sideZSign = firstCushionSide === 'right' ? 1 : -1;
-    const railAimZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS);
-    const hitThreshold = sideZSign > 0 ? railAimZ - 0.01 : railAimZ + 0.01;
-    const hitPoint = points.find((point) => (sideZSign > 0 ? point.z >= hitThreshold : point.z <= hitThreshold));
-    if (!hitPoint) {
+    const target = hits.find((entry) => entry.order === cushionOrder);
+    if (!target) {
       return null;
     }
-    const topRailX = TABLE_WIDTH / 2;
-    const bottomRailX = -TABLE_WIDTH / 2;
-    const ratio = clamp((topRailX - hitPoint.x) / (topRailX - bottomRailX), 0, 1);
-    return quantizeFahIndexToNearestHalfStep(mapFahRailRatioToIndex(ratio));
+    return estimateObservedCushionIndex(target.cushion, target.x, target.z);
   };
 
 
@@ -1100,6 +1134,24 @@ function GameWorld() {
         onCushionCollision: (ball, cushionId) => {
           if (ball.id === activeCueBallId) {
             cueCushionContacts.add(cushionId);
+            if (gameStore.playMode === 'fahTest' && fahTestShotTraceRef.current) {
+              const nowMs = performance.now();
+              const existing = fahTestShotTraceRef.current.cushionHits;
+              const prev = existing[existing.length - 1];
+              if (!prev || prev.cushion !== cushionId || nowMs - prev.atMs >= CUSHION_TRACE_DEDUPE_WINDOW_MS) {
+                const hitWorld = physicsToWorldXZ(ball.x, ball.y);
+                existing.push({
+                  order: existing.length + 1,
+                  cushion: cushionId,
+                  x: hitWorld.x,
+                  z: hitWorld.z,
+                  atMs: nowMs,
+                });
+              }
+              if (existing.length > 8) {
+                existing.length = 8;
+              }
+            }
             const nowMs = performance.now();
             const prev = lastCueCushionEventRef.current;
             if (
@@ -1239,10 +1291,6 @@ function GameWorld() {
               FAH_TEST_SHOT_TRACE_STORAGE_KEY,
               JSON.stringify(existing.slice(-120)),
             );
-            const observedFirstCushionIndex = estimateObservedFirstCushionIndex(
-              tracePayload.points,
-              tracePayload.indexModel.firstCushionSide,
-            );
             const calibrationRaw = window.localStorage.getItem(FAH_CALIBRATION_STORAGE_KEY);
             const calibrationExisting = (() => {
               try {
@@ -1264,14 +1312,45 @@ function GameWorld() {
                   ? tracePayload.shotInput.correctedTargetPoint
                   : tracePayload.indexModel.firstCushionIndex,
               startIndex: tracePayload.indexModel.startIndex,
+              expectedSecondIndex: tracePayload.indexModel.expectedSecondIndex,
               expectedThirdIndex: tracePayload.indexModel.expectedThirdIndex,
+              expectedFourthIndex: tracePayload.indexModel.expectedFourthIndex,
               startSide: tracePayload.indexModel.startSide,
               firstCushionSide: tracePayload.indexModel.firstCushionSide,
-              observedFirstCushionIndex,
-              firstCushionIndexDelta:
-                observedFirstCushionIndex === null
-                  ? null
-                  : Math.round((observedFirstCushionIndex - tracePayload.indexModel.firstCushionIndex) * 1000) / 1000,
+              thirdCushionSide: tracePayload.indexModel.thirdCushionSide,
+              fourthCushionSide: tracePayload.indexModel.fourthCushionSide,
+              observedFirstCushionIndex: estimateObservedCushionIndexFromShotTrace(
+                tracePayload.cushionHits,
+                1,
+              ),
+              observedSecondCushionIndex: estimateObservedCushionIndexFromShotTrace(
+                tracePayload.cushionHits,
+                2,
+              ),
+              observedThirdCushionIndex: estimateObservedCushionIndexFromShotTrace(
+                tracePayload.cushionHits,
+                3,
+              ),
+              observedFourthCushionIndex: estimateObservedCushionIndexFromShotTrace(
+                tracePayload.cushionHits,
+                4,
+              ),
+              firstCushionIndexDelta: (() => {
+                const observed = estimateObservedCushionIndexFromShotTrace(tracePayload.cushionHits, 1);
+                return observed === null ? null : Math.round((observed - tracePayload.indexModel.firstCushionIndex) * 1000) / 1000;
+              })(),
+              secondCushionIndexDelta: (() => {
+                const observed = estimateObservedCushionIndexFromShotTrace(tracePayload.cushionHits, 2);
+                return observed === null ? null : Math.round((observed - tracePayload.indexModel.expectedSecondIndex) * 1000) / 1000;
+              })(),
+              thirdCushionIndexDelta: (() => {
+                const observed = estimateObservedCushionIndexFromShotTrace(tracePayload.cushionHits, 3);
+                return observed === null ? null : Math.round((observed - tracePayload.indexModel.expectedThirdIndex) * 1000) / 1000;
+              })(),
+              fourthCushionIndexDelta: (() => {
+                const observed = estimateObservedCushionIndexFromShotTrace(tracePayload.cushionHits, 4);
+                return observed === null ? null : Math.round((observed - tracePayload.indexModel.expectedFourthIndex) * 1000) / 1000;
+              })(),
               shotDirectionDeg: tracePayload.shotInput.shotDirectionDeg,
               physicsTuning: {
                 speedBoost: fahPhysicsTuningRef.current.speedBoost,

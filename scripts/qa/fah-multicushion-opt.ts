@@ -33,6 +33,7 @@ type CandidateOverrides = {
 
 type ShotEval = {
   first: number;
+  routeValid: boolean;
   expected: { second: number; third: number; fourth: number };
   observed: { second: number | null; third: number | null; fourth: number | null };
   error: { second: number; third: number; fourth: number };
@@ -63,6 +64,11 @@ const ANCHORS: AnchorTarget[] = [
   { first: 40, second: 30, third: 10, fourth: 100 },
   { first: 45, second: 35, third: 5, fourth: 95 },
 ];
+
+const SCORE_GLOBAL_WEIGHT = Number(process.env.FAH_SCORE_GLOBAL_WEIGHT ?? '0.25');
+const SCORE_P0_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P0_SECOND_WEIGHT ?? '4.0');
+const SCORE_P0_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P0_THIRD_WEIGHT ?? '0.6');
+const SCORE_P0_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P0_FOURTH_WEIGHT ?? '3.2');
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -110,6 +116,38 @@ function computeFahFirstRailTarget(firstSide: 'left' | 'right', firstIndex: numb
   return { x: targetX, z: targetZ };
 }
 
+function computeFahMarkerRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
+  const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
+  const topRailX = TABLE_WIDTH / 2;
+  const bottomRailX = -TABLE_WIDTH / 2;
+  const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
+  const sideZSign = firstSide === 'right' ? 1 : -1;
+  const cushionThicknessM = 0.058;
+  const targetZ = sideZSign * (TABLE_HEIGHT / 2 + cushionThicknessM / 2);
+  return { x: targetX, z: targetZ };
+}
+
+function computeFahCompensatedAimTarget(
+  cueX: number,
+  cueZ: number,
+  firstSide: 'left' | 'right',
+  requestedFirstIndex: number,
+): { x: number; z: number } {
+  const marker = computeFahMarkerRailTarget(firstSide, requestedFirstIndex);
+  const collision = computeFahFirstRailTarget(firstSide, requestedFirstIndex);
+  const markerDepth = marker.z - cueZ;
+  const collisionDepth = collision.z - cueZ;
+  if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
+    return collision;
+  }
+  const depthScale = markerDepth / collisionDepth;
+  const compensatedX = cueX + (collision.x - cueX) * depthScale;
+  return {
+    x: clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2),
+    z: marker.z,
+  };
+}
+
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
   return () => {
@@ -141,7 +179,12 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
   const startIndex = computeFahStartIndexFromCue(cueStart.x);
   const startSide = inferFahStartSide(cueStart.z);
   const indexModel = buildFahIndexModel(startIndex, anchor.first, startSide);
-  const firstTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex);
+  const firstTarget = computeFahCompensatedAimTarget(
+    cueStart.x,
+    cueStart.z,
+    indexModel.firstCushionSide,
+    indexModel.firstCushionIndex,
+  );
   const shotDirectionDeg = directionDegFromCueToTarget(cueStart.x, cueStart.z, firstTarget.x, firstTarget.z);
 
   const base = createRoomPhysicsStepConfig('fahTest', {
@@ -180,7 +223,7 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
     },
   ];
 
-  const cushionHits: Array<{ cushion: CushionId; index: number }> = [];
+  const rawHits: Array<{ cushion: CushionId; index: number }> = [];
   let lastHit: CushionId | null = null;
   let sameCount = 0;
 
@@ -201,28 +244,46 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
         }
         const world = physicsToWorldXZ(ball.x, ball.y);
         const index = mapFahCushionContactToIndex(cushionId, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
-        cushionHits.push({ cushion: cushionId, index });
+        rawHits.push({ cushion: cushionId, index });
       },
     });
     const cue = balls[0];
     const stopped = Math.hypot(cue.vx, cue.vy) < base.shotEndLinearSpeedThresholdMps;
-    if (stopped && cushionHits.length >= 4) {
+    if (stopped && rawHits.length >= 4) {
       break;
     }
   }
 
-  const obs2 = cushionHits[1]?.index ?? null;
-  const obs3 = cushionHits[2]?.index ?? null;
-  const obs4 = cushionHits[3]?.index ?? null;
+  const fahRoute: CushionId[] = ['right', 'top', 'left', 'bottom'];
+  let routeCursor = 0;
+  const fahHits: Array<{ cushion: CushionId; index: number }> = [];
+  for (const hit of rawHits) {
+    if (routeCursor >= fahRoute.length) {
+      break;
+    }
+    if (hit.cushion !== fahRoute[routeCursor]) {
+      continue;
+    }
+    fahHits.push(hit);
+    routeCursor += 1;
+  }
+
+  const routeValid = fahHits.length === 4;
+  const obs2 = fahHits[1]?.index ?? null;
+  const obs3 = fahHits[2]?.index ?? null;
+  const obs4 = fahHits[3]?.index ?? null;
 
   const error2 = (obs2 ?? anchor.second) - anchor.second;
   const error3 = (obs3 ?? anchor.third) - anchor.third;
   const error4 = (obs4 ?? anchor.fourth) - anchor.fourth;
   const missPenalty = (obs2 === null ? 12 : 0) + (obs3 === null ? 12 : 0) + (obs4 === null ? 12 : 0);
-  const weightedAbsError = (Math.abs(error2) * 0.4) + (Math.abs(error3) * 0.35) + (Math.abs(error4) * 0.25) + missPenalty;
+  const routePenalty = routeValid ? 0 : 20;
+  const weightedAbsError =
+    (Math.abs(error2) * 0.4) + (Math.abs(error3) * 0.35) + (Math.abs(error4) * 0.25) + missPenalty + routePenalty;
 
   return {
     first: anchor.first,
+    routeValid,
     expected: {
       second: anchor.second,
       third: anchor.third,
@@ -247,7 +308,14 @@ function evaluateCandidate(candidate: CandidateOverrides): CandidateResult {
   const errors = byPoint.flatMap((row) => [row.error.second, row.error.third, row.error.fourth]);
   const mae = errors.reduce((sum, value) => sum + Math.abs(value), 0) / errors.length;
   const rmse = Math.sqrt(errors.reduce((sum, value) => sum + value * value, 0) / errors.length);
-  const weightedScore = byPoint.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPoint.length;
+  const baseScore = byPoint.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPoint.length;
+  const p0 = byPoint.find((row) => row.first === 0);
+  const p0Objective = p0
+    ? (Math.abs(p0.error.second) * SCORE_P0_SECOND_WEIGHT)
+      + (Math.abs(p0.error.third) * SCORE_P0_THIRD_WEIGHT)
+      + (Math.abs(p0.error.fourth) * SCORE_P0_FOURTH_WEIGHT)
+    : 0;
+  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p0Objective;
   return {
     overrides: candidate,
     mae: round3(mae),
