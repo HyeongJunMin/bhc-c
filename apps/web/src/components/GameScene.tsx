@@ -42,9 +42,11 @@ const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
 const FAH_MAX_CORRECTION_ABS = 20;
-const FAH_DIRECTION_SOLVE_COARSE_DEG = 24;
-const FAH_DIRECTION_SOLVE_COARSE_STEP_DEG = 2;
-const FAH_DIRECTION_SOLVE_REFINE_STEPS_DEG = [0.5, 0.1];
+const FAH_DIRECTION_SOLVE_GLOBAL_DEG = 80;
+const FAH_DIRECTION_SOLVE_GLOBAL_STEP_DEG = 4;
+const FAH_DIRECTION_SOLVE_LOCAL_DEG = 16;
+const FAH_DIRECTION_SOLVE_LOCAL_STEP_DEG = 1;
+const FAH_DIRECTION_SOLVE_REFINE_STEPS_DEG = [0.25, 0.1];
 const FAH_DIRECTION_SOLVE_SIM_MAX_SEC = 10;
 const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
 const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
@@ -1020,12 +1022,20 @@ function GameWorld() {
       }
     };
 
-    for (let delta = -FAH_DIRECTION_SOLVE_COARSE_DEG; delta <= FAH_DIRECTION_SOLVE_COARSE_DEG; delta += FAH_DIRECTION_SOLVE_COARSE_STEP_DEG) {
+    // 1) 전역 탐색: 코너/짧은각 구간에서 지역해에 빠지지 않도록 넓게 스캔
+    for (let delta = -FAH_DIRECTION_SOLVE_GLOBAL_DEG; delta <= FAH_DIRECTION_SOLVE_GLOBAL_DEG; delta += FAH_DIRECTION_SOLVE_GLOBAL_STEP_DEG) {
       evalDirection(seedDeg + delta);
     }
+
+    // 2) 국소 탐색: 전역 최적 근처를 더 촘촘히 스캔
+    for (let delta = -FAH_DIRECTION_SOLVE_LOCAL_DEG; delta <= FAH_DIRECTION_SOLVE_LOCAL_DEG; delta += FAH_DIRECTION_SOLVE_LOCAL_STEP_DEG) {
+      evalDirection(bestDirection + delta);
+    }
+
+    // 3) 미세 탐색
     for (const refineStep of FAH_DIRECTION_SOLVE_REFINE_STEPS_DEG) {
-      const start = bestDirection - FAH_DIRECTION_SOLVE_COARSE_STEP_DEG;
-      const end = bestDirection + FAH_DIRECTION_SOLVE_COARSE_STEP_DEG;
+      const start = bestDirection - 2;
+      const end = bestDirection + 2;
       for (let candidate = start; candidate <= end; candidate += refineStep) {
         evalDirection(candidate);
       }
