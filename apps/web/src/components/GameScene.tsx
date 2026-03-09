@@ -21,6 +21,7 @@ import {
   FAH_PHYSICS_TUNING_STORAGE_KEY,
   readFahPhysicsTuning,
 } from '../lib/fah-physics-tuning';
+import { deriveFahDynamicPhysicsProfile, type FahDynamicPhysicsProfile } from '../lib/fah-dynamic-physics';
 import { AIM_CONTROL_CONTRACT } from '../../../../packages/shared-types/src/aim-control.ts';
 import { createRoomPhysicsStepConfig } from '../../../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld, type PhysicsBallState, type CushionId } from '../../../../packages/physics-core/src/room-physics-step.ts';
@@ -187,6 +188,7 @@ function GameWorld() {
     points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>;
   } | null>(null);
   const fahLastIndexModelRef = useRef<FahIndexModel | null>(null);
+  const fahDynamicProfileRef = useRef<FahDynamicPhysicsProfile | null>(null);
   const debugTracePartsRef = useRef<string[]>([]);
   const traceEventIndexRef = useRef(0);
   const traceWasTruncatedRef = useRef(false);
@@ -755,6 +757,10 @@ function GameWorld() {
         `impactOffsetX(UI):${shotInput.impactOffsetX.toFixed(4)} ` +
         `impactOffsetX(phys):${impactOffsetXForPhysics.toFixed(4)} ` +
         `impactOffsetY:${shotInput.impactOffsetY.toFixed(4)} ` +
+        `dynProfile:${fahDynamicProfileRef.current ? 'Y' : 'N'} ` +
+        `dynBlend:g${(fahDynamicProfileRef.current?.grazingFactor ?? 0).toFixed(3)}_c${(fahDynamicProfileRef.current?.cornerFactor ?? 0).toFixed(3)} ` +
+        `dynRest:${(fahDynamicProfileRef.current?.overrides.cushionRestitution ?? 0).toFixed(3)} ` +
+        `dynFric:${(fahDynamicProfileRef.current?.overrides.cushionContactFriction ?? 0).toFixed(3)} ` +
         `cueX:${(cue?.x ?? 0).toFixed(4)} ` +
         `cueZ:${(cue?.z ?? 0).toFixed(4)} ` +
         `obj1X:${(obj1?.x ?? 0).toFixed(4)} ` +
@@ -845,6 +851,19 @@ function GameWorld() {
     fahLastIndexModelRef.current = indexModel;
     const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'aim');
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    const baseFahConfig = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
+    const dynamicProfile = deriveFahDynamicPhysicsProfile(
+      baseFahConfig,
+      indexModel.firstCushionIndex,
+      shotDirectionDeg,
+      indexModel.firstCushionSide,
+    );
+    fahDynamicProfileRef.current = dynamicProfile;
+    physicsConfigRef.current = createRoomPhysicsStepConfig('fahTest', {
+      ...fahPhysicsTuningRef.current.overrides,
+      ...dynamicProfile.overrides,
+    });
+    physicsAccumulatorRef.current = 0;
 
     gameStore.setSystemMode('fiveAndHalf');
     gameStore.setShotDirection(shotDirectionDeg);
@@ -853,7 +872,7 @@ function GameWorld() {
     // 10시 방향 2팁
     gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex}`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
     );
 
     executeShot({
@@ -1258,6 +1277,7 @@ function GameWorld() {
                 speedBoost: fahPhysicsTuningRef.current.speedBoost,
                 overrides: fahPhysicsTuningRef.current.overrides,
               },
+              dynamicPhysics: fahDynamicProfileRef.current,
             });
             window.localStorage.setItem(
               FAH_CALIBRATION_STORAGE_KEY,

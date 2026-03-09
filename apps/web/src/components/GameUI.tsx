@@ -39,6 +39,12 @@ type FahCalibrationEntry = {
     speedBoost?: number;
     overrides?: Record<string, unknown>;
   };
+  dynamicPhysics?: {
+    targetIndex?: number;
+    grazingFactor?: number;
+    cornerFactor?: number;
+    overrides?: Record<string, unknown>;
+  };
 };
 
 export function GameUI() {
@@ -999,6 +1005,13 @@ export function GameUI() {
           <div>calibration samples: {fahCalibrationEntries.length}</div>
           <div>physics tuning samples: {fahPhysicsTuning.sampleCount}</div>
           <div>physics tuning meanΔ / mean|Δ|: {fahPhysicsTuning.stats.meanDelta} / {fahPhysicsTuning.stats.meanAbsDelta}</div>
+          {playMode === 'fahTest' && fahCalibrationEntries.length > 0 && (
+            <div>
+              latest dynamic: r={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.cushionRestitution ?? '-')}
+              , f={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.cushionContactFriction ?? '-')}
+              , sc={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.clothLinearSpinCouplingPerSec ?? '-')}
+            </div>
+          )}
           <div>avg |delta|: {fahSummary.avgAbsIndexDelta}</div>
           <div>max |delta|: {fahSummary.maxAbsIndexDelta}</div>
           <div>avg landing: {fahSummary.avgLandingDistanceM} m</div>
