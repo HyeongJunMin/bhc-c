@@ -42,6 +42,10 @@ const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
 const FAH_MAX_CORRECTION_ABS = 20;
+const FAH_DIRECTION_SOLVE_COARSE_DEG = 24;
+const FAH_DIRECTION_SOLVE_COARSE_STEP_DEG = 2;
+const FAH_DIRECTION_SOLVE_REFINE_STEPS_DEG = [0.5, 0.1];
+const FAH_DIRECTION_SOLVE_SIM_MAX_SEC = 10;
 const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
 const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
 const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
@@ -466,7 +470,14 @@ function GameWorld() {
     }
     const indexModel = computeFahShotIndexModel(cue.position, gameStore.fahTestTargetPoint);
     const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'aim');
-    const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    const seededDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    const solved = solveDirectionForFahTarget(
+      cue.position.clone(),
+      indexModel.firstCushionIndex,
+      indexModel.firstCushionSide,
+      seededDirectionDeg,
+    );
+    const shotDirectionDeg = solved.directionDeg;
     if (Math.abs(shotDirectionDeg - gameStore.shotInput.shotDirectionDeg) > 0.05) {
       gameStore.setShotDirection(shotDirectionDeg);
     }
@@ -844,7 +855,14 @@ function GameWorld() {
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
     fahLastIndexModelRef.current = indexModel;
     const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'aim');
-    const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    const seededDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    const solved = solveDirectionForFahTarget(
+      cue.position.clone(),
+      indexModel.firstCushionIndex,
+      indexModel.firstCushionSide,
+      seededDirectionDeg,
+    );
+    const shotDirectionDeg = solved.directionDeg;
 
     gameStore.setSystemMode('fiveAndHalf');
     gameStore.setShotDirection(shotDirectionDeg);
@@ -853,7 +871,7 @@ function GameWorld() {
     // 10시 방향 2팁
     gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex}`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | solveObs=${solved.observedIndex ?? '-'} err=${solved.absError.toFixed(1)}`,
     );
 
     executeShot({
@@ -924,6 +942,100 @@ function GameWorld() {
     const bottomRailX = -TABLE_WIDTH / 2;
     const ratio = clamp((topRailX - hitPoint.x) / (topRailX - bottomRailX), 0, 1);
     return quantizeFahIndexToNearestHalfStep(mapFahRailRatioToIndex(ratio));
+  };
+
+  const simulateFirstCushionHitIndex = (
+    cue: THREE.Vector3,
+    directionDeg: number,
+    firstCushionSide: FahRailSide,
+    cfg: ReturnType<typeof createRoomPhysicsStepConfig>,
+    speedBoost: number,
+  ): number | null => {
+    const shotInit = computeShotInitialization({
+      dragPx: FAH_FIXED_DRAG_PX,
+      impactOffsetX: FAH_FIXED_TWO_TIP_OFFSET,
+      impactOffsetY: FAH_FIXED_TWO_TIP_OFFSET,
+    });
+    const directionRad = (directionDeg * Math.PI) / 180;
+    const forwardX = Math.sin(directionRad);
+    const forwardY = Math.cos(directionRad);
+    const ball: PhysicsBallState = {
+      id: 'cueBall',
+      x: cue.x + TABLE_WIDTH / 2,
+      y: cue.z + TABLE_HEIGHT / 2,
+      vx: forwardX * shotInit.initialBallSpeedMps * speedBoost,
+      vy: forwardY * shotInit.initialBallSpeedMps * speedBoost,
+      spinX: shotInit.omegaX * forwardY * speedBoost,
+      spinY: -shotInit.omegaX * forwardX * speedBoost,
+      spinZ: shotInit.omegaZ * speedBoost,
+      isPocketed: false,
+    };
+    let hitX: number | null = null;
+    const wantedCushion: CushionId = firstCushionSide === 'right' ? 'right' : 'left';
+    const balls = [ball];
+    const maxSteps = Math.ceil(FAH_DIRECTION_SOLVE_SIM_MAX_SEC / cfg.dtSec);
+    for (let i = 0; i < maxSteps; i += 1) {
+      stepRoomPhysicsWorld(balls, cfg, {
+        onCushionCollision: (hitBall, cushionId) => {
+          if (hitBall.id === 'cueBall' && cushionId === wantedCushion && hitX === null) {
+            hitX = hitBall.x - TABLE_WIDTH / 2;
+          }
+        },
+      });
+      if (hitX !== null) {
+        break;
+      }
+      if (Math.hypot(ball.vx, ball.vy) <= cfg.shotEndLinearSpeedThresholdMps) {
+        break;
+      }
+    }
+    if (hitX === null) {
+      return null;
+    }
+    const topRailX = TABLE_WIDTH / 2;
+    const bottomRailX = -TABLE_WIDTH / 2;
+    const ratio = clamp((topRailX - hitX) / (topRailX - bottomRailX), 0, 1);
+    return quantizeFahIndexToNearestHalfStep(mapFahRailRatioToIndex(ratio));
+  };
+
+  const solveDirectionForFahTarget = (
+    cue: THREE.Vector3,
+    targetIndex: number,
+    firstCushionSide: FahRailSide,
+    seedDeg: number,
+  ): { directionDeg: number; observedIndex: number | null; absError: number } => {
+    const cfg = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
+    const speedBoost = fahPhysicsTuningRef.current.speedBoost;
+    const normalizedTarget = quantizeFahIndexToNearestHalfStep(targetIndex);
+    let bestDirection = seedDeg;
+    let bestObserved: number | null = null;
+    let bestError = Number.POSITIVE_INFINITY;
+    const evalDirection = (candidate: number) => {
+      const observed = simulateFirstCushionHitIndex(cue, candidate, firstCushionSide, cfg, speedBoost);
+      const error = observed === null ? 9_999 : Math.abs(observed - normalizedTarget);
+      if (error < bestError) {
+        bestError = error;
+        bestDirection = candidate;
+        bestObserved = observed;
+      }
+    };
+
+    for (let delta = -FAH_DIRECTION_SOLVE_COARSE_DEG; delta <= FAH_DIRECTION_SOLVE_COARSE_DEG; delta += FAH_DIRECTION_SOLVE_COARSE_STEP_DEG) {
+      evalDirection(seedDeg + delta);
+    }
+    for (const refineStep of FAH_DIRECTION_SOLVE_REFINE_STEPS_DEG) {
+      const start = bestDirection - FAH_DIRECTION_SOLVE_COARSE_STEP_DEG;
+      const end = bestDirection + FAH_DIRECTION_SOLVE_COARSE_STEP_DEG;
+      for (let candidate = start; candidate <= end; candidate += refineStep) {
+        evalDirection(candidate);
+      }
+    }
+
+    return {
+      directionDeg: bestDirection,
+      observedIndex: bestObserved,
+      absError: Number.isFinite(bestError) ? bestError : 9_999,
+    };
   };
 
 
