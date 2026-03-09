@@ -87,10 +87,10 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
   const speedBoost = clamp(2.0 + correction * 0.35, 1.7, 2.4);
   const linearDampingPerTick = clamp(0.983 + correction * 0.0015 - spread * 0.0008, 0.981, 0.987);
   const spinDampingPerTick = clamp(0.989 + correction * 0.001 - spread * 0.0006, 0.987, 0.993);
-  const cushionRestitution = clamp(0.755 + correction * 0.01 - spread * 0.005, 0.74, 0.77);
-  const cushionContactFriction = clamp(0.12 - correction * 0.01 + spread * 0.01, 0.1, 0.16);
-  const cushionPostCollisionSpeedScale = clamp(0.975 + correction * 0.005 - spread * 0.004, 0.965, 0.985);
-  const clothLinearSpinCouplingPerSec = clamp(3.2 - correction * 0.6 + spread * 0.8, 2.4, 4.2);
+  const cushionRestitution = clamp(0.9 + correction * 0.02 - spread * 0.01, 0.86, 0.94);
+  const cushionContactFriction = clamp(0.05 - correction * 0.01 + spread * 0.01, 0.03, 0.09);
+  const cushionPostCollisionSpeedScale = clamp(1.0 + correction * 0.004 - spread * 0.004, 0.985, 1.01);
+  const clothLinearSpinCouplingPerSec = clamp(1.0 - correction * 0.3 + spread * 0.5, 0.7, 1.8);
 
   return {
     schemaVersion: '1.0.0',

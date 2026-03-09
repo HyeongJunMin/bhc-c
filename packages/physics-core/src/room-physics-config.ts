@@ -26,15 +26,19 @@ export const ROOM_PHYSICS_CLOTH_LINEAR_SPIN_COUPLING_PER_SEC = 4.2;
 export const ROOM_PHYSICS_CLOTH_ANGULAR_SPIN_COUPLING_PER_SEC = 0;
 export const ROOM_PHYSICS_RECOVERY_FALLBACK_ENABLED = true;
 export const ROOM_PHYSICS_MAX_SUBSTEP_ENERGY_GAIN_J = 0.03;
+export const ROOM_PHYSICS_CUSHION_SPIN_MONOTONIC_ENABLED = false;
+export const ROOM_PHYSICS_CUSHION_SPIN_MONOTONIC_RETENTION = 1.0;
 export type RoomPhysicsProfile = 'default' | 'fahTest';
 
 export const FAH_TEST_ROOM_PHYSICS_OVERRIDES: Partial<StepRoomPhysicsConfig> = {
   linearDampingPerTick: 0.983,
   spinDampingPerTick: 0.989,
-  cushionRestitution: 0.755,
-  cushionContactFriction: 0.12,
-  cushionPostCollisionSpeedScale: 0.975,
-  clothLinearSpinCouplingPerSec: 3.2,
+  cushionRestitution: 0.9,
+  cushionContactFriction: 0.05,
+  cushionPostCollisionSpeedScale: 1.0,
+  clothLinearSpinCouplingPerSec: 1.0,
+  cushionSpinMonotonicEnabled: true,
+  cushionSpinMonotonicRetention: 0.92,
 };
 
 export function createRoomPhysicsStepConfig(
@@ -64,6 +68,8 @@ export function createRoomPhysicsStepConfig(
     clothAngularSpinCouplingPerSec: ROOM_PHYSICS_CLOTH_ANGULAR_SPIN_COUPLING_PER_SEC,
     recoveryFallbackEnabled: ROOM_PHYSICS_RECOVERY_FALLBACK_ENABLED,
     maxSubstepEnergyGainJ: ROOM_PHYSICS_MAX_SUBSTEP_ENERGY_GAIN_J,
+    cushionSpinMonotonicEnabled: ROOM_PHYSICS_CUSHION_SPIN_MONOTONIC_ENABLED,
+    cushionSpinMonotonicRetention: ROOM_PHYSICS_CUSHION_SPIN_MONOTONIC_RETENTION,
   };
   const profileOverrides = profile === 'fahTest' ? FAH_TEST_ROOM_PHYSICS_OVERRIDES : undefined;
   return {
