@@ -131,8 +131,8 @@ export function buildFahExpectedCushionSequence(startIndex: number, firstCushion
   };
 }
 
-export function inferFahStartSide(cueZ: number): FahRailSide {
-  return cueZ <= 0 ? 'left' : 'right';
+export function inferFahStartSide(cueX: number): FahRailSide {
+  return cueX <= 0 ? 'left' : 'right';
 }
 
 export function buildFahIndexModel(startIndex: number, firstCushionIndex: number, startSide: FahRailSide): FahIndexModel {

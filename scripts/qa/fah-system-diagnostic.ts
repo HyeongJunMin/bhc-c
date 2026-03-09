@@ -42,12 +42,43 @@ const FIXED_DRAG_PX = 127;
 const FIXED_IMPACT_OFFSET_X = -BALL_RADIUS * 0.4;
 const FIXED_IMPACT_OFFSET_Y = BALL_RADIUS * 0.4;
 
-const ANCHORS: AnchorTarget[] = [
+const DEFAULT_ANCHORS: AnchorTarget[] = [
   { first: 0, second: 5, third: 40, fourth: 20 },
   { first: 30, second: 20, third: 20, fourth: 110 },
   { first: 40, second: 30, third: 10, fourth: 100 },
   { first: 45, second: 35, third: 5, fourth: 95 },
 ];
+
+function normalizeFahCushionId(cushion: CushionId): CushionId {
+  if (cushion === 'top') {
+    return 'bottom';
+  }
+  if (cushion === 'bottom') {
+    return 'top';
+  }
+  return cushion;
+}
+
+function resolveAnchors(): AnchorTarget[] {
+  const raw = process.env.FAH_DIAG_POINTS?.trim();
+  if (!raw) {
+    return DEFAULT_ANCHORS;
+  }
+  const points = raw
+    .split(',')
+    .map((v) => Number(v.trim()))
+    .filter((v) => Number.isFinite(v))
+    .map((v) => Math.round(v));
+  if (points.length === 0) {
+    return DEFAULT_ANCHORS;
+  }
+  return points.map((first) => ({
+    first,
+    second: 0,
+    third: 0,
+    fourth: 0,
+  }));
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -92,21 +123,21 @@ function computeFahStartIndexFromCue(cueX: number): number {
 
 function computeFahFirstRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailX = TABLE_WIDTH / 2;
-  const bottomRailX = -TABLE_WIDTH / 2;
-  const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
-  const sideZSign = firstSide === 'right' ? 1 : -1;
-  const targetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS);
+  const topRailZ = TABLE_HEIGHT / 2;
+  const bottomRailZ = -TABLE_HEIGHT / 2;
+  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
+  const sideXSign = firstSide === 'right' ? 1 : -1;
+  const targetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS);
   return { x: targetX, z: targetZ };
 }
 
 function computeFahMarkerRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailX = TABLE_WIDTH / 2;
-  const bottomRailX = -TABLE_WIDTH / 2;
-  const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
-  const sideZSign = firstSide === 'right' ? 1 : -1;
-  const targetZ = sideZSign * (TABLE_HEIGHT / 2 + CUSHION_THICKNESS / 2);
+  const topRailZ = TABLE_HEIGHT / 2;
+  const bottomRailZ = -TABLE_HEIGHT / 2;
+  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
+  const sideXSign = firstSide === 'right' ? 1 : -1;
+  const targetX = sideXSign * (TABLE_WIDTH / 2 + CUSHION_THICKNESS / 2);
   return { x: targetX, z: targetZ };
 }
 
@@ -118,16 +149,16 @@ function computeFahCompensatedAimTarget(
 ): { x: number; z: number } {
   const marker = computeFahMarkerRailTarget(firstSide, requestedFirstIndex);
   const collision = computeFahFirstRailTarget(firstSide, requestedFirstIndex);
-  const markerDepth = marker.z - cueZ;
-  const collisionDepth = collision.z - cueZ;
+  const markerDepth = marker.x - cueX;
+  const collisionDepth = collision.x - cueX;
   if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
     return collision;
   }
   const depthScale = markerDepth / collisionDepth;
-  const compensatedX = cueX + (collision.x - cueX) * depthScale;
+  const compensatedZ = cueZ + (collision.z - cueZ) * depthScale;
   return {
-    x: clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2),
-    z: marker.z,
+    x: marker.x,
+    z: clamp(compensatedZ, -TABLE_HEIGHT / 2, TABLE_HEIGHT / 2),
   };
 }
 
@@ -168,7 +199,7 @@ function checkRailMappingMonotonic() {
 function runAnchor(anchor: AnchorTarget, maxTicks: number, overrides: ReturnType<typeof getDiagnosticOverrides>) {
   const cueStart = { x: FIXED_CUE_WORLD_X, z: FIXED_CUE_WORLD_Z };
   const startIndex = computeFahStartIndexFromCue(cueStart.x);
-  const startSide = inferFahStartSide(cueStart.z);
+  const startSide = inferFahStartSide(cueStart.x);
   const indexModel = buildFahIndexModel(startIndex, anchor.first, startSide);
   const aimTarget = computeFahCompensatedAimTarget(
     cueStart.x,
@@ -222,17 +253,18 @@ function runAnchor(anchor: AnchorTarget, maxTicks: number, overrides: ReturnType
     stepRoomPhysicsWorld(balls, base, {
       onCushionCollision: (ball, cushionId) => {
         if (ball.id !== 'cueBall') return;
-        if (last === cushionId) duplicated += 1;
+        const normalizedCushion = normalizeFahCushionId(cushionId);
+        if (last === normalizedCushion) duplicated += 1;
         else {
-          last = cushionId;
+          last = normalizedCushion;
           duplicated = 0;
         }
         if (duplicated > 0) return;
         const world = physicsToWorldXZ(ball.x, ball.y);
-        const index = mapFahCushionContactToIndex(cushionId, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
+        const index = mapFahCushionContactToIndex(normalizedCushion, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
         hits.push({
           order: hits.length + 1,
-          cushion: cushionId,
+          cushion: normalizedCushion,
           x: round3(world.x),
           z: round3(world.z),
           index: round3(index),
@@ -279,8 +311,9 @@ async function run() {
   const runId = process.env.FAH_RUN_ID ?? `fah-diagnose-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const maxTicks = Math.max(1200, Number(process.env.FAH_MAX_TICKS ?? '2200'));
   const overrides = getDiagnosticOverrides();
+  const anchorsInput = resolveAnchors();
   const mapping = checkRailMappingMonotonic();
-  const anchors = ANCHORS.map((anchor) => runAnchor(anchor, maxTicks, overrides));
+  const anchors = anchorsInput.map((anchor) => runAnchor(anchor, maxTicks, overrides));
   const summary = {
     runId,
     maxTicks,

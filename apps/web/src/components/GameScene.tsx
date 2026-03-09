@@ -106,6 +106,16 @@ type FahCushionHitEvent = {
   atMs: number;
 };
 
+function normalizeFahCushionId(cushion: CushionId): FahCushionSide {
+  if (cushion === 'top') {
+    return 'bottom';
+  }
+  if (cushion === 'bottom') {
+    return 'top';
+  }
+  return cushion;
+}
+
 function readCaptureParams(): { capture: boolean; cam: 'play' | 'top' | 'side' } {
   if (typeof window === 'undefined') {
     return { capture: false, cam: 'play' };
@@ -916,7 +926,7 @@ function GameWorld() {
 
   const computeFahShotIndexModel = (cue: THREE.Vector3, firstCushionIndex: number): FahIndexModel => {
     const startIndex = computeFahStartIndexFromCue(cue);
-    const startSide = inferFahStartSide(cue.z);
+    const startSide = inferFahStartSide(cue.x);
     return buildFahIndexModel(startIndex, firstCushionIndex, startSide);
   };
 
@@ -926,17 +936,17 @@ function GameWorld() {
     mode: 'aim' | 'marker' = 'aim',
   ): THREE.Vector3 => {
     const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstCushionIndex));
-    const topRailX = TABLE_WIDTH / 2;
-    const bottomRailX = -TABLE_WIDTH / 2;
-    const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
-    const sideZSign = side === 'right' ? 1 : -1;
-    const aimTargetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS);
-    const markerTargetZ = sideZSign * (TABLE_HEIGHT / 2 + PHYSICS.CUSHION_THICKNESS / 2);
+    const topRailZ = TABLE_HEIGHT / 2;
+    const bottomRailZ = -TABLE_HEIGHT / 2;
+    const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
+    const sideXSign = side === 'right' ? 1 : -1;
+    const aimTargetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS);
+    const markerTargetX = sideXSign * (TABLE_WIDTH / 2 + PHYSICS.CUSHION_THICKNESS / 2);
 
     return new THREE.Vector3(
-      targetX,
+      mode === 'marker' ? markerTargetX : aimTargetX,
       BALL_RADIUS + 0.008,
-      mode === 'marker' ? markerTargetZ : aimTargetZ,
+      targetZ,
     );
   };
 
@@ -949,15 +959,15 @@ function GameWorld() {
   ): THREE.Vector3 => {
     const markerPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'marker');
     const collisionPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'aim');
-    const markerDepth = markerPoint.z - cue.z;
-    const collisionDepth = collisionPoint.z - cue.z;
+    const markerDepth = markerPoint.x - cue.x;
+    const collisionDepth = collisionPoint.x - cue.x;
     if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
       return collisionPoint;
     }
     const depthScale = markerDepth / collisionDepth;
-    const compensatedX = cue.x + (collisionPoint.x - cue.x) * depthScale;
-    const clampedX = clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2);
-    return new THREE.Vector3(clampedX, BALL_RADIUS + 0.008, markerPoint.z);
+    const compensatedZ = cue.z + (collisionPoint.z - cue.z) * depthScale;
+    const clampedZ = clamp(compensatedZ, -TABLE_HEIGHT / 2, TABLE_HEIGHT / 2);
+    return new THREE.Vector3(markerPoint.x, BALL_RADIUS + 0.008, clampedZ);
   };
 
   const estimateObservedCushionIndex = (
@@ -1136,13 +1146,14 @@ function GameWorld() {
             cueCushionContacts.add(cushionId);
             if (gameStore.playMode === 'fahTest' && fahTestShotTraceRef.current) {
               const nowMs = performance.now();
+              const normalizedCushion = normalizeFahCushionId(cushionId);
               const existing = fahTestShotTraceRef.current.cushionHits;
               const prev = existing[existing.length - 1];
-              if (!prev || prev.cushion !== cushionId || nowMs - prev.atMs >= CUSHION_TRACE_DEDUPE_WINDOW_MS) {
+              if (!prev || prev.cushion !== normalizedCushion || nowMs - prev.atMs >= CUSHION_TRACE_DEDUPE_WINDOW_MS) {
                 const hitWorld = physicsToWorldXZ(ball.x, ball.y);
                 existing.push({
                   order: existing.length + 1,
-                  cushion: cushionId,
+                  cushion: normalizedCushion,
                   x: hitWorld.x,
                   z: hitWorld.z,
                   atMs: nowMs,

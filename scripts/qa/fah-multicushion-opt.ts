@@ -70,6 +70,16 @@ const SCORE_P0_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P0_SECOND_WEIGHT ?? 
 const SCORE_P0_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P0_THIRD_WEIGHT ?? '0.6');
 const SCORE_P0_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P0_FOURTH_WEIGHT ?? '3.2');
 
+function normalizeFahCushionId(cushion: CushionId): CushionId {
+  if (cushion === 'top') {
+    return 'bottom';
+  }
+  if (cushion === 'bottom') {
+    return 'top';
+  }
+  return cushion;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -108,22 +118,22 @@ function computeFahStartIndexFromCue(cueX: number): number {
 
 function computeFahFirstRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailX = TABLE_WIDTH / 2;
-  const bottomRailX = -TABLE_WIDTH / 2;
-  const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
-  const sideZSign = firstSide === 'right' ? 1 : -1;
-  const targetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS);
+  const topRailZ = TABLE_HEIGHT / 2;
+  const bottomRailZ = -TABLE_HEIGHT / 2;
+  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
+  const sideXSign = firstSide === 'right' ? 1 : -1;
+  const targetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS);
   return { x: targetX, z: targetZ };
 }
 
 function computeFahMarkerRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailX = TABLE_WIDTH / 2;
-  const bottomRailX = -TABLE_WIDTH / 2;
-  const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
-  const sideZSign = firstSide === 'right' ? 1 : -1;
+  const topRailZ = TABLE_HEIGHT / 2;
+  const bottomRailZ = -TABLE_HEIGHT / 2;
+  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
   const cushionThicknessM = 0.058;
-  const targetZ = sideZSign * (TABLE_HEIGHT / 2 + cushionThicknessM / 2);
+  const sideXSign = firstSide === 'right' ? 1 : -1;
+  const targetX = sideXSign * (TABLE_WIDTH / 2 + cushionThicknessM / 2);
   return { x: targetX, z: targetZ };
 }
 
@@ -135,16 +145,16 @@ function computeFahCompensatedAimTarget(
 ): { x: number; z: number } {
   const marker = computeFahMarkerRailTarget(firstSide, requestedFirstIndex);
   const collision = computeFahFirstRailTarget(firstSide, requestedFirstIndex);
-  const markerDepth = marker.z - cueZ;
-  const collisionDepth = collision.z - cueZ;
+  const markerDepth = marker.x - cueX;
+  const collisionDepth = collision.x - cueX;
   if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
     return collision;
   }
   const depthScale = markerDepth / collisionDepth;
-  const compensatedX = cueX + (collision.x - cueX) * depthScale;
+  const compensatedZ = cueZ + (collision.z - cueZ) * depthScale;
   return {
-    x: clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2),
-    z: marker.z,
+    x: marker.x,
+    z: clamp(compensatedZ, -TABLE_HEIGHT / 2, TABLE_HEIGHT / 2),
   };
 }
 
@@ -177,7 +187,7 @@ function buildCandidate(random: () => number): CandidateOverrides {
 function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): ShotEval {
   const cueStart = { x: FIXED_CUE_WORLD_X, z: FIXED_CUE_WORLD_Z };
   const startIndex = computeFahStartIndexFromCue(cueStart.x);
-  const startSide = inferFahStartSide(cueStart.z);
+  const startSide = inferFahStartSide(cueStart.x);
   const indexModel = buildFahIndexModel(startIndex, anchor.first, startSide);
   const firstTarget = computeFahCompensatedAimTarget(
     cueStart.x,
@@ -233,18 +243,19 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
         if (ball.id !== 'cueBall') {
           return;
         }
-        if (lastHit === cushionId) {
+        const normalizedCushion = normalizeFahCushionId(cushionId);
+        if (lastHit === normalizedCushion) {
           sameCount += 1;
         } else {
-          lastHit = cushionId;
+          lastHit = normalizedCushion;
           sameCount = 0;
         }
         if (sameCount > 0) {
           return;
         }
         const world = physicsToWorldXZ(ball.x, ball.y);
-        const index = mapFahCushionContactToIndex(cushionId, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
-        rawHits.push({ cushion: cushionId, index });
+        const index = mapFahCushionContactToIndex(normalizedCushion, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
+        rawHits.push({ cushion: normalizedCushion, index });
       },
     });
     const cue = balls[0];
