@@ -23,12 +23,16 @@ export interface ShotInput {
 }
 
 export type CueBallId = 'cueBall' | 'objectBall2';
+export type SystemMode = 'half' | 'fiveAndHalf' | 'plusTwo';
+export type PlayMode = 'game' | 'fahTest';
 
 export type TurnEvent = 
   | { type: 'cushion'; railId: string; timestamp: number }
   | { type: 'ball'; ballId: string; timestamp: number };
 
 interface GameStore {
+  playMode: PlayMode;
+  setPlayMode: (mode: PlayMode) => void;
   // 게임 상태
   phase: GamePhase;
   setPhase: (phase: GamePhase) => void;
@@ -51,6 +55,10 @@ interface GameStore {
   setIsDragging: (dragging: boolean) => void;
   
   // 게임 로직
+  systemMode: SystemMode;
+  setSystemMode: (mode: SystemMode) => void;
+  fahGuide: { correctedAim: number; expectedThirdCushion: number; indexScale: 50 | 100 } | null;
+  setFahGuide: (guide: { correctedAim: number; expectedThirdCushion: number; indexScale: 50 | 100 } | null) => void;
   currentPlayer: string;
   activeCueBallId: CueBallId;
   players: string[];
@@ -60,6 +68,10 @@ interface GameStore {
   turnMessage: string;
   turnStartedAtMs: number;
   turnEvents: TurnEvent[];
+  fahTestShotRequest: { targetPoint: number; requestedAt: number } | null;
+  fahTestTargetPoint: number;
+  fahTestCorrectionOffset: number;
+  fahTestAutoCorrectionEnabled: boolean;
   
   // 액션
   addScore: (player: string) => void;
@@ -75,6 +87,10 @@ interface GameStore {
   resetTurnEvents: () => void;
   checkThreeCushionScore: () => boolean;
   handleTurnEnd: () => void;
+  requestFahTestShot: (targetPoint: number) => void;
+  clearFahTestShotRequest: () => void;
+  setFahTestCorrectionOffset: (offset: number) => void;
+  setFahTestAutoCorrectionEnabled: (enabled: boolean) => void;
 }
 
 // 3쿠션 초구 세팅
@@ -90,34 +106,72 @@ function readInitialAimControlMode(): AimControlMode {
   return raw === 'MANUAL_AIM' || raw === 'AUTO_SYNC' ? raw : AIM_CONTROL_CONTRACT.defaultMode;
 }
 
-const createInitialBalls = (): BallState[] => [
-  {
-    id: 'cueBall',
-    position: new Vector3(headSpotX, PHYSICS.BALL_RADIUS, -0.1524),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
-    isPocketed: false,
-  },
-  {
-    id: 'objectBall1',
-    position: new Vector3(footSpotX, PHYSICS.BALL_RADIUS, 0),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
-    isPocketed: false,
-  },
-  {
-    id: 'objectBall2',
-    position: new Vector3(headSpotX, PHYSICS.BALL_RADIUS, 0),
-    velocity: new Vector3(0, 0, 0),
-    angularVelocity: new Vector3(0, 0, 0),
-    isPocketed: false,
-  },
-];
+const createInitialBalls = (mode: PlayMode): BallState[] => {
+  if (mode === 'fahTest') {
+    return [
+      {
+        id: 'cueBall',
+        position: new Vector3(-PHYSICS.TABLE_WIDTH / 2 + PHYSICS.TABLE_WIDTH / 8, PHYSICS.BALL_RADIUS, -PHYSICS.TABLE_HEIGHT / 2 + PHYSICS.TABLE_HEIGHT / 4),
+        velocity: new Vector3(0, 0, 0),
+        angularVelocity: new Vector3(0, 0, 0),
+        isPocketed: false,
+      },
+    ];
+  }
+  return [
+    {
+      id: 'cueBall',
+      position: new Vector3(headSpotX, PHYSICS.BALL_RADIUS, -0.1524),
+      velocity: new Vector3(0, 0, 0),
+      angularVelocity: new Vector3(0, 0, 0),
+      isPocketed: false,
+    },
+    {
+      id: 'objectBall1',
+      position: new Vector3(footSpotX, PHYSICS.BALL_RADIUS, 0),
+      velocity: new Vector3(0, 0, 0),
+      angularVelocity: new Vector3(0, 0, 0),
+      isPocketed: false,
+    },
+    {
+      id: 'objectBall2',
+      position: new Vector3(headSpotX, PHYSICS.BALL_RADIUS, 0),
+      velocity: new Vector3(0, 0, 0),
+      angularVelocity: new Vector3(0, 0, 0),
+      isPocketed: false,
+    },
+  ];
+};
 
 export const useGameStore = create<GameStore>((set, get) => ({
   // 초기 상태
+  playMode: 'game',
+  setPlayMode: (mode) => set(() => ({
+    playMode: mode,
+    phase: 'AIMING',
+    balls: createInitialBalls(mode),
+    turnEvents: [],
+    cushionContacts: 0,
+    objectBallsHit: new Set(),
+    systemMode: mode === 'fahTest' ? 'fiveAndHalf' : 'half',
+    fahGuide: null,
+    shotInput: {
+      aimControlMode: AIM_CONTROL_CONTRACT.defaultMode,
+      shotDirectionDeg: 90,
+      cueElevationDeg: 0,
+      dragPx: 10,
+      impactOffsetX: 0,
+      impactOffsetY: 0,
+    },
+    turnMessage: mode === 'fahTest' ? 'FAH TEST MODE' : '',
+    turnStartedAtMs: Date.now(),
+    fahTestShotRequest: null,
+    fahTestTargetPoint: 10,
+    fahTestCorrectionOffset: 0,
+    fahTestAutoCorrectionEnabled: false,
+  })),
   phase: 'AIMING',
-  balls: createInitialBalls(),
+  balls: createInitialBalls('game'),
   shotInput: {
     aimControlMode: readInitialAimControlMode(),
     shotDirectionDeg: 90,
@@ -127,6 +181,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     impactOffsetY: 0,
   },
   isDragging: false,
+  systemMode: 'half',
+  setSystemMode: (mode) => set({ systemMode: mode }),
+  fahGuide: null,
+  setFahGuide: (guide) => set({ fahGuide: guide }),
   currentPlayer: 'player1',
   activeCueBallId: 'cueBall',
   players: ['player1', 'player2'],
@@ -136,6 +194,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   turnMessage: '',
   turnStartedAtMs: Date.now(),
   turnEvents: [],
+  fahTestShotRequest: null,
+  fahTestTargetPoint: 10,
+  fahTestCorrectionOffset: 0,
+  fahTestAutoCorrectionEnabled: false,
 
   // 기본 액션
   setPhase: (phase) => set({ phase }),
@@ -146,7 +208,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     ),
   })),
   
-  resetBalls: () => set({ balls: createInitialBalls() }),
+  resetBalls: () => set((state) => ({ balls: createInitialBalls(state.playMode) })),
   
   setShotDirection: (deg) => set((state) => ({
     shotInput: { ...state.shotInput, shotDirectionDeg: deg },
@@ -209,16 +271,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       impactOffsetY: 0,
     },
     isDragging: false,
+    fahGuide: null,
     turnMessage: '',
     turnStartedAtMs: Date.now(),
   })),
   
   resetGame: () => set(() => ({
+    playMode: 'game',
     phase: 'AIMING',
-    balls: createInitialBalls(),
+    balls: createInitialBalls('game'),
     scores: { player1: 0, player2: 0 },
     currentPlayer: 'player1',
     activeCueBallId: 'cueBall',
+    systemMode: 'half',
+    fahGuide: null,
     turnMessage: '',
     turnStartedAtMs: Date.now(),
     isDragging: false,
@@ -233,6 +299,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       impactOffsetX: 0,
       impactOffsetY: 0,
     },
+    fahTestShotRequest: null,
+    fahTestTargetPoint: 10,
+    fahTestCorrectionOffset: 0,
+    fahTestAutoCorrectionEnabled: false,
   })),
 
   // 3쿠션 이벤트 추적
@@ -286,6 +356,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   handleTurnEnd: () => {
     const state = get();
+    if (state.playMode === 'fahTest') {
+      set({
+        currentPlayer: 'player1',
+        activeCueBallId: 'cueBall',
+        turnMessage: 'FAH TEST SHOT DONE',
+        phase: 'AIMING',
+        turnStartedAtMs: Date.now(),
+        turnEvents: [],
+        cushionContacts: 0,
+        objectBallsHit: new Set(),
+      });
+      return;
+    }
     const scored = state.checkThreeCushionScore();
     
     if (scored) {
@@ -346,4 +429,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     }
   },
+  requestFahTestShot: (targetPoint) => set({
+    fahTestShotRequest: {
+      targetPoint,
+      requestedAt: Date.now(),
+    },
+    fahTestTargetPoint: targetPoint,
+  }),
+  clearFahTestShotRequest: () => set({ fahTestShotRequest: null }),
+  setFahTestCorrectionOffset: (offset) => set({ fahTestCorrectionOffset: offset }),
+  setFahTestAutoCorrectionEnabled: (enabled) => set({ fahTestAutoCorrectionEnabled: enabled }),
 }));

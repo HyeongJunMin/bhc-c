@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 
 import { createAuthRequestHandler } from './auth/http.ts';
 import { createLobbyRequestHandler } from './lobby/http.ts';
+import { createFiveAndHalfRequestHandler } from './system/five-and-half.ts';
 
 const PORT_MIN = 1;
 const PORT_MAX = 65535;
@@ -38,6 +39,7 @@ const lobbyState = {
 
 const authHandler = createAuthRequestHandler(authState);
 const lobbyHandler = createLobbyRequestHandler(lobbyState);
+const fiveAndHalfHandler = createFiveAndHalfRequestHandler();
 
 const server = createServer((req, res) => {
   if (req.url === '/health') {
@@ -52,6 +54,10 @@ const server = createServer((req, res) => {
   }
   if (req.url?.startsWith('/lobby/')) {
     void lobbyHandler(req, res);
+    return;
+  }
+  if (req.url?.startsWith('/v1/systems/five-and-half/')) {
+    void fiveAndHalfHandler(req, res);
     return;
   }
   res.statusCode = 404;

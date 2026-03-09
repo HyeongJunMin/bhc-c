@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bhc.local/schemas/five-and-half-api-v1.json",
+  "title": "FiveAndHalfApiV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaName",
+    "schemaVersion",
+    "payloadType",
+    "payload"
+  ],
+  "properties": {
+    "schemaName": {
+      "type": "string",
+      "const": "five_and_half_api"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "payloadType": {
+      "type": "string",
+      "enum": [
+        "predict_request",
+        "predict_response",
+        "simulate_request",
+        "simulate_response",
+        "calibrate_request",
+        "calibrate_response"
+      ]
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/predictRequest"
+        },
+        {
+          "$ref": "#/$defs/predictResponse"
+        },
+        {
+          "$ref": "#/$defs/simulateRequest"
+        },
+        {
+          "$ref": "#/$defs/simulateResponse"
+        },
+        {
+          "$ref": "#/$defs/calibrateRequest"
+        },
+        {
+          "$ref": "#/$defs/calibrateResponse"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "point2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "tableProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "widthM",
+        "heightM",
+        "indexScale",
+        "condition"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "widthM": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "heightM": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "indexScale": {
+          "type": "integer",
+          "enum": [
+            50,
+            100
+          ]
+        },
+        "condition": {
+          "type": "string",
+          "enum": [
+            "tight",
+            "normal",
+            "slippery"
+          ]
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cueBall",
+        "objectBall1",
+        "objectBall2"
+      ],
+      "properties": {
+        "cueBall": {
+          "$ref": "#/$defs/point2"
+        },
+        "objectBall1": {
+          "$ref": "#/$defs/point2"
+        },
+        "objectBall2": {
+          "$ref": "#/$defs/point2"
+        }
+      }
+    },
+    "shotHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speedBand",
+        "spinBand",
+        "angleBand"
+      ],
+      "properties": {
+        "speedBand": {
+          "type": "string",
+          "enum": [
+            "low",
+            "mid",
+            "high"
+          ]
+        },
+        "spinBand": {
+          "type": "string",
+          "enum": [
+            "none",
+            "light",
+            "strong"
+          ]
+        },
+        "angleBand": {
+          "type": "string",
+          "enum": [
+            "shallow",
+            "mid",
+            "steep"
+          ]
+        }
+      }
+    },
+    "predictRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableProfile",
+        "layout",
+        "intent"
+      ],
+      "properties": {
+        "tableProfile": {
+          "$ref": "#/$defs/tableProfile"
+        },
+        "layout": {
+          "$ref": "#/$defs/layout"
+        },
+        "intent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "routeType",
+            "targetThirdRail"
+          ],
+          "properties": {
+            "routeType": {
+              "type": "string",
+              "enum": [
+                "five_and_half"
+              ]
+            },
+            "targetThirdRail": {
+              "type": "string",
+              "enum": [
+                "long",
+                "short"
+              ]
+            }
+          }
+        },
+        "shotHint": {
+          "$ref": "#/$defs/shotHint"
+        }
+      }
+    },
+    "predictResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseAim",
+        "correctedAim",
+        "expectedThirdCushion",
+        "confidence"
+      ],
+      "properties": {
+        "baseAim": {
+          "type": "number"
+        },
+        "correctedAim": {
+          "type": "number"
+        },
+        "expectedThirdCushion": {
+          "type": "number"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "correctionBreakdown": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "factor",
+              "delta"
+            ],
+            "properties": {
+              "factor": {
+                "type": "string",
+                "enum": [
+                  "speed",
+                  "spin",
+                  "angle",
+                  "table_condition",
+                  "user_profile"
+                ]
+              },
+              "delta": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "simulateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shotInput",
+        "physicsProfile"
+      ],
+      "properties": {
+        "predict": {
+          "$ref": "#/$defs/predictResponse"
+        },
+        "shotInput": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "physicsProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "clothFriction",
+            "cushionRestitution",
+            "spinDecay"
+          ],
+          "properties": {
+            "clothFriction": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cushionRestitution": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "spinDecay": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "simulateResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events",
+        "finalState",
+        "errorMetrics"
+      ],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tMs",
+              "kind"
+            ],
+            "properties": {
+              "tMs": {
+                "type": "number",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "cushion_contact",
+                  "ball_contact"
+                ]
+              },
+              "rail": {
+                "type": "string",
+                "enum": [
+                  "top",
+                  "bottom",
+                  "left",
+                  "right"
+                ]
+              }
+            }
+          }
+        },
+        "finalState": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "errorMetrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "thirdCushionIndexDelta",
+            "landingDistanceM"
+          ],
+          "properties": {
+            "thirdCushionIndexDelta": {
+              "type": "number"
+            },
+            "landingDistanceM": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "calibrationSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predict",
+        "simulate",
+        "success"
+      ],
+      "properties": {
+        "predict": {
+          "$ref": "#/$defs/predictResponse"
+        },
+        "simulate": {
+          "$ref": "#/$defs/simulateResponse"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      }
+    },
+    "calibrateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "samples",
+        "strategy"
+      ],
+      "properties": {
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/calibrationSample"
+          }
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "ema",
+            "batch_least_squares"
+          ]
+        }
+      }
+    },
+    "calibrateResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "updatedProfile",
+        "deltaSummary",
+        "appliedSampleCount"
+      ],
+      "properties": {
+        "updatedProfile": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "deltaSummary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "factor",
+              "delta"
+            ],
+            "properties": {
+              "factor": {
+                "type": "string"
+              },
+              "delta": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "appliedSampleCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

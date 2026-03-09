@@ -26,6 +26,23 @@ const MAX_DEBUG_TRACE_CHARS = 2000;
 const CUSHION_TRACE_DEDUPE_WINDOW_MS = 120;
 const CUE_DEBUG_X = -TABLE_WIDTH / 2 + DIAMOND_STEP_X * 3;
 const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
+const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
+const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
+const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
+const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
+const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
+// INPUT drag range(10..400) 기준 30%
+const FAH_FIXED_DRAG_PX = 127;
+// 테스트 모드에서만 30% 입력 속도에 추가 부스트 적용
+const FAH_TEST_SPEED_BOOST = 2.0;
+// FAH 좌표계 기준(화면 기준 가로 테이블):
+// - 하단/상단은 단쿠션, 좌측/우측은 장쿠션으로만 표기한다.
+// - 1쿠션 인덱스: 우측 장쿠션, 0=우상단, 증가방향=아래(0..40)
+// - 출발 인덱스: 좌측 장쿠션, 0=좌상단, 증가방향=아래(0..80)
+// - 3쿠션 인덱스: 좌측 장쿠션, 0=좌상단, 증가방향=아래(0..80)
+const FAH_INDEX_MAX = 80;
+const FAH_FIRST_CUSHION_INDEX_MAX = 40;
+const FAH_FRAME_VERSION = 'fah-frame-v1-right-long';
 const DEBUG_PRESET_ENABLED = false;
 const TURN_DURATION_MS = 20_000;
 const DEBUG_PRESETS = {
@@ -110,12 +127,23 @@ function signedDeltaDeg(beforeDeg: number, afterDeg: number): number {
   return delta;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function directionDegFromCueToTarget(cue: THREE.Vector3, target: THREE.Vector3): number {
   const dx = target.x - cue.x;
   const dz = target.z - cue.z;
   const deg = (Math.atan2(dx, dz) * 180) / Math.PI;
   return (deg + 360) % 360;
 }
+
+type FahShotIndexModel = {
+  frameVersion: string;
+  startIndex: number;
+  firstCushionIndex: number;
+  expectedThirdIndex: number;
+};
 
 /**
  * 3D 게임 월드
@@ -125,7 +153,9 @@ function GameWorld() {
   const captureParams = readCaptureParams();
   const gameStore = useGameStore();
 
-  const physicsConfigRef = useRef(createRoomPhysicsStepConfig());
+  const physicsConfigRef = useRef(
+    createRoomPhysicsStepConfig(gameStore.playMode === 'fahTest' ? 'fahTest' : 'default'),
+  );
   const physicsAccumulatorRef = useRef(0);
   const physicsBallsRef = useRef<PhysicsBallState[]>([]);
   const cueStickRef = useRef<CueStick | null>(null);
@@ -134,6 +164,25 @@ function GameWorld() {
   const guideCuePathRef = useRef<THREE.Line | null>(null);
   const guidePostCuePathRef = useRef<THREE.Line | null>(null);
   const guideObjectPathRef = useRef<THREE.Line | null>(null);
+  const guideFahPathRef = useRef<THREE.Line | null>(null);
+  const guideFahFirstCushionMarkerRef = useRef<THREE.Mesh | null>(null);
+  const fahTestShotTraceRef = useRef<{
+    shotId: string;
+    startedAtMs: number;
+    playMode: 'fahTest';
+    shotInput: {
+      shotDirectionDeg: number;
+      cueElevationDeg: number;
+      dragPx: number;
+      impactOffsetX: number;
+      impactOffsetY: number;
+      requestedTargetPoint: number | null;
+      correctedTargetPoint: number | null;
+    };
+    indexModel: FahShotIndexModel;
+    points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>;
+  } | null>(null);
+  const fahLastIndexModelRef = useRef<FahShotIndexModel | null>(null);
   const debugTracePartsRef = useRef<string[]>([]);
   const traceEventIndexRef = useRef(0);
   const traceWasTruncatedRef = useRef(false);
@@ -157,7 +206,6 @@ function GameWorld() {
 
   useEffect(() => {
     createVisualTable(scene);
-    createBalls();
     if (DEBUG_PRESET_ENABLED) {
       applyDebugPreset();
     }
@@ -180,6 +228,18 @@ function GameWorld() {
     guideCuePathRef.current = createGuideLine(0x8be9fd);
     guidePostCuePathRef.current = createGuideLine(0x50fa7b);
     guideObjectPathRef.current = createGuideLine(0xffb86c);
+    guideFahPathRef.current = createGuideLine(0xff79c6);
+    const markerGeo = new THREE.SphereGeometry(BALL_RADIUS * 0.35, 24, 24);
+    const markerMat = new THREE.MeshStandardMaterial({
+      color: 0xff5a5f,
+      emissive: 0x661111,
+      roughness: 0.25,
+      metalness: 0.1,
+    });
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    marker.visible = false;
+    scene.add(marker);
+    guideFahFirstCushionMarkerRef.current = marker;
     console.log('[GameWorld] Initialized (physics-core runtime)');
 
     return () => {
@@ -194,11 +254,30 @@ function GameWorld() {
       disposeLine(guideCuePathRef.current);
       disposeLine(guidePostCuePathRef.current);
       disposeLine(guideObjectPathRef.current);
+      disposeLine(guideFahPathRef.current);
+      if (guideFahFirstCushionMarkerRef.current) {
+        scene.remove(guideFahFirstCushionMarkerRef.current);
+        guideFahFirstCushionMarkerRef.current.geometry.dispose();
+        (guideFahFirstCushionMarkerRef.current.material as THREE.Material).dispose();
+      }
       guideCuePathRef.current = null;
       guidePostCuePathRef.current = null;
       guideObjectPathRef.current = null;
+      guideFahPathRef.current = null;
+      guideFahFirstCushionMarkerRef.current = null;
     };
   }, [scene]);
+
+  useEffect(() => {
+    clearBalls();
+    createBalls();
+    physicsAccumulatorRef.current = 0;
+  }, [scene, gameStore.playMode]);
+
+  useEffect(() => {
+    physicsConfigRef.current = createRoomPhysicsStepConfig(gameStore.playMode === 'fahTest' ? 'fahTest' : 'default');
+    physicsAccumulatorRef.current = 0;
+  }, [gameStore.playMode]);
 
   useEffect(() => {
     if (gameStore.phase === 'SHOOTING') {
@@ -319,15 +398,70 @@ function GameWorld() {
     }
   }, [camera, captureParams.cam]);
 
+  useEffect(() => {
+    if (gameStore.playMode !== 'fahTest' || gameStore.phase !== 'AIMING') {
+      return;
+    }
+    const cue = ballsRef.current.get('cueBall')?.mesh;
+    const cuePhysics = physicsBallsRef.current.find((ball) => ball.id === 'cueBall');
+    if (!cue || !cuePhysics) {
+      return;
+    }
+    cue.position.set(FAH_FIXED_CUE_WORLD_X, BALL_RADIUS, FAH_FIXED_CUE_WORLD_Z);
+    cuePhysics.x = FAH_FIXED_CUE_WORLD_X + TABLE_WIDTH / 2;
+    cuePhysics.y = FAH_FIXED_CUE_WORLD_Z + TABLE_HEIGHT / 2;
+    cuePhysics.vx = 0;
+    cuePhysics.vy = 0;
+    cuePhysics.spinX = 0;
+    cuePhysics.spinY = 0;
+    cuePhysics.spinZ = 0;
+    gameStore.updateBall('cueBall', {
+      position: cue.position.clone(),
+      velocity: new THREE.Vector3(0, 0, 0),
+      angularVelocity: new THREE.Vector3(0, 0, 0),
+      isPocketed: false,
+    });
+    gameStore.setDragPower(FAH_FIXED_DRAG_PX);
+    gameStore.setCueElevation(0);
+    gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
+  }, [gameStore.playMode, gameStore.phase]);
+
+  useEffect(() => {
+    if (gameStore.playMode !== 'fahTest' || gameStore.phase !== 'AIMING') {
+      return;
+    }
+    const cue = ballsRef.current.get('cueBall')?.mesh;
+    if (!cue) {
+      return;
+    }
+    const indexModel = computeFahShotIndexModel(cue.position, gameStore.fahTestTargetPoint);
+    const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionIndex, 'aim');
+    const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+    if (Math.abs(shotDirectionDeg - gameStore.shotInput.shotDirectionDeg) > 0.05) {
+      gameStore.setShotDirection(shotDirectionDeg);
+    }
+  }, [gameStore.playMode, gameStore.phase, gameStore.fahTestTargetPoint]);
+
+  const clearBalls = () => {
+    for (const { mesh } of ballsRef.current.values()) {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    ballsRef.current.clear();
+    physicsBallsRef.current = [];
+  };
+
   const createBalls = () => {
-    const ballConfigs = [
-      { id: 'cueBall', color: 0xffffff, pos: gameStore.balls[0].position },
-      { id: 'objectBall1', color: 0xff0000, pos: gameStore.balls[1].position },
-      { id: 'objectBall2', color: 0xffd700, pos: gameStore.balls[2].position },
-    ];
+    const colorById: Record<string, number> = {
+      cueBall: 0xffffff,
+      objectBall1: 0xff0000,
+      objectBall2: 0xffd700,
+    };
 
     const physicsBalls: PhysicsBallState[] = [];
-    ballConfigs.forEach(({ id, color, pos }) => {
+    gameStore.balls.forEach(({ id, position: pos }) => {
+      const color = colorById[id] ?? 0xffffff;
       const geometry = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
       const material = new THREE.MeshPhysicalMaterial({
         color,
@@ -346,7 +480,7 @@ function GameWorld() {
 
       const physicsPos = worldToPhysicsXY(pos.x, pos.z);
       physicsBalls.push({
-        id,
+        id: id as PhysicsBallState['id'],
         x: physicsPos.x,
         y: physicsPos.y,
         vx: 0,
@@ -523,27 +657,54 @@ function GameWorld() {
     }
   };
 
-  const executeShot = () => {
-    const cueBall = physicsBallsRef.current.find((ball) => ball.id === gameStore.activeCueBallId);
+  const executeShot = (overrideShotInput?: {
+    shotDirectionDeg?: number;
+    cueElevationDeg?: number;
+    dragPx?: number;
+    impactOffsetX?: number;
+    impactOffsetY?: number;
+    requestedTargetPoint?: number | null;
+    correctedTargetPoint?: number | null;
+  }) => {
+    const shotInput = {
+      ...gameStore.shotInput,
+      ...(overrideShotInput ?? {}),
+    };
+    if (gameStore.playMode === 'fahTest') {
+      shotInput.dragPx = FAH_FIXED_DRAG_PX;
+      shotInput.cueElevationDeg = 0;
+      shotInput.impactOffsetX = -FAH_FIXED_TWO_TIP_OFFSET;
+      shotInput.impactOffsetY = FAH_FIXED_TWO_TIP_OFFSET;
+    }
+    const shotCueBallId = gameStore.playMode === 'fahTest' ? 'cueBall' : gameStore.activeCueBallId;
+    const cueBall = physicsBallsRef.current.find((ball) => ball.id === shotCueBallId);
     if (!cueBall) {
       return;
     }
-    const impactOffsetXForPhysics = -gameStore.shotInput.impactOffsetX;
+    const impactOffsetXForPhysics = -shotInput.impactOffsetX;
 
-    if (isMiscue(impactOffsetXForPhysics, gameStore.shotInput.impactOffsetY, BALL_RADIUS)) {
+    if (isMiscue(impactOffsetXForPhysics, shotInput.impactOffsetY, BALL_RADIUS)) {
       gameStore.setTurnMessage('MISCUE!');
     }
 
     const shotInit = computeShotInitialization({
-      dragPx: gameStore.shotInput.dragPx,
+      dragPx: shotInput.dragPx,
       impactOffsetX: impactOffsetXForPhysics,
-      impactOffsetY: gameStore.shotInput.impactOffsetY,
+      impactOffsetY: shotInput.impactOffsetY,
     });
+    let initialBallSpeedMps = shotInit.initialBallSpeedMps;
+    let omegaX = shotInit.omegaX;
+    let omegaZ = shotInit.omegaZ;
+    if (gameStore.playMode === 'fahTest') {
+      initialBallSpeedMps *= FAH_TEST_SPEED_BOOST;
+      omegaX *= FAH_TEST_SPEED_BOOST;
+      omegaZ *= FAH_TEST_SPEED_BOOST;
+    }
 
     if (typeof window !== 'undefined') {
-      const cue = gameStore.balls.find((ball) => ball.id === gameStore.activeCueBallId)?.position;
+      const cue = gameStore.balls.find((ball) => ball.id === shotCueBallId)?.position;
       const obj1 = gameStore.balls.find((ball) => ball.id === 'objectBall1')?.position;
-      const obj2 = gameStore.balls.find((ball) => ball.id !== gameStore.activeCueBallId && ball.id !== 'objectBall1')?.position;
+      const obj2 = gameStore.balls.find((ball) => ball.id !== shotCueBallId && ball.id !== 'objectBall1')?.position;
       const playableWidth = PHYSICS.TABLE_WIDTH - PHYSICS.BALL_RADIUS * 2;
       const playableHeight = PHYSICS.TABLE_HEIGHT - PHYSICS.BALL_RADIUS * 2;
       const startRatioX = cue
@@ -555,13 +716,14 @@ function GameWorld() {
       const lastShotLine =
         `startRatioX:${startRatioX.toFixed(3)} ` +
         `startRatioY:${startRatioY.toFixed(3)} ` +
-        `directionDeg:${gameStore.shotInput.shotDirectionDeg.toFixed(1)} ` +
-        `speedMps:${shotInit.initialBallSpeedMps.toFixed(3)} ` +
-        `spinZ:${shotInit.omegaZ.toFixed(3)} ` +
-        `dragPx:${gameStore.shotInput.dragPx.toFixed(1)} ` +
-        `impactOffsetX(UI):${gameStore.shotInput.impactOffsetX.toFixed(4)} ` +
+        `directionDeg:${shotInput.shotDirectionDeg.toFixed(1)} ` +
+        `speedMps:${initialBallSpeedMps.toFixed(3)} ` +
+        `spinZ:${omegaZ.toFixed(3)} ` +
+        `speedBoost:${(gameStore.playMode === 'fahTest' ? FAH_TEST_SPEED_BOOST : 1).toFixed(2)} ` +
+        `dragPx:${shotInput.dragPx.toFixed(1)} ` +
+        `impactOffsetX(UI):${shotInput.impactOffsetX.toFixed(4)} ` +
         `impactOffsetX(phys):${impactOffsetXForPhysics.toFixed(4)} ` +
-        `impactOffsetY:${gameStore.shotInput.impactOffsetY.toFixed(4)} ` +
+        `impactOffsetY:${shotInput.impactOffsetY.toFixed(4)} ` +
         `cueX:${(cue?.x ?? 0).toFixed(4)} ` +
         `cueZ:${(cue?.z ?? 0).toFixed(4)} ` +
         `obj1X:${(obj1?.x ?? 0).toFixed(4)} ` +
@@ -575,21 +737,178 @@ function GameWorld() {
     traceWasTruncatedRef.current = false;
     lastCueCushionEventRef.current = null;
 
-    const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
+    const directionRad = (shotInput.shotDirectionDeg * Math.PI) / 180;
     const forwardX = Math.sin(directionRad);
     const forwardY = Math.cos(directionRad);
-    cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
-    cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
-    cueBall.spinX = shotInit.omegaX * forwardY;
-    cueBall.spinY = -shotInit.omegaX * forwardX;
-    cueBall.spinZ = shotInit.omegaZ;
+    cueBall.vx = forwardX * initialBallSpeedMps;
+    cueBall.vy = forwardY * initialBallSpeedMps;
+    cueBall.spinX = omegaX * forwardY;
+    cueBall.spinY = -omegaX * forwardX;
+    cueBall.spinZ = omegaZ;
+    if (gameStore.playMode === 'fahTest') {
+      const cueMesh = ballsRef.current.get('cueBall')?.mesh;
+      const fallbackCue = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X, BALL_RADIUS, FAH_FIXED_CUE_WORLD_Z);
+      const indexModel =
+        fahLastIndexModelRef.current ??
+        computeFahShotIndexModel(cueMesh?.position ?? fallbackCue, gameStore.fahTestTargetPoint);
+      fahTestShotTraceRef.current = {
+        shotId: `fah-test-shot-${Date.now()}`,
+        startedAtMs: performance.now(),
+        playMode: 'fahTest',
+        shotInput: {
+          shotDirectionDeg: shotInput.shotDirectionDeg,
+          cueElevationDeg: shotInput.cueElevationDeg,
+          dragPx: shotInput.dragPx,
+          impactOffsetX: shotInput.impactOffsetX,
+          impactOffsetY: shotInput.impactOffsetY,
+          requestedTargetPoint:
+            typeof shotInput.requestedTargetPoint === 'number' ? shotInput.requestedTargetPoint : null,
+          correctedTargetPoint:
+            typeof shotInput.correctedTargetPoint === 'number' ? shotInput.correctedTargetPoint : null,
+        },
+        indexModel,
+        points: [],
+      };
+    } else {
+      fahTestShotTraceRef.current = null;
+    }
 
     gameStore.executeShot();
     cueStickRef.current?.animateShot();
   };
 
+    const runFahTestTargetShot = (targetPoint: number) => {
+    const cue = ballsRef.current.get('cueBall')?.mesh;
+    const cuePhysics = physicsBallsRef.current.find((ball) => ball.id === 'cueBall');
+    if (!cue || !cuePhysics) {
+      return;
+    }
+
+    // 다이아 (1,1) 고정
+    const cueX = FAH_FIXED_CUE_WORLD_X;
+    const cueZ = FAH_FIXED_CUE_WORLD_Z;
+    cue.position.set(cueX, BALL_RADIUS, cueZ);
+    cuePhysics.x = cueX + TABLE_WIDTH / 2;
+    cuePhysics.y = cueZ + TABLE_HEIGHT / 2;
+    cuePhysics.vx = 0;
+    cuePhysics.vy = 0;
+    cuePhysics.spinX = 0;
+    cuePhysics.spinY = 0;
+    cuePhysics.spinZ = 0;
+    gameStore.updateBall('cueBall', {
+      position: cue.position.clone(),
+      velocity: new THREE.Vector3(0, 0, 0),
+      angularVelocity: new THREE.Vector3(0, 0, 0),
+      isPocketed: false,
+    });
+
+    const correctedTargetPoint = Math.round(
+      clamp(
+        targetPoint +
+          (gameStore.fahTestAutoCorrectionEnabled ? gameStore.fahTestCorrectionOffset : 0),
+        0,
+        FAH_FIRST_CUSHION_INDEX_MAX,
+      ) / 10,
+    ) * 10;
+    const indexModel = computeFahShotIndexModel(cue.position, correctedTargetPoint);
+    fahLastIndexModelRef.current = indexModel;
+    const firstRailTarget = computeFahFirstRailTarget(indexModel.firstCushionIndex, 'aim');
+    const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
+
+    gameStore.setSystemMode('fiveAndHalf');
+    gameStore.setShotDirection(shotDirectionDeg);
+    gameStore.setDragPower(FAH_FIXED_DRAG_PX);
+    gameStore.setCueElevation(0);
+    // 10시 방향 2팁
+    gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
+    gameStore.setTurnMessage(
+      `FAH TEST SHOT req=${targetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex}`,
+    );
+
+    executeShot({
+      shotDirectionDeg,
+      dragPx: FAH_FIXED_DRAG_PX,
+      cueElevationDeg: 0,
+      impactOffsetX: -FAH_FIXED_TWO_TIP_OFFSET,
+      impactOffsetY: FAH_FIXED_TWO_TIP_OFFSET,
+      requestedTargetPoint: targetPoint,
+      correctedTargetPoint,
+    });
+  };
+
+  useEffect(() => {
+    if (gameStore.playMode !== 'fahTest' || !gameStore.fahTestShotRequest || gameStore.phase !== 'AIMING') {
+      return;
+    }
+    runFahTestTargetShot(gameStore.fahTestShotRequest.targetPoint);
+    gameStore.clearFahTestShotRequest();
+  }, [gameStore.playMode, gameStore.fahTestShotRequest, gameStore.phase]);
+
+  const normalizeIndex10 = (indexValue: number): number => {
+    const clamped = clamp(indexValue, 0, FAH_INDEX_MAX);
+    return Math.round(clamped / 10) * 10;
+  };
+
+  const computeFahStartIndexFromCue = (cue: THREE.Vector3): number => {
+    const topX = TABLE_WIDTH / 2 - BALL_RADIUS;
+    const bottomX = -TABLE_WIDTH / 2 + BALL_RADIUS;
+    // 출발축은 좌측 장쿠션 상->하(원근 기준 x+ -> x-) 증가 방향으로 고정
+    const ratio = clamp((topX - cue.x) / (topX - bottomX), 0, 1);
+    return normalizeIndex10(ratio * FAH_INDEX_MAX);
+  };
+
+  const computeFahShotIndexModel = (cue: THREE.Vector3, firstCushionIndex: number): FahShotIndexModel => {
+    const startIndex = computeFahStartIndexFromCue(cue);
+    const normalizedFirst = normalizeIndex10(firstCushionIndex);
+    const expectedThirdIndex = normalizeIndex10(startIndex - normalizedFirst);
+    return {
+      frameVersion: FAH_FRAME_VERSION,
+      startIndex,
+      firstCushionIndex: normalizedFirst,
+      expectedThirdIndex,
+    };
+  };
+
+  const computeFahFirstRailTarget = (
+    firstCushionIndex: number,
+    mode: 'aim' | 'marker' = 'aim',
+  ): THREE.Vector3 => {
+    const targetRatio = clamp(firstCushionIndex / FAH_FIRST_CUSHION_INDEX_MAX, 0, 1);
+    // 1쿠션 좌표계(화면 기준 우측 장쿠션):
+    // - 우측 장쿠션은 z 경계(+z)로 고정
+    // - 인덱스 0->40은 x+ (우상단) 에서 x- (우하단)로 내려간다.
+    const topRailX = TABLE_WIDTH / 2;
+    const bottomRailX = -TABLE_WIDTH / 2;
+    const targetX = topRailX - targetRatio * (topRailX - bottomRailX);
+    const aimTargetZ = TABLE_HEIGHT / 2 - BALL_RADIUS;
+    const markerTargetZ = TABLE_HEIGHT / 2 + PHYSICS.CUSHION_THICKNESS / 2;
+
+    return new THREE.Vector3(
+      targetX,
+      BALL_RADIUS + 0.008,
+      mode === 'marker' ? markerTargetZ : aimTargetZ,
+    );
+  };
+
+  const estimateObservedFirstCushionIndex = (
+    points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>,
+  ): number | null => {
+    const rightRailAimZ = TABLE_HEIGHT / 2 - BALL_RADIUS;
+    const hitThreshold = rightRailAimZ - 0.01;
+    const hitPoint = points.find((point) => point.z >= hitThreshold);
+    if (!hitPoint) {
+      return null;
+    }
+    const topRailX = TABLE_WIDTH / 2;
+    const bottomRailX = -TABLE_WIDTH / 2;
+    const ratio = clamp((topRailX - hitPoint.x) / (topRailX - bottomRailX), 0, 1);
+    return normalizeIndex10(ratio * FAH_FIRST_CUSHION_INDEX_MAX);
+  };
+
+
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
+      if (gameStore.playMode === 'fahTest') return;
       if (gameStore.phase !== 'AIMING' || e.button !== 0) return;
 
       dragState.current.isDragging = true;
@@ -600,6 +919,7 @@ function GameWorld() {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+      if (gameStore.playMode === 'fahTest') return;
       if (!dragState.current.isDragging) return;
 
       const deltaY = e.clientY - dragState.current.startY;
@@ -612,6 +932,7 @@ function GameWorld() {
     };
 
     const handleMouseUp = () => {
+      if (gameStore.playMode === 'fahTest') return;
       if (!dragState.current.isDragging) return;
 
       dragState.current.isDragging = false;
@@ -626,6 +947,9 @@ function GameWorld() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameStore.phase !== 'AIMING') return;
+      if (gameStore.playMode === 'fahTest') {
+        return;
+      }
 
       const step = 0.002;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.85;
@@ -680,6 +1004,17 @@ function GameWorld() {
         case 'm':
         case 'ㅡ':
           gameStore.setAimControlMode('AUTO_SYNC');
+          break;
+        case '1':
+          gameStore.setSystemMode('half');
+          gameStore.setFahGuide(null);
+          break;
+        case '2':
+          gameStore.setSystemMode('fiveAndHalf');
+          break;
+        case '3':
+          gameStore.setSystemMode('plusTwo');
+          gameStore.setFahGuide(null);
           break;
         case 'arrowleft':
           if (gameStore.shotInput.aimControlMode === 'MANUAL_AIM') {
@@ -804,6 +1139,21 @@ function GameWorld() {
       });
     });
 
+    if (gameStore.playMode === 'fahTest' && (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING')) {
+      const trace = fahTestShotTraceRef.current;
+      const cue = balls.find((ball) => ball.id === gameStore.activeCueBallId);
+      if (trace && cue) {
+        const elapsedMs = Math.max(0, performance.now() - trace.startedAtMs);
+        trace.points.push({
+          tMs: Math.round(elapsedMs * 1000) / 1000,
+          x: Math.round((cue.x - TABLE_WIDTH / 2) * 10000) / 10000,
+          z: Math.round((cue.y - TABLE_HEIGHT / 2) * 10000) / 10000,
+          speedMps: Math.round(Math.hypot(cue.vx, cue.vy) * 10000) / 10000,
+          headingDeg: Math.round(headingDeg(cue.vx, cue.vy) * 1000) / 1000,
+        });
+      }
+    }
+
     if (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING') {
       const allStopped = balls.every((ball) => ball.isPocketed || Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps);
       if (allStopped && !turnEndHandledRef.current) {
@@ -817,6 +1167,75 @@ function GameWorld() {
             ? `${rawTraceLine.slice(0, MAX_DEBUG_TRACE_CHARS)} | ...TRUNCATED(chars=${MAX_DEBUG_TRACE_CHARS})`
             : rawTraceLine;
           window.sessionStorage.setItem('bhc.lastShotTraceLine', traceLine);
+          if (gameStore.playMode === 'fahTest' && fahTestShotTraceRef.current) {
+            const tracePayload = fahTestShotTraceRef.current;
+            const existingRaw = window.localStorage.getItem(FAH_TEST_SHOT_TRACE_STORAGE_KEY);
+            const existing = (() => {
+              try {
+                const parsed = JSON.parse(existingRaw ?? '[]') as unknown;
+                return Array.isArray(parsed) ? parsed : [];
+              } catch {
+                return [];
+              }
+            })();
+            const start = tracePayload.points[0];
+            const end = tracePayload.points[tracePayload.points.length - 1];
+            existing.push({
+              shotId: tracePayload.shotId,
+              createdAt: new Date().toISOString(),
+              playMode: 'fahTest',
+              shotInput: tracePayload.shotInput,
+              indexModel: tracePayload.indexModel,
+              pointCount: tracePayload.points.length,
+              startHeadingDeg: start?.headingDeg ?? null,
+              endHeadingDeg: end?.headingDeg ?? null,
+              points: tracePayload.points,
+            });
+            window.sessionStorage.setItem(
+              'bhc.fah.lastIndexModel',
+              JSON.stringify(tracePayload.indexModel),
+            );
+            window.localStorage.setItem(
+              FAH_TEST_SHOT_TRACE_STORAGE_KEY,
+              JSON.stringify(existing.slice(-120)),
+            );
+            const observedFirstCushionIndex = estimateObservedFirstCushionIndex(tracePayload.points);
+            const calibrationRaw = window.localStorage.getItem(FAH_CALIBRATION_STORAGE_KEY);
+            const calibrationExisting = (() => {
+              try {
+                const parsed = JSON.parse(calibrationRaw ?? '[]') as unknown;
+                return Array.isArray(parsed) ? parsed : [];
+              } catch {
+                return [];
+              }
+            })();
+            calibrationExisting.push({
+              id: `fah-cal-${Date.now()}`,
+              createdAt: new Date().toISOString(),
+              targetPoint:
+                typeof tracePayload.shotInput.requestedTargetPoint === 'number'
+                  ? tracePayload.shotInput.requestedTargetPoint
+                  : tracePayload.indexModel.firstCushionIndex,
+              correctedTargetPoint:
+                typeof tracePayload.shotInput.correctedTargetPoint === 'number'
+                  ? tracePayload.shotInput.correctedTargetPoint
+                  : tracePayload.indexModel.firstCushionIndex,
+              startIndex: tracePayload.indexModel.startIndex,
+              expectedThirdIndex: tracePayload.indexModel.expectedThirdIndex,
+              observedFirstCushionIndex,
+              firstCushionIndexDelta:
+                observedFirstCushionIndex === null
+                  ? null
+                  : Math.round((observedFirstCushionIndex - tracePayload.indexModel.firstCushionIndex) * 1000) / 1000,
+              shotDirectionDeg: tracePayload.shotInput.shotDirectionDeg,
+            });
+            window.localStorage.setItem(
+              FAH_CALIBRATION_STORAGE_KEY,
+              JSON.stringify(calibrationExisting.slice(-300)),
+            );
+            window.dispatchEvent(new Event('bhc:fah-calibration-updated'));
+            fahTestShotTraceRef.current = null;
+          }
         }
         gameStore.handleTurnEnd();
       } else if (!allStopped) {
@@ -826,11 +1245,18 @@ function GameWorld() {
 
     const cueBallRef = ballsRef.current.get(activeCueBallId);
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
+      if (gameStore.playMode === 'fahTest') {
+        // 테스트 모드 화면 기준: 단쿠션 방향이 하단으로 보이도록 좌/우(short rail) 축 기준 시점 고정
+        const targetPos = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X - 1.7, 1.95, FAH_FIXED_CUE_WORLD_Z);
+        camera.position.lerp(targetPos, 0.25);
+        camera.lookAt(FAH_FIXED_CUE_WORLD_X + 1.05, 0.05, FAH_FIXED_CUE_WORLD_Z);
+      }
       tempDir.current.copy(cueBallRef.mesh.position).sub(camera.position);
       tempDir.current.y = 0;
       if (
         tempDir.current.lengthSq() > 1e-6 &&
         !gameStore.isDragging &&
+        gameStore.playMode !== 'fahTest' &&
         gameStore.shotInput.aimControlMode === 'AUTO_SYNC'
       ) {
         tempDir.current.normalize();
@@ -871,7 +1297,67 @@ function GameWorld() {
       const object1 = ballsRef.current.get('objectBall1')?.mesh.position;
       const object2Id = gameStore.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
       const object2 = ballsRef.current.get(object2Id)?.mesh.position;
-      if (object1 && object2) {
+      if (gameStore.playMode === 'fahTest') {
+        const guideY = BALL_RADIUS + 0.01;
+        const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
+        const dir = new THREE.Vector3(Math.sin(directionRad), 0, Math.cos(directionRad)).normalize();
+        const start = new THREE.Vector3(cue.x, guideY, cue.z);
+        const minX = -TABLE_WIDTH / 2 + BALL_RADIUS;
+        const maxX = TABLE_WIDTH / 2 - BALL_RADIUS;
+        const minZ = -TABLE_HEIGHT / 2 + BALL_RADIUS;
+        const maxZ = TABLE_HEIGHT / 2 - BALL_RADIUS;
+        const findBoundaryHit = (origin: THREE.Vector3, heading: THREE.Vector3): { point: THREE.Vector3; axis: 'x' | 'y' } => {
+          let bestT = Number.POSITIVE_INFINITY;
+          let bestPoint = origin.clone();
+          let bestAxis: 'x' | 'y' = 'x';
+          if (Math.abs(heading.x) > 1e-8) {
+            const txMin = (minX - origin.x) / heading.x;
+            if (txMin > 0 && txMin < bestT) {
+              bestT = txMin;
+              bestPoint = new THREE.Vector3(minX, guideY, origin.z + heading.z * txMin);
+              bestAxis = 'x';
+            }
+            const txMax = (maxX - origin.x) / heading.x;
+            if (txMax > 0 && txMax < bestT) {
+              bestT = txMax;
+              bestPoint = new THREE.Vector3(maxX, guideY, origin.z + heading.z * txMax);
+              bestAxis = 'x';
+            }
+          }
+          if (Math.abs(heading.z) > 1e-8) {
+            const tzMin = (minZ - origin.z) / heading.z;
+            if (tzMin > 0 && tzMin < bestT) {
+              bestT = tzMin;
+              bestPoint = new THREE.Vector3(origin.x + heading.x * tzMin, guideY, minZ);
+              bestAxis = 'y';
+            }
+            const tzMax = (maxZ - origin.z) / heading.z;
+            if (tzMax > 0 && tzMax < bestT) {
+              bestT = tzMax;
+              bestPoint = new THREE.Vector3(origin.x + heading.x * tzMax, guideY, maxZ);
+              bestAxis = 'y';
+            }
+          }
+          return { point: bestPoint, axis: bestAxis };
+        };
+        const firstHit = findBoundaryHit(start, dir);
+        const reflectedDir = dir.clone();
+        if (firstHit.axis === 'x') reflectedDir.x *= -1;
+        else reflectedDir.z *= -1;
+        const secondHit = findBoundaryHit(firstHit.point, reflectedDir);
+        setGuideLinePoints(guideCuePathRef.current, [start, firstHit.point]);
+        setGuideLinePoints(guidePostCuePathRef.current, [firstHit.point, secondHit.point]);
+        setGuideLinePoints(guideObjectPathRef.current, []);
+        if (guideFahFirstCushionMarkerRef.current) {
+          const indexModel = computeFahShotIndexModel(start, gameStore.fahTestTargetPoint);
+          const firstMarkerPos = computeFahFirstRailTarget(indexModel.firstCushionIndex, 'marker');
+          guideFahFirstCushionMarkerRef.current.position.copy(firstMarkerPos);
+          guideFahFirstCushionMarkerRef.current.visible = true;
+        }
+      } else if (object1 && object2) {
+        if (guideFahFirstCushionMarkerRef.current) {
+          guideFahFirstCushionMarkerRef.current.visible = false;
+        }
         const guideY = BALL_RADIUS + 0.01;
         const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
         const dir = new THREE.Vector3(Math.sin(directionRad), 0, Math.cos(directionRad)).normalize();
@@ -1000,10 +1486,34 @@ function GameWorld() {
           setGuideLinePoints(guideObjectPathRef.current, []);
         }
       }
+
+      if (gameStore.systemMode === 'fiveAndHalf' && gameStore.fahGuide) {
+        const minX = -TABLE_WIDTH / 2 + BALL_RADIUS;
+        const maxX = TABLE_WIDTH / 2 - BALL_RADIUS;
+        const minZ = -TABLE_HEIGHT / 2 + BALL_RADIUS;
+        const maxZ = TABLE_HEIGHT / 2 - BALL_RADIUS;
+        const guideY = BALL_RADIUS + 0.012;
+        const scale = gameStore.fahGuide.indexScale;
+        const correctedRatio = clamp(gameStore.fahGuide.correctedAim / scale, 0, 1);
+        const thirdRatio = clamp(gameStore.fahGuide.expectedThirdCushion / scale, 0, 1);
+        const correctedX = minX + correctedRatio * (maxX - minX);
+        const thirdX = minX + thirdRatio * (maxX - minX);
+        setGuideLinePoints(guideFahPathRef.current, [
+          new THREE.Vector3(cue.x, guideY, cue.z),
+          new THREE.Vector3(correctedX, guideY, minZ),
+          new THREE.Vector3(thirdX, guideY, maxZ),
+        ]);
+      } else {
+        setGuideLinePoints(guideFahPathRef.current, []);
+      }
     } else {
       setGuideLinePoints(guideCuePathRef.current, []);
       setGuideLinePoints(guidePostCuePathRef.current, []);
       setGuideLinePoints(guideObjectPathRef.current, []);
+      setGuideLinePoints(guideFahPathRef.current, []);
+      if (guideFahFirstCushionMarkerRef.current) {
+        guideFahFirstCushionMarkerRef.current.visible = false;
+      }
     }
 
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
@@ -1036,7 +1546,7 @@ function GameWorld() {
       <directionalLight position={[5, 5, 5]} intensity={0.5} />
 
       <OrbitControls
-        enabled={!captureParams.capture && gameStore.phase === 'AIMING' && !gameStore.isDragging}
+        enabled={!captureParams.capture && gameStore.playMode !== 'fahTest' && gameStore.phase === 'AIMING' && !gameStore.isDragging}
         mouseButtons={{ LEFT: undefined, MIDDLE: undefined, RIGHT: 0 }}
         enablePan={false}
         minDistance={2}
