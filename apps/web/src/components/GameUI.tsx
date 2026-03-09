@@ -15,6 +15,11 @@ import {
   toFahHistoryCsv,
   type FahHistoryEntry,
 } from '../lib/five-and-half-history';
+import {
+  FAH_PHYSICS_TUNING_STORAGE_KEY,
+  deriveFahPhysicsTuning,
+  readFahPhysicsTuning,
+} from '../lib/fah-physics-tuning';
 
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
 
@@ -25,9 +30,15 @@ type FahCalibrationEntry = {
   correctedTargetPoint?: number;
   startIndex: number;
   expectedThirdIndex: number;
+  startSide?: 'left' | 'right';
+  firstCushionSide?: 'left' | 'right';
   observedFirstCushionIndex: number | null;
   firstCushionIndexDelta: number | null;
   shotDirectionDeg: number;
+  physicsTuning?: {
+    speedBoost?: number;
+    overrides?: Record<string, unknown>;
+  };
 };
 
 export function GameUI() {
@@ -65,6 +76,7 @@ export function GameUI() {
   const [fahCalibrate, setFahCalibrate] = useState<Record<string, unknown> | null>(null);
   const [fahHistory, setFahHistory] = useState<FahHistoryEntry[]>([]);
   const [fahCalibrationEntries, setFahCalibrationEntries] = useState<FahCalibrationEntry[]>([]);
+  const [fahPhysicsTuning, setFahPhysicsTuning] = useState(() => readFahPhysicsTuning(null));
   const [fahPreviewEnabled, setFahPreviewEnabled] = useState(false);
   const [fahPreviewOffset, setFahPreviewOffset] = useState(0);
   const [fahAutoTrackEnabled, setFahAutoTrackEnabled] = useState(true);
@@ -136,7 +148,7 @@ export function GameUI() {
   const objectBall2ForApi = gameStore.balls.find((ball) => ball.id === secondTargetIdForApi);
   const fahSummary = useMemo(() => summarizeFahHistory(fahHistory), [fahHistory]);
   const fahRecommendation = useMemo(() => recommendPreviewOffset(fahHistory), [fahHistory]);
-  const fahQuickTargets = [0, 10, 20, 30, 40];
+  const fahQuickTargets = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110];
   const tenPointCalibrationStats = useMemo(() => {
     const source = fahCalibrationEntries
       .filter((entry) => entry.targetPoint === 10 && typeof entry.firstCushionIndexDelta === 'number')
@@ -175,6 +187,7 @@ export function GameUI() {
     }
     const parsed = safeParseHistory(window.localStorage.getItem(FAH_HISTORY_STORAGE_KEY));
     setFahHistory(parsed);
+    setFahPhysicsTuning(readFahPhysicsTuning(window.localStorage.getItem(FAH_PHYSICS_TUNING_STORAGE_KEY)));
     try {
       const raw = window.localStorage.getItem(FAH_CALIBRATION_STORAGE_KEY);
       const parsedCalibration = raw ? (JSON.parse(raw) as unknown) : [];
@@ -196,9 +209,16 @@ export function GameUI() {
       } catch {
         setFahCalibrationEntries([]);
       }
+      setFahPhysicsTuning(readFahPhysicsTuning(window.localStorage.getItem(FAH_PHYSICS_TUNING_STORAGE_KEY)));
     };
     window.addEventListener('bhc:fah-calibration-updated', syncCalibration);
-    return () => window.removeEventListener('bhc:fah-calibration-updated', syncCalibration);
+    window.addEventListener('bhc:fah-physics-tuning-updated', syncCalibration);
+    window.addEventListener('storage', syncCalibration);
+    return () => {
+      window.removeEventListener('bhc:fah-calibration-updated', syncCalibration);
+      window.removeEventListener('bhc:fah-physics-tuning-updated', syncCalibration);
+      window.removeEventListener('storage', syncCalibration);
+    };
   }, []);
 
   useEffect(() => {
@@ -268,6 +288,27 @@ export function GameUI() {
     tenPointCalibrationStats.recommendedOffset,
     setFahTestCorrectionOffset,
   ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || playMode !== 'fahTest') {
+      return;
+    }
+    const recommendation = deriveFahPhysicsTuning(fahCalibrationEntries);
+    if (recommendation.sampleCount < 8) {
+      return;
+    }
+    const prev = readFahPhysicsTuning(window.localStorage.getItem(FAH_PHYSICS_TUNING_STORAGE_KEY));
+    if (
+      Math.abs(prev.speedBoost - recommendation.speedBoost) < 0.001 &&
+      Math.abs((prev.stats.meanDelta ?? 0) - recommendation.stats.meanDelta) < 0.001 &&
+      Math.abs((prev.stats.meanAbsDelta ?? 0) - recommendation.stats.meanAbsDelta) < 0.001
+    ) {
+      return;
+    }
+    window.localStorage.setItem(FAH_PHYSICS_TUNING_STORAGE_KEY, JSON.stringify(recommendation));
+    window.dispatchEvent(new Event('bhc:fah-physics-tuning-updated'));
+    setFahPhysicsTuning(recommendation);
+  }, [fahCalibrationEntries, playMode]);
 
   const requestFiveAndHalfPredictAndSimulate = async () => {
     if (!cueBallForApi) {
@@ -795,7 +836,7 @@ export function GameUI() {
           </button>
         </div>
         {playMode === 'fahTest' && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
             {fahQuickTargets.map((targetPoint) => (
               <button
                 key={targetPoint}
@@ -803,7 +844,7 @@ export function GameUI() {
                 onClick={() => requestFahTestShot(targetPoint)}
                 disabled={phase !== 'AIMING' || fahLoading}
                 style={{
-                  flex: 1,
+                  minWidth: 70,
                   border: 'none',
                   borderRadius: 8,
                   background:
@@ -940,12 +981,12 @@ export function GameUI() {
           <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>오차 추세</div>
           {playMode === 'fahTest' && (
             <div style={{ color: '#ffcc80' }}>
-              테스트 세팅: 목표포인트={fahTestTargetPoint} / 수구=1,1 / 당점=10시 2팁 / 파워=30%(속도 보정x2.0) / 물리=FAH 프로파일
+              테스트 세팅: 목표포인트={fahTestTargetPoint} / 수구=1,1 / 당점=10시 2팁 / 파워=30%(속도보정 x{fahPhysicsTuning.speedBoost.toFixed(2)}) / 물리=FAH 자동튜닝
             </div>
           )}
           {playMode === 'fahTest' && (
             <div style={{ color: '#9ad6ff' }}>
-              기준: 하단=단쿠션 / 좌·우=장쿠션 / 1쿠션=우측 장쿠션(0~40, 0→아래) / 출발·3쿠션=좌측 장쿠션(0~80, 0→아래)
+              기준: 1쿠션/3쿠션 인덱스 = 0,10,20,30,40,50,70,90,110 (0~50은 중간 +5, 이후 중간 +10), 좌/우 시작은 미러 계산
             </div>
           )}
           <div>추천 offset: {fahPreviewOffset.toFixed(3)} (basis: {fahRecommendation.basisSampleCount}, conf: {fahRecommendation.confidence})</div>
@@ -955,6 +996,8 @@ export function GameUI() {
           <div>현재 보정 오프셋: {fahTestCorrectionOffset.toFixed(3)} {fahTestAutoCorrectionEnabled ? '(AUTO)' : '(MANUAL)'}</div>
           <div>samples: {fahSummary.total}</div>
           <div>calibration samples: {fahCalibrationEntries.length}</div>
+          <div>physics tuning samples: {fahPhysicsTuning.sampleCount}</div>
+          <div>physics tuning meanΔ / mean|Δ|: {fahPhysicsTuning.stats.meanDelta} / {fahPhysicsTuning.stats.meanAbsDelta}</div>
           <div>avg |delta|: {fahSummary.avgAbsIndexDelta}</div>
           <div>max |delta|: {fahSummary.maxAbsIndexDelta}</div>
           <div>avg landing: {fahSummary.avgLandingDistanceM} m</div>

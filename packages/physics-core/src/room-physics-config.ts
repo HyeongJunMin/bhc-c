@@ -37,7 +37,10 @@ export const FAH_TEST_ROOM_PHYSICS_OVERRIDES: Partial<StepRoomPhysicsConfig> = {
   clothLinearSpinCouplingPerSec: 3.2,
 };
 
-export function createRoomPhysicsStepConfig(profile: RoomPhysicsProfile = 'default'): StepRoomPhysicsConfig {
+export function createRoomPhysicsStepConfig(
+  profile: RoomPhysicsProfile = 'default',
+  overrides?: Partial<StepRoomPhysicsConfig>,
+): StepRoomPhysicsConfig {
   const baseConfig: StepRoomPhysicsConfig = {
     dtSec: ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS / 1000,
     substeps: ROOM_PHYSICS_SUBSTEPS,
@@ -62,11 +65,10 @@ export function createRoomPhysicsStepConfig(profile: RoomPhysicsProfile = 'defau
     recoveryFallbackEnabled: ROOM_PHYSICS_RECOVERY_FALLBACK_ENABLED,
     maxSubstepEnergyGainJ: ROOM_PHYSICS_MAX_SUBSTEP_ENERGY_GAIN_J,
   };
-  if (profile === 'fahTest') {
-    return {
-      ...baseConfig,
-      ...FAH_TEST_ROOM_PHYSICS_OVERRIDES,
-    };
-  }
-  return baseConfig;
+  const profileOverrides = profile === 'fahTest' ? FAH_TEST_ROOM_PHYSICS_OVERRIDES : undefined;
+  return {
+    ...baseConfig,
+    ...(profileOverrides ?? {}),
+    ...(overrides ?? {}),
+  };
 }
