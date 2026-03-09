@@ -19,6 +19,7 @@ import {
   FAH_PHYSICS_TUNING_STORAGE_KEY,
   deriveFahPhysicsTuning,
   readFahPhysicsTuning,
+  resolveFahPointCorrection,
 } from '../lib/fah-physics-tuning';
 
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
@@ -29,11 +30,21 @@ type FahCalibrationEntry = {
   targetPoint: number;
   correctedTargetPoint?: number;
   startIndex: number;
+  expectedSecondIndex?: number;
   expectedThirdIndex: number;
   startSide?: 'left' | 'right';
   firstCushionSide?: 'left' | 'right';
+  secondCushionSide?: 'left' | 'right';
+  thirdCushionSide?: 'left' | 'right';
+  fourthCushionSide?: 'left' | 'right';
   observedFirstCushionIndex: number | null;
+  observedSecondCushionIndex?: number | null;
+  observedThirdCushionIndex?: number | null;
+  observedFourthCushionIndex?: number | null;
   firstCushionIndexDelta: number | null;
+  secondCushionIndexDelta?: number | null;
+  thirdCushionIndexDelta?: number | null;
+  fourthCushionIndexDelta?: number | null;
   shotDirectionDeg: number;
   physicsTuning?: {
     speedBoost?: number;
@@ -168,19 +179,65 @@ export function GameUI() {
         recommendedOffset: 0,
       };
     }
-    const deltas = source.map((entry) => entry.firstCushionIndexDelta as number);
-    const avgDelta = deltas.reduce((acc, value) => acc + value, 0) / deltas.length;
-    const abs = deltas.map((value) => Math.abs(value));
-    const avgAbsDelta = abs.reduce((acc, value) => acc + value, 0) / abs.length;
-    const maxAbsDelta = Math.max(...abs);
+    const cushionWeights = [1, 0.9, 0.75, 0.6];
+    const perSample = source
+      .map((entry) => {
+        const deltas = [
+          { value: entry.firstCushionIndexDelta, weight: cushionWeights[0] },
+          { value: entry.secondCushionIndexDelta, weight: cushionWeights[1] },
+          { value: entry.thirdCushionIndexDelta, weight: cushionWeights[2] },
+          { value: entry.fourthCushionIndexDelta, weight: cushionWeights[3] },
+        ];
+        let weightSum = 0;
+        let weightedDelta = 0;
+        let weightedAbs = 0;
+        for (const item of deltas) {
+          if (typeof item.value !== 'number') {
+            continue;
+          }
+          weightSum += item.weight;
+          weightedDelta += item.value * item.weight;
+          weightedAbs += Math.abs(item.value) * item.weight;
+        }
+        if (weightSum <= 0) {
+          return null;
+        }
+        return {
+          weightedDelta: weightedDelta / weightSum,
+          weightedAbsDelta: weightedAbs / weightSum,
+        };
+      })
+      .filter((item): item is { weightedDelta: number; weightedAbsDelta: number } => item !== null);
+    if (perSample.length === 0) {
+      return {
+        sampleCount: 0,
+        avgDelta: 0,
+        avgAbsDelta: 0,
+        maxAbsDelta: 0,
+        recommendedOffset: 0,
+      };
+    }
+    const avgDelta = perSample.reduce((acc, item) => acc + item.weightedDelta, 0) / perSample.length;
+    const avgAbsDelta = perSample.reduce((acc, item) => acc + item.weightedAbsDelta, 0) / perSample.length;
+    const maxAbsDelta = Math.max(...perSample.map((item) => item.weightedAbsDelta));
     return {
-      sampleCount: source.length,
+      sampleCount: perSample.length,
       avgDelta: Math.round(avgDelta * 1000) / 1000,
       avgAbsDelta: Math.round(avgAbsDelta * 1000) / 1000,
       maxAbsDelta: Math.round(maxAbsDelta * 1000) / 1000,
       recommendedOffset: Math.round(-avgDelta * 1000) / 1000,
     };
   }, [fahCalibrationEntries]);
+  const targetPointCalibrationOffset = useMemo(() => {
+    if (playMode !== 'fahTest') {
+      return 0;
+    }
+    return resolveFahPointCorrection(fahPhysicsTuning, fahTestTargetPoint);
+  }, [playMode, fahPhysicsTuning, fahTestTargetPoint]);
+  const latestFahCalibration = useMemo(
+    () => (fahCalibrationEntries.length === 0 ? null : fahCalibrationEntries[fahCalibrationEntries.length - 1]),
+    [fahCalibrationEntries],
+  );
 
   const startTenPointRepeat = () => {
     fahRepeatDispatchLockRef.current = false;
@@ -287,11 +344,14 @@ export function GameUI() {
 
   useEffect(() => {
     if (fahTestAutoCorrectionEnabled) {
-      const bounded = Math.max(-20, Math.min(20, tenPointCalibrationStats.recommendedOffset));
+      const recommended = targetPointCalibrationOffset;
+      const fallback = tenPointCalibrationStats.recommendedOffset;
+      const bounded = Math.max(-20, Math.min(20, Number.isFinite(recommended) ? recommended : fallback));
       setFahTestCorrectionOffset(Number.isFinite(bounded) ? bounded : 0);
     }
   }, [
     fahTestAutoCorrectionEnabled,
+    targetPointCalibrationOffset,
     tenPointCalibrationStats.recommendedOffset,
     setFahTestCorrectionOffset,
   ]);
@@ -992,24 +1052,44 @@ export function GameUI() {
             </div>
           )}
           {playMode === 'fahTest' && (
-            <div style={{ color: '#9ad6ff' }}>
-              기준: 1쿠션/3쿠션 인덱스 = 0,10,20,30,40,50,70,90,110 (0~50은 중간 +5, 이후 중간 +10), 좌/우 시작은 미러 계산
+          <div style={{ color: '#9ad6ff' }}>
+              기준: 1~4쿠션 인덱스 = 0,10,20,30,40,50,70,90,110 (0~50은 중간 +5, 이후 중간 +10), 좌/우 시작은 미러 계산
             </div>
           )}
           <div>추천 offset: {fahPreviewOffset.toFixed(3)} (basis: {fahRecommendation.basisSampleCount}, conf: {fahRecommendation.confidence})</div>
-          <div>10pt avg delta: {tenPointCalibrationStats.avgDelta}</div>
-          <div>10pt avg|max |delta|: {tenPointCalibrationStats.avgAbsDelta} | {tenPointCalibrationStats.maxAbsDelta}</div>
+          <div>10pt 가중 avgΔ: {tenPointCalibrationStats.avgDelta}</div>
+          <div>10pt 가중 avg|Δ|: {tenPointCalibrationStats.avgAbsDelta}</div>
+          <div>10pt 가중 max|Δ|: {tenPointCalibrationStats.maxAbsDelta}</div>
           <div>10pt 추천 보정값: {tenPointCalibrationStats.recommendedOffset}</div>
+          <div>현재 포인트({fahTestTargetPoint}) 추천 보정값: {targetPointCalibrationOffset}</div>
           <div>현재 보정 오프셋: {fahTestCorrectionOffset.toFixed(3)} {fahTestAutoCorrectionEnabled ? '(AUTO)' : '(MANUAL)'}</div>
           <div>samples: {fahSummary.total}</div>
           <div>calibration samples: {fahCalibrationEntries.length}</div>
           <div>physics tuning samples: {fahPhysicsTuning.sampleCount}</div>
           <div>physics tuning meanΔ / mean|Δ|: {fahPhysicsTuning.stats.meanDelta} / {fahPhysicsTuning.stats.meanAbsDelta}</div>
-          {playMode === 'fahTest' && fahCalibrationEntries.length > 0 && (
+          {latestFahCalibration && (
             <div>
-              latest dynamic: r={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.cushionRestitution ?? '-')}
-              , f={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.cushionContactFriction ?? '-')}
-              , sc={String((fahCalibrationEntries[fahCalibrationEntries.length - 1].dynamicPhysics?.overrides as Record<string, unknown> | undefined)?.clothLinearSpinCouplingPerSec ?? '-')}
+              latest 1~4Δ:
+              {typeof latestFahCalibration.firstCushionIndexDelta === 'number'
+                ? ` 1st=${latestFahCalibration.firstCushionIndexDelta}`
+                : ''}
+              {typeof latestFahCalibration.secondCushionIndexDelta === 'number'
+                ? ` / 2nd=${latestFahCalibration.secondCushionIndexDelta}`
+                : ''}
+              {typeof latestFahCalibration.thirdCushionIndexDelta === 'number'
+                ? ` / 3rd=${latestFahCalibration.thirdCushionIndexDelta}`
+                : ''}
+              {typeof latestFahCalibration.fourthCushionIndexDelta === 'number'
+                ? ` / 4th=${latestFahCalibration.fourthCushionIndexDelta}`
+                : ''}
+            </div>
+          )}
+          {playMode === 'fahTest' && latestFahCalibration && (
+            <div>
+              latest dynamic:
+              r={String(latestFahCalibration.dynamicPhysics?.overrides?.cushionRestitution ?? '-')}
+              , f={String(latestFahCalibration.dynamicPhysics?.overrides?.cushionContactFriction ?? '-')}
+              , sc={String(latestFahCalibration.dynamicPhysics?.overrides?.clothLinearSpinCouplingPerSec ?? '-')}
             </div>
           )}
           <div>avg |delta|: {fahSummary.avgAbsIndexDelta}</div>
