@@ -60,18 +60,28 @@ const FIXED_IMPACT_OFFSET_Y = BALL_RADIUS * 0.4;
 const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
 
 const ANCHORS: AnchorTarget[] = [
-  { first: 5, second: 35, third: 45, fourth: 20 },
-  { first: 8, second: 8, third: 40, fourth: 18 },
-  { first: 23, second: 15, third: 25, fourth: 80 },
+  // Right long-cushion starts only: P10/P20/P30/P40.
+  // P10/P20 목표는 현재 튜닝용 임시 기준값.
+  { first: 10, second: 30, third: 30, fourth: 50 },
+  { first: 20, second: 25, third: 25, fourth: 80 },
   { first: 30, second: 20, third: 20, fourth: 110 },
   { first: 40, second: 30, third: 10, fourth: 100 },
-  { first: 45, second: 35, third: 5, fourth: 95 },
 ];
 
 const SCORE_GLOBAL_WEIGHT = Number(process.env.FAH_SCORE_GLOBAL_WEIGHT ?? '0.25');
-const SCORE_P0_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P0_SECOND_WEIGHT ?? '4.0');
-const SCORE_P0_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P0_THIRD_WEIGHT ?? '0.6');
-const SCORE_P0_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P0_FOURTH_WEIGHT ?? '3.2');
+const SCORE_P10_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P10_SECOND_WEIGHT ?? '4.0');
+const SCORE_P10_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P10_THIRD_WEIGHT ?? '0.6');
+const SCORE_P10_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P10_FOURTH_WEIGHT ?? '3.2');
+
+function normalizeFahCushionId(cushion: CushionId): CushionId {
+  if (cushion === 'top') {
+    return 'bottom';
+  }
+  if (cushion === 'bottom') {
+    return 'top';
+  }
+  return cushion;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -236,18 +246,19 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
         if (ball.id !== 'cueBall') {
           return;
         }
-        if (lastHit === cushionId) {
+        const normalizedCushion = normalizeFahCushionId(cushionId);
+        if (lastHit === normalizedCushion) {
           sameCount += 1;
         } else {
-          lastHit = cushionId;
+          lastHit = normalizedCushion;
           sameCount = 0;
         }
         if (sameCount > 0) {
           return;
         }
         const world = physicsToWorldXZ(ball.x, ball.y);
-        const index = mapFahCushionContactToIndex(cushionId, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
-        rawHits.push({ cushion: cushionId, index });
+        const index = mapFahCushionContactToIndex(normalizedCushion, { x: world.x, z: world.z }, TABLE_WIDTH, TABLE_HEIGHT);
+        rawHits.push({ cushion: normalizedCushion, index });
       },
     });
     const cue = balls[0];
@@ -312,13 +323,13 @@ function evaluateCandidate(candidate: CandidateOverrides): CandidateResult {
   const mae = errors.reduce((sum, value) => sum + Math.abs(value), 0) / errors.length;
   const rmse = Math.sqrt(errors.reduce((sum, value) => sum + value * value, 0) / errors.length);
   const baseScore = byPoint.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPoint.length;
-  const p0 = byPoint.find((row) => row.first === 0);
-  const p0Objective = p0
-    ? (Math.abs(p0.error.second) * SCORE_P0_SECOND_WEIGHT)
-      + (Math.abs(p0.error.third) * SCORE_P0_THIRD_WEIGHT)
-      + (Math.abs(p0.error.fourth) * SCORE_P0_FOURTH_WEIGHT)
+  const p10 = byPoint.find((row) => row.first === 10);
+  const p10Objective = p10
+    ? (Math.abs(p10.error.second) * SCORE_P10_SECOND_WEIGHT)
+      + (Math.abs(p10.error.third) * SCORE_P10_THIRD_WEIGHT)
+      + (Math.abs(p10.error.fourth) * SCORE_P10_FOURTH_WEIGHT)
     : 0;
-  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p0Objective;
+  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p10Objective;
   return {
     overrides: candidate,
     mae: round3(mae),
@@ -382,18 +393,18 @@ async function run(): Promise<void> {
     'linearDampingPerTick',
     'cushionPostCollisionSpeedScale',
     'cushionSpinMonotonicRetention',
-    'p0_e2',
-    'p0_e3',
-    'p0_e4',
+    'p10_e2',
+    'p10_e3',
+    'p10_e4',
+    'p20_e2',
+    'p20_e3',
+    'p20_e4',
     'p30_e2',
     'p30_e3',
     'p30_e4',
     'p40_e2',
     'p40_e3',
     'p40_e4',
-    'p45_e2',
-    'p45_e3',
-    'p45_e4',
   ];
   const csvRows = top.map((row) => {
     const at = (first: number) => row.byPoint.find((point) => point.first === first);
@@ -410,18 +421,18 @@ async function run(): Promise<void> {
       row.overrides.linearDampingPerTick,
       row.overrides.cushionPostCollisionSpeedScale,
       row.overrides.cushionSpinMonotonicRetention,
-      at(0)?.error.second ?? '',
-      at(0)?.error.third ?? '',
-      at(0)?.error.fourth ?? '',
+      at(10)?.error.second ?? '',
+      at(10)?.error.third ?? '',
+      at(10)?.error.fourth ?? '',
+      at(20)?.error.second ?? '',
+      at(20)?.error.third ?? '',
+      at(20)?.error.fourth ?? '',
       at(30)?.error.second ?? '',
       at(30)?.error.third ?? '',
       at(30)?.error.fourth ?? '',
       at(40)?.error.second ?? '',
       at(40)?.error.third ?? '',
       at(40)?.error.fourth ?? '',
-      at(45)?.error.second ?? '',
-      at(45)?.error.third ?? '',
-      at(45)?.error.fourth ?? '',
     ].join(',');
   });
   writeFileSync(csvPath, `${header.join(',')}\n${csvRows.join('\n')}\n`, 'utf8');
