@@ -728,9 +728,6 @@ export function GameUI() {
         <h2 style={{ margin: '0 0 15px 0', fontSize: 20, color: '#00ff88' }}>
           3-Cushion Billiards
         </h2>
-        <div style={{ fontSize: 13, marginBottom: 10, color: '#8be9fd' }}>
-          {systemMode === 'plusTwo' ? '플러스투 시스템' : '하프 시스템'}
-        </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
           <button
             type="button"
@@ -749,25 +746,6 @@ export function GameUI() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              setPlayMode('fahTest');
-              setSystemMode('fiveAndHalf');
-              setFahGuide(null);
-            }}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: playMode === 'fahTest' ? '#0f9d58' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            테스트 모드(FAH)
-          </button>
-          <button
-            type="button"
             onClick={() => gameStore.toggleBallTrail()}
             style={{
               border: 'none',
@@ -782,45 +760,6 @@ export function GameUI() {
             수구궤적 {gameStore.showBallTrail ? 'ON' : 'OFF'}
           </button>
         </div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={() => {
-              setSystemMode('half');
-              setFahGuide(null);
-            }}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: systemMode === 'half' ? '#4f46e5' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            1 하프
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSystemMode('plusTwo');
-              setFahGuide(null);
-            }}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: systemMode === 'plusTwo' ? '#4f46e5' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            3 플러스
-          </button>
-        </div>
-        
         {/* 점수판 */}
         <div style={{ marginBottom: 15 }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>SCORE (Target: {RULES.WINNING_SCORE})</div>
