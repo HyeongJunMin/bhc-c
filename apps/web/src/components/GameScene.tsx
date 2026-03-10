@@ -29,7 +29,7 @@ import { createRoomPhysicsStepConfig } from '../../../../packages/physics-core/s
 import { stepRoomPhysicsWorld, type PhysicsBallState, type CushionId } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
 import { isMiscue } from '../../../../packages/physics-core/src/miscue.ts';
-import { solveBallCushionImpulse } from '../../../../packages/physics-core/src/solver/impulse-solver.ts';
+import { applyCushionContactThrow } from '../../../../packages/physics-core/src/cushion-contact-throw.ts';
 
 // 테이블 스펙 (Unit: meters)
 const TABLE_WIDTH = PHYSICS.TABLE_WIDTH;
@@ -1691,25 +1691,35 @@ function GameWorld() {
           const hitPoint = boundaryHit.point;
           const shotInit = computeShotInitialization({
             dragPx: gameStore.shotInput.dragPx,
-            impactOffsetX: gameStore.shotInput.impactOffsetX,
+            impactOffsetX: -gameStore.shotInput.impactOffsetX,
             impactOffsetY: gameStore.shotInput.impactOffsetY,
           });
           const speedForGuide = Math.max(5, shotInit.initialBallSpeedMps);
-          const collision = solveBallCushionImpulse({
+          const cfg = physicsConfigRef.current;
+          const collision = applyCushionContactThrow({
             axis: boundaryHit.axis,
             vx: dir.x * speedForGuide,
             vy: dir.z * speedForGuide,
-            spinX: shotInit.omegaX,
-            spinY: 0,
+            spinX: shotInit.omegaX * dir.z,
+            spinY: -shotInit.omegaX * dir.x,
             spinZ: shotInit.omegaZ,
-            restitution: physicsConfigRef.current.cushionRestitution,
-            friction: physicsConfigRef.current.cushionContactFriction,
-            maxSpinMagnitude: physicsConfigRef.current.cushionMaxSpinMagnitude,
-            maxThrowAngleDeg: physicsConfigRef.current.cushionMaxThrowAngleDeg,
-            ballMassKg: physicsConfigRef.current.ballMassKg,
-            ballRadiusM: physicsConfigRef.current.ballRadiusM,
-            ballInertiaKgM2:
-              (2 / 5) * physicsConfigRef.current.ballMassKg * physicsConfigRef.current.ballRadiusM * physicsConfigRef.current.ballRadiusM,
+            restitution: cfg.cushionRestitution,
+            contactFriction: cfg.cushionContactFriction,
+            referenceNormalSpeedMps: cfg.cushionReferenceSpeedMps,
+            contactTimeExponent: cfg.cushionContactTimeExponent,
+            maxSpinMagnitude: cfg.cushionMaxSpinMagnitude,
+            maxThrowAngleDeg: cfg.cushionMaxThrowAngleDeg,
+            ballMassKg: cfg.ballMassKg,
+            ballRadiusM: cfg.ballRadiusM,
+            cushionHeightM: cfg.cushionHeightM,
+            rollingSpinHeightFactor: cfg.cushionRollingSpinHeightFactor,
+            cushionTorqueDamping: cfg.cushionTorqueDamping,
+            maxSpeedScale: cfg.cushionMaxSpeedScale,
+            frictionSpinDamping: cfg.cushionFrictionSpinDamping,
+            restitutionLow: cfg.cushionRestitutionLow,
+            restitutionHigh: cfg.cushionRestitutionHigh,
+            restitutionMidSpeedMps: cfg.cushionRestitutionMidSpeedMps,
+            restitutionSigmoidK: cfg.cushionRestitutionSigmoidK,
           });
           const post = new THREE.Vector3(collision.vx, 0, collision.vy);
           if (post.lengthSq() > 1e-8) {
