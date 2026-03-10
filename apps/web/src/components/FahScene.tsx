@@ -7,7 +7,7 @@ import { CueStick } from '../ammo/CueStick';
 import { ImpactPoint } from '../ammo/ImpactPoint';
 import { useGameStore } from '../stores/gameStore';
 import { PHYSICS, INPUT_LIMITS } from '../lib/constants';
-import { GameUI } from './GameUI';
+import { FahUI } from './FahUI';
 import {
   buildFahIndexModel,
   inferFahStartSide,
@@ -168,7 +168,7 @@ function directionDegFromCueToTarget(cue: THREE.Vector3, target: THREE.Vector3):
  * 3D 게임 월드
  */
 function GameWorld() {
-  const isFahMode = false;
+  const isFahMode = true;
   const { scene, camera } = useThree();
   const captureParams = readCaptureParams();
   const gameStore = useGameStore();
@@ -1829,7 +1829,7 @@ function LoadingScreen() {
 /**
  * 메인 게임 씬
  */
-export function GameScene() {
+export function FahScene() {
   const setPlayMode = useGameStore((state) => state.setPlayMode);
   const setSystemMode = useGameStore((state) => state.setSystemMode);
   const setFahGuide = useGameStore((state) => state.setFahGuide);
@@ -1837,14 +1837,13 @@ export function GameScene() {
   const systemMode = useGameStore((state) => state.systemMode);
 
   useEffect(() => {
-    if (playMode !== 'game') {
-      setPlayMode('game');
+    if (playMode !== 'fahTest') {
+      setPlayMode('fahTest');
     }
-    if (systemMode === 'fiveAndHalf') {
-      setSystemMode('half');
-      setFahGuide(null);
+    if (systemMode !== 'fiveAndHalf') {
+      setSystemMode('fiveAndHalf');
     }
-  }, [playMode, setFahGuide, setPlayMode, setSystemMode, systemMode]);
+  }, [playMode, setPlayMode, setSystemMode, systemMode]);
 
   const captureParams = readCaptureParams();
   const cameraPosition: [number, number, number] =
@@ -1868,7 +1867,7 @@ export function GameScene() {
           <PerspectiveCamera makeDefault fov={captureParams.cam === 'side' ? 42 : 50} position={cameraPosition} />
           <GameWorld />
         </Canvas>
-        {!captureParams.capture && <GameUI mode="game" />}
+        {!captureParams.capture && <FahUI mode="fah" />}
       </Suspense>
     </div>
   );

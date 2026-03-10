@@ -66,6 +66,12 @@ export type StepRoomPhysicsConfig = {
   slidingFriction: number;
   rollingFriction: number;
   gravityMps2?: number;
+  linearDampingPerTick?: number;
+  spinDampingPerTick?: number;
+  clothLinearSpinCouplingPerSec?: number;
+  cushionPostCollisionSpeedScale?: number;
+  cushionSpinMonotonicEnabled?: boolean;
+  cushionSpinMonotonicRetention?: number;
   // Cushion contact throw geometry (optional)
   cushionHeightM?: number;
   cushionRollingSpinHeightFactor?: number;
