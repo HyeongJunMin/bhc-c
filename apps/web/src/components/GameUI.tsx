@@ -19,6 +19,8 @@ export function GameUI(_props: GameUIProps = {}) {
     turnStartedAtMs,
     cushionContacts,
     objectBallsHit,
+    turnEvents,
+    checkThreeCushionScore,
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
@@ -80,6 +82,7 @@ export function GameUI(_props: GameUIProps = {}) {
   const secondTargetId = activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
   const hitObject1 = objectBallsHit.has('objectBall1');
   const hitObject2 = objectBallsHit.has(secondTargetId);
+  const isScoreValid = turnEvents.length > 0 && checkThreeCushionScore();
   const isMissTurnOver = turnMessage.trim().toUpperCase().includes('MISS - TURN OVER');
   const isScoreTurnMessage = turnMessage.trim().toUpperCase().includes('SCORE');
   const isCompactTurnMessage = isMissTurnOver || isScoreTurnMessage;
@@ -190,7 +193,7 @@ export function GameUI(_props: GameUIProps = {}) {
             padding: '20px',
             borderRadius: 12,
             minWidth: 180,
-            border: `2px solid ${cushionContacts >= 3 ? '#00ff88' : '#444'}`,
+            border: `2px solid ${isScoreValid ? '#00ff88' : '#444'}`,
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 12, color: '#ffd700' }}>
@@ -242,6 +245,23 @@ export function GameUI(_props: GameUIProps = {}) {
               </div>
             </div>
           </div>
+
+          {/* 득점 가능 여부 */}
+          {isScoreValid && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 8,
+                background: '#00ff88',
+                color: '#000',
+                borderRadius: 6,
+                textAlign: 'center',
+                fontWeight: 'bold',
+              }}
+            >
+              SCORED! ✓
+            </div>
+          )}
         </div>
       )}
 
