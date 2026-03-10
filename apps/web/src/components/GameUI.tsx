@@ -92,6 +92,7 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
     resetGame,
   } = gameStore;
   const showFahPanel = mode === 'fah';
+  const enableFahDiagnostics = false;
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
   const [fahLoading, setFahLoading] = useState(false);
   const [fahError, setFahError] = useState('');
@@ -172,7 +173,7 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
   const objectBall2ForApi = gameStore.balls.find((ball) => ball.id === secondTargetIdForApi);
   const fahSummary = useMemo(() => summarizeFahHistory(fahHistory), [fahHistory]);
   const fahRecommendation = useMemo(() => recommendPreviewOffset(fahHistory), [fahHistory]);
-  const fahQuickTargets = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110];
+  const fahAnchorTargets = [0, 5, 8, 10, 20, 23, 30, 40, 45];
   const tenPointCalibrationStats = useMemo(() => {
     const source = fahCalibrationEntries
       .filter((entry) => entry.targetPoint === 10 && typeof entry.firstCushionIndexDelta === 'number')
@@ -697,7 +698,7 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
   };
 
   useEffect(() => {
-    if (!fahAutoTrackEnabled || systemMode !== 'fiveAndHalf' || phase !== 'SHOOTING') {
+    if (!enableFahDiagnostics || !fahAutoTrackEnabled || systemMode !== 'fiveAndHalf' || phase !== 'SHOOTING') {
       return;
     }
     const shotKey = `${currentPlayer}:${turnStartedAtMs}`;
@@ -706,7 +707,7 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
     }
     fahAutoTrackShotKeyRef.current = shotKey;
     void requestFiveAndHalfPredictAndSimulate();
-  }, [fahAutoTrackEnabled, systemMode, phase, currentPlayer, turnStartedAtMs]);
+  }, [enableFahDiagnostics, fahAutoTrackEnabled, systemMode, phase, currentPlayer, turnStartedAtMs]);
 
   // 3쿠션 상태
   const secondTargetId = activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
@@ -762,6 +763,7 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
           </button>
         </div>
         {/* 점수판 */}
+        {mode !== 'fah' && (
         <div style={{ marginBottom: 15 }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>SCORE (Target: {RULES.WINNING_SCORE})</div>
           <div style={{ display: 'flex', gap: 20 }}>
@@ -789,13 +791,16 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
             ))}
           </div>
         </div>
+        )}
 
+        {mode !== 'fah' && (
         <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.85 }}>
           TURN: <span style={{ color: '#ffd700', fontWeight: 700 }}>{(turnRemainMs / 1000).toFixed(1)}s</span>
         </div>
+        )}
         
         {/* 게임 상태 */}
-        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 10 }}>
+        <div style={{ fontSize: 11, opacity: 0.6, marginTop: mode === 'fah' ? 0 : 10 }}>
           Phase: <span style={{ color: '#ffd700' }}>{phase}</span>
         </div>
       </div>
@@ -810,58 +815,23 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
           background: 'rgba(0,0,0,0.85)',
           padding: '16px',
           borderRadius: 12,
-          width: 340,
+          width: 320,
           border: '1px solid rgba(255,255,255,0.1)',
           pointerEvents: 'auto',
         }}
       >
         <div style={{ fontSize: 14, fontWeight: 700, color: '#8be9fd', marginBottom: 10 }}>
-          Five & Half API
+          FAH Anchors
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <button
-            type="button"
-            onClick={requestFiveAndHalfPredictAndSimulate}
-            disabled={fahLoading}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahLoading ? '#3b3b3b' : '#2d57dc',
-              color: '#fff',
-              padding: '8px 10px',
-              cursor: fahLoading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {fahLoading ? '처리 중...' : '예측+시뮬'}
-          </button>
-          <button
-            type="button"
-            onClick={requestFiveAndHalfCalibrate}
-            disabled={fahLoading || !fahPredict || !fahSimulate}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahLoading || !fahPredict || !fahSimulate ? '#3b3b3b' : '#00a86b',
-              color: '#fff',
-              padding: '8px 10px',
-              cursor: fahLoading || !fahPredict || !fahSimulate ? 'not-allowed' : 'pointer',
-            }}
-          >
-            보정 실행
-          </button>
-        </div>
-        {playMode === 'fahTest' && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-            {fahQuickTargets.map((targetPoint) => (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+            {fahAnchorTargets.map((targetPoint) => (
               <button
                 key={targetPoint}
                 type="button"
                 onClick={() => requestFahTestShot(targetPoint)}
                 disabled={phase !== 'AIMING' || fahLoading}
                 style={{
-                  minWidth: 70,
+                  minWidth: 60,
                   border: 'none',
                   borderRadius: 8,
                   background:
@@ -873,274 +843,17 @@ export function GameUI({ mode = 'game' }: GameUIProps) {
                   color: '#fff',
                   padding: '7px 10px',
                   cursor: phase !== 'AIMING' || fahLoading ? 'not-allowed' : 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
+                  fontWeight: 700,
                 }}
               >
-                {targetPoint}포인트 샷
+                A{targetPoint}
               </button>
             ))}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <button
-            type="button"
-            onClick={() => setFahAutoTrackEnabled((prev) => !prev)}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahAutoTrackEnabled ? '#00897b' : '#2e2e2e',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-            }}
-          >
-            샷 자동저장 {fahAutoTrackEnabled ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            onClick={refreshFahPreviewRecommendation}
-            disabled={fahHistory.length === 0}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahHistory.length === 0 ? '#3b3b3b' : '#455a64',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: fahHistory.length === 0 ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            추천값 갱신
-          </button>
-          <button
-            type="button"
-            onClick={() => setFahPreviewEnabled((prev) => !prev)}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahPreviewEnabled ? '#1e88e5' : '#2e2e2e',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-            }}
-          >
-            추천 미리보기 {fahPreviewEnabled ? 'ON' : 'OFF'}
-          </button>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          {playMode === 'fahTest' && (
-            <button
-              type="button"
-              onClick={startTenPointRepeat}
-              disabled={phase !== 'AIMING' || fahLoading || fahRepeatRemaining > 0}
-              style={{
-                flex: 1,
-                border: 'none',
-                borderRadius: 8,
-                background:
-                  phase !== 'AIMING' || fahLoading || fahRepeatRemaining > 0 ? '#3b3b3b' : '#ef6c00',
-                color: '#fff',
-                padding: '7px 10px',
-                cursor:
-                  phase !== 'AIMING' || fahLoading || fahRepeatRemaining > 0 ? 'not-allowed' : 'pointer',
-                fontSize: 11,
-              }}
-            >
-              {fahRepeatRemaining > 0 ? `10포인트 반복중 (${fahRepeatRemaining})` : '10포인트 x10 반복'}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={runFahBatchSampling}
-            disabled={fahLoading}
-            style={{
-              width: '100%',
-              border: 'none',
-              borderRadius: 8,
-              background: fahLoading ? '#3b3b3b' : '#6a1b9a',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: fahLoading ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            배치 샘플 3회 실행
-          </button>
-        </div>
-        {fahError && (
-          <div style={{ color: '#ff6b6b', fontSize: 11, marginBottom: 8 }}>
-            {fahError}
-          </div>
-        )}
-        <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.4 }}>
-          <div>
-            predict: {fahPredict ? `aim=${String(fahPredict.correctedAim ?? '-')}, confidence=${String(fahPredict.confidence ?? '-')}` : '-'}
-          </div>
-          <div>
-            simulate:{' '}
-            {fahSimulate
-              ? `delta=${String((fahSimulate.errorMetrics as Record<string, unknown> | undefined)?.thirdCushionIndexDelta ?? '-')}, landing=${String((fahSimulate.errorMetrics as Record<string, unknown> | undefined)?.landingDistanceM ?? '-')}`
-              : '-'}
-          </div>
-          <div>
-            calibrate:{' '}
-            {fahCalibrate
-              ? `offset=${String((fahCalibrate.updatedProfile as Record<string, unknown> | undefined)?.correctionOffset ?? '-')}, samples=${String(fahCalibrate.appliedSampleCount ?? '-')}`
-              : '-'}
-          </div>
-        </div>
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.12)', fontSize: 11, lineHeight: 1.45 }}>
-          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>오차 추세</div>
-          {playMode === 'fahTest' && (
-            <div style={{ color: '#ffcc80' }}>
-              테스트 세팅: 목표포인트={fahTestTargetPoint} / 수구=1,1 / 당점=10시 2팁 / 파워=30%(속도보정 x{fahPhysicsTuning.speedBoost.toFixed(2)}) / 물리=FAH 자동튜닝
-            </div>
-          )}
-          {playMode === 'fahTest' && (
-          <div style={{ color: '#9ad6ff' }}>
-              기준: 1~4쿠션 인덱스 = 0,10,20,30,40,50,70,90,110 (0~50은 중간 +5, 이후 중간 +10), 좌/우 시작은 미러 계산
-            </div>
-          )}
-          <div>추천 offset: {fahPreviewOffset.toFixed(3)} (basis: {fahRecommendation.basisSampleCount}, conf: {fahRecommendation.confidence})</div>
-          <div>10pt 가중 avgΔ: {tenPointCalibrationStats.avgDelta}</div>
-          <div>10pt 가중 avg|Δ|: {tenPointCalibrationStats.avgAbsDelta}</div>
-          <div>10pt 가중 max|Δ|: {tenPointCalibrationStats.maxAbsDelta}</div>
-          <div>10pt 추천 보정값: {tenPointCalibrationStats.recommendedOffset}</div>
-          <div>현재 포인트({fahTestTargetPoint}) 추천 보정값: {targetPointCalibrationOffset}</div>
-          <div>현재 보정 오프셋: {fahTestCorrectionOffset.toFixed(3)} {fahTestAutoCorrectionEnabled ? '(AUTO)' : '(MANUAL)'}</div>
-          <div>samples: {fahSummary.total}</div>
-          <div>calibration samples: {fahCalibrationEntries.length}</div>
-          <div>physics tuning samples: {fahPhysicsTuning.sampleCount}</div>
-          <div>physics tuning meanΔ / mean|Δ|: {fahPhysicsTuning.stats.meanDelta} / {fahPhysicsTuning.stats.meanAbsDelta}</div>
-          {latestFahCalibration && (
-            <div>
-              latest 1~4Δ:
-              {typeof latestFahCalibration.firstCushionIndexDelta === 'number'
-                ? ` 1st=${latestFahCalibration.firstCushionIndexDelta}`
-                : ''}
-              {typeof latestFahCalibration.secondCushionIndexDelta === 'number'
-                ? ` / 2nd=${latestFahCalibration.secondCushionIndexDelta}`
-                : ''}
-              {typeof latestFahCalibration.thirdCushionIndexDelta === 'number'
-                ? ` / 3rd=${latestFahCalibration.thirdCushionIndexDelta}`
-                : ''}
-              {typeof latestFahCalibration.fourthCushionIndexDelta === 'number'
-                ? ` / 4th=${latestFahCalibration.fourthCushionIndexDelta}`
-                : ''}
-            </div>
-          )}
-          {playMode === 'fahTest' && latestFahCalibration && (
-            <div>
-              latest dynamic:
-              r={String(latestFahCalibration.dynamicPhysics?.overrides?.cushionRestitution ?? '-')}
-              , f={String(latestFahCalibration.dynamicPhysics?.overrides?.cushionContactFriction ?? '-')}
-              , sc={String(latestFahCalibration.dynamicPhysics?.overrides?.clothLinearSpinCouplingPerSec ?? '-')}
-            </div>
-          )}
-          <div>avg |delta|: {fahSummary.avgAbsIndexDelta}</div>
-          <div>max |delta|: {fahSummary.maxAbsIndexDelta}</div>
-          <div>avg landing: {fahSummary.avgLandingDistanceM} m</div>
-          <div>best confidence: {fahSummary.bestConfidence}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button
-            type="button"
-            onClick={() => setFahTestAutoCorrectionEnabled(!fahTestAutoCorrectionEnabled)}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahTestAutoCorrectionEnabled ? '#00a86b' : '#2e2e2e',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-            }}
-          >
-            자동 보정 {fahTestAutoCorrectionEnabled ? 'ON' : 'OFF'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFahTestCorrectionOffset(tenPointCalibrationStats.recommendedOffset)}
-            disabled={tenPointCalibrationStats.sampleCount === 0}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: tenPointCalibrationStats.sampleCount === 0 ? '#3b3b3b' : '#6d4c41',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: tenPointCalibrationStats.sampleCount === 0 ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            추천 보정값 적용
-          </button>
-          <button
-            type="button"
-            onClick={exportFahHistory}
-            disabled={fahHistory.length === 0}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahHistory.length === 0 ? '#3b3b3b' : '#546e7a',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: fahHistory.length === 0 ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            CSV 내보내기
-          </button>
-          <button
-            type="button"
-            onClick={exportFahCalibrationJson}
-            disabled={fahCalibrationEntries.length === 0}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahCalibrationEntries.length === 0 ? '#3b3b3b' : '#455a64',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: fahCalibrationEntries.length === 0 ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            Calibration JSON
-          </button>
-          <button
-            type="button"
-            onClick={clearFahHistory}
-            disabled={fahHistory.length === 0}
-            style={{
-              flex: 1,
-              border: 'none',
-              borderRadius: 8,
-              background: fahHistory.length === 0 ? '#3b3b3b' : '#8e24aa',
-              color: '#fff',
-              padding: '7px 10px',
-              cursor: fahHistory.length === 0 ? 'not-allowed' : 'pointer',
-              fontSize: 11,
-            }}
-          >
-            히스토리 초기화
-          </button>
-        </div>
-        <div style={{ marginTop: 10, maxHeight: 110, overflowY: 'auto', fontSize: 10, opacity: 0.9 }}>
-          {fahHistory.length === 0 && <div style={{ opacity: 0.6 }}>히스토리 없음</div>}
-          {fahHistory.slice(-5).reverse().map((entry) => (
-            <div key={entry.id} style={{ padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              {new Date(entry.createdAt).toLocaleTimeString()} | d={entry.thirdCushionIndexDelta.toFixed(3)} | l={entry.landingDistanceM.toFixed(3)}
-              {entry.calibrationOffset !== null ? ` | c=${entry.calibrationOffset.toFixed(3)}` : ''}
-            </div>
-          ))}
+        <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.5 }}>
+          <div>현재 앵커: <span style={{ color: '#ffd700', fontWeight: 700 }}>{fahTestTargetPoint}</span></div>
+          <div style={{ opacity: 0.8 }}>세팅: 수구(1,1) / 당점 10시 2팁 / 파워 30%</div>
         </div>
       </div>
       )}

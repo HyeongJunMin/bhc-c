@@ -869,12 +869,7 @@ function GameWorld() {
     });
 
     const safeTargetPoint = Number.isFinite(targetPoint) ? targetPoint : 10;
-    const rawCorrection =
-      gameStore.fahTestAutoCorrectionEnabled && Number.isFinite(gameStore.fahTestCorrectionOffset)
-        ? gameStore.fahTestCorrectionOffset
-        : 0;
-    const boundedCorrection = clamp(rawCorrection, -FAH_MAX_CORRECTION_ABS, FAH_MAX_CORRECTION_ABS);
-    const correctedTargetPoint = Math.round(clamp(safeTargetPoint + boundedCorrection, 0, 110));
+    const correctedTargetPoint = Math.round(clamp(safeTargetPoint, 0, 110));
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
     fahLastIndexModelRef.current = indexModel;
