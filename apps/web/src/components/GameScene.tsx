@@ -210,6 +210,9 @@ function GameWorld() {
   const traceWasTruncatedRef = useRef(false);
   const lastCueCushionEventRef = useRef<{ cushionId: CushionId; atMs: number } | null>(null);
   const turnEndHandledRef = useRef(false);
+  const ballTrailLastPosRef = useRef<Map<string, THREE.Vector3>>(new Map());
+  const ballTrailSegmentsRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
+  const substepPositionsRef = useRef<Map<string, Array<{ x: number; y: number }>>>(new Map());
 
   const dragState = useRef<{
     isDragging: boolean;
@@ -287,6 +290,15 @@ function GameWorld() {
       guideObjectPathRef.current = null;
       guideFahPathRef.current = null;
       guideFahFirstCushionMarkerRef.current = null;
+      ballTrailSegmentsRef.current.forEach((segments) => {
+        segments.forEach((mesh) => {
+          scene.remove(mesh);
+          mesh.geometry.dispose();
+          (mesh.material as THREE.Material).dispose();
+        });
+      });
+      ballTrailSegmentsRef.current.clear();
+      ballTrailLastPosRef.current.clear();
     };
   }, [scene]);
 
@@ -1137,6 +1149,14 @@ function GameWorld() {
 
       stepRoomPhysicsWorld(balls, cfg, {
         onCushionCollision: (ball, cushionId) => {
+          if (gameStore.showBallTrail && ball.id === activeCueBallId) {
+            const arr = substepPositionsRef.current.get(ball.id);
+            if (arr) {
+              arr.push({ x: ball.x, y: ball.y });
+            } else {
+              substepPositionsRef.current.set(ball.id, [{ x: ball.x, y: ball.y }]);
+            }
+          }
           if (ball.id === activeCueBallId) {
             cueCushionContacts.add(cushionId);
             if (gameStore.playMode === 'fahTest' && fahTestShotTraceRef.current) {
@@ -1184,6 +1204,17 @@ function GameWorld() {
           }
         },
         onBallCollision: (first, second) => {
+          if (gameStore.showBallTrail) {
+            for (const b of [first, second]) {
+              if (b.id !== activeCueBallId) continue;
+              const arr = substepPositionsRef.current.get(b.id);
+              if (arr) {
+                arr.push({ x: b.x, y: b.y });
+              } else {
+                substepPositionsRef.current.set(b.id, [{ x: b.x, y: b.y }]);
+              }
+            }
+          }
           if (first.id === activeCueBallId && second.id !== activeCueBallId) {
             cueObjectHits.add(second.id);
             if (debugTracePartsRef.current.length >= MAX_DEBUG_TRACE_EVENTS) {
@@ -1214,6 +1245,19 @@ function GameWorld() {
             );
           }
         },
+        onSubstepEnd: (snapshotBalls) => {
+          if (!gameStore.showBallTrail) return;
+          for (const ball of snapshotBalls) {
+            if (ball.isPocketed) continue;
+            if (ball.id !== activeCueBallId) continue;
+            const arr = substepPositionsRef.current.get(ball.id);
+            if (arr) {
+              arr.push({ x: ball.x, y: ball.y });
+            } else {
+              substepPositionsRef.current.set(ball.id, [{ x: ball.x, y: ball.y }]);
+            }
+          }
+        },
       });
 
       cueCushionContacts.forEach((cushionId) => gameStore.addCushionContact(cushionId));
@@ -1236,6 +1280,54 @@ function GameWorld() {
         angularVelocity: new THREE.Vector3(ball.spinX, ball.spinY, ball.spinZ),
       });
     });
+
+    if (gameStore.showBallTrail && (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING')) {
+      const trailColorById: Record<string, number> = {
+        cueBall: 0xffffff,
+      };
+      substepPositionsRef.current.forEach((positions, ballId) => {
+        for (const phys of positions) {
+          const world = physicsToWorldXZ(phys.x, phys.y);
+          const pos = new THREE.Vector3(world.x, BALL_RADIUS, world.z);
+          const lastPos = ballTrailLastPosRef.current.get(ballId);
+
+          if (!lastPos || lastPos.distanceTo(pos) > BALL_RADIUS * 0.5) {
+            const color = trailColorById[ballId] ?? 0xffffff;
+            const tubeMat = new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.3,
+              depthWrite: false,
+              stencilWrite: true,
+              stencilRef: 1,
+              stencilFunc: THREE.NotEqualStencilFunc,
+              stencilZPass: THREE.ReplaceStencilOp,
+            });
+            if (lastPos) {
+              const curve = new THREE.LineCurve3(lastPos.clone(), pos.clone());
+              const tubeGeo = new THREE.TubeGeometry(curve, 1, BALL_RADIUS, 8, false);
+              const mesh = new THREE.Mesh(tubeGeo, tubeMat);
+              scene.add(mesh);
+
+              const segments = ballTrailSegmentsRef.current.get(ballId) ?? [];
+              segments.push(mesh);
+              ballTrailSegmentsRef.current.set(ballId, segments);
+            }
+            // SphereGeometry cap to fill gaps at direction changes
+            const capGeo = new THREE.SphereGeometry(BALL_RADIUS, 8, 8);
+            const capMesh = new THREE.Mesh(capGeo, tubeMat);
+            capMesh.position.copy(pos);
+            scene.add(capMesh);
+            const capSegments = ballTrailSegmentsRef.current.get(ballId) ?? [];
+            capSegments.push(capMesh);
+            ballTrailSegmentsRef.current.set(ballId, capSegments);
+
+            ballTrailLastPosRef.current.set(ballId, pos.clone());
+          }
+        }
+      });
+      substepPositionsRef.current.clear();
+    }
 
     if (gameStore.playMode === 'fahTest' && (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING')) {
       const trace = fahTestShotTraceRef.current;
@@ -1372,6 +1464,16 @@ function GameWorld() {
             fahTestShotTraceRef.current = null;
           }
         }
+        // 잔상 클리어
+        ballTrailLastPosRef.current.clear();
+        ballTrailSegmentsRef.current.forEach((segments) => {
+          segments.forEach((mesh) => {
+            scene.remove(mesh);
+            mesh.geometry.dispose();
+            (mesh.material as THREE.Material).dispose();
+          });
+        });
+        ballTrailSegmentsRef.current.clear();
         gameStore.handleTurnEnd();
       } else if (!allStopped) {
         gameStore.setPhase('SIMULATING');

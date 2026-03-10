@@ -85,6 +85,7 @@ export type StepRoomPhysicsHooks = {
   applyCushionContactThrow?: (input: CushionContactThrowInput) => CushionContactThrowResult;
   onCushionCollision?: (ball: PhysicsBallState, cushionId: CushionId) => void;
   onBallCollision?: (first: PhysicsBallState, second: PhysicsBallState) => void;
+  onSubstepEnd?: (balls: readonly PhysicsBallState[]) => void;
 };
 
 export type StepRoomPhysicsStats = {
@@ -575,6 +576,8 @@ export function stepRoomPhysicsWorld(
         reasonCounts.SPEED_CAP += 1;
       }
     }
+
+    hooks.onSubstepEnd?.(balls);
   }
 
   const kineticEnergyEndJ = computeKineticEnergyJ(balls, config.ballMassKg);

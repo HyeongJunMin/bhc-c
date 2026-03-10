@@ -91,6 +91,10 @@ interface GameStore {
   clearFahTestShotRequest: () => void;
   setFahTestCorrectionOffset: (offset: number) => void;
   setFahTestAutoCorrectionEnabled: (enabled: boolean) => void;
+
+  // 잔상 표시
+  showBallTrail: boolean;
+  toggleBallTrail: () => void;
 }
 
 // 3쿠션 초구 세팅
@@ -198,6 +202,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   fahTestTargetPoint: 10,
   fahTestCorrectionOffset: 0,
   fahTestAutoCorrectionEnabled: false,
+  showBallTrail: false,
+  toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
 
   // 기본 액션
   setPhase: (phase) => set({ phase }),

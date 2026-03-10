@@ -734,6 +734,57 @@ export function GameUI() {
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
           <button
             type="button"
+            onClick={() => setPlayMode('game')}
+            style={{
+              border: 'none',
+              borderRadius: 6,
+              background: playMode === 'game' ? '#0f9d58' : '#2e2e2e',
+              color: '#fff',
+              padding: '4px 8px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            게임 모드
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPlayMode('fahTest');
+              setSystemMode('fiveAndHalf');
+              setFahGuide(null);
+            }}
+            style={{
+              border: 'none',
+              borderRadius: 6,
+              background: playMode === 'fahTest' ? '#0f9d58' : '#2e2e2e',
+              color: '#fff',
+              padding: '4px 8px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            테스트 모드(FAH)
+          </button>
+          <button
+            type="button"
+            onClick={() => gameStore.toggleBallTrail()}
+            style={{
+              border: 'none',
+              borderRadius: 6,
+              background: gameStore.showBallTrail ? '#0f9d58' : '#2e2e2e',
+              color: '#fff',
+              padding: '4px 8px',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            수구궤적 {gameStore.showBallTrail ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          <button
+            type="button"
             onClick={() => {
               setSystemMode('half');
               setFahGuide(null);
