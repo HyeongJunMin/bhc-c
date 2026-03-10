@@ -50,7 +50,7 @@ test('비탄성 충돌(e<1): 충돌 후 상대 법선속도가 감소한다', ()
   assert.equal(Math.abs(afterRelNormal + e * beforeRelNormal) < 1e-9, true);
 });
 
-test('저속 공-공 충돌은 추가 감쇠되어 반발계수가 더 낮아진다', () => {
+test('저속 공-공 충돌은 입력 반발계수를 그대로 사용한다', () => {
   const first = { vx: 0.2, vy: 0 };
   const second = { vx: 0, vy: 0 };
   const e = 0.95;
@@ -65,7 +65,7 @@ test('저속 공-공 충돌은 추가 감쇠되어 반발계수가 더 낮아진
   const observedRestitution = Math.abs(afterRelNormal / beforeRelNormal);
 
   assert.equal(result.collided, true);
-  assert.equal(observedRestitution < e, true);
+  assert.equal(Math.abs(observedRestitution - e) < 1e-9, true);
 });
 
 test('쿠션 충돌: 반발 후 법선 방향으로 이탈하고 속도가 유한하다', () => {

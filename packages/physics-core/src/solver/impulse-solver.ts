@@ -1,6 +1,8 @@
 export type ImpulseBody2D = {
   vx: number;
   vy: number;
+  // bhc2 convention: spinZ = vertical-axis spin (side english), used for tangential contact velocity
+  spinZ?: number;
 };
 
 export type BallBallImpulseInput = {
@@ -9,11 +11,14 @@ export type BallBallImpulseInput = {
   restitution: number;
   mass1Kg?: number;
   mass2Kg?: number;
+  contactFriction?: number;
+  ballRadiusM?: number;
 };
 
 export type BallBallImpulseResult = {
   collided: boolean;
   impulseN: number;
+  tangentialImpulse: number;
 };
 
 export type CushionAxis = 'x' | 'y';
@@ -32,6 +37,10 @@ export type BallCushionImpulseInput = {
   ballMassKg: number;
   ballRadiusM: number;
   ballInertiaKgM2: number;
+  restitutionLow?: number;
+  restitutionHigh?: number;
+  restitutionMidSpeedMps?: number;
+  restitutionSigmoidK?: number;
 };
 
 export type BallCushionImpulseResult = {
@@ -46,6 +55,25 @@ export type BallCushionImpulseResult = {
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+// Speed-dependent cushion restitution: real cushion rubber absorbs more energy at higher impact speeds.
+// Sigmoid curve between restitutionLow (slow, elastic) and restitutionHigh (fast, absorbing).
+function computeSpeedDependentRestitution(
+  absNormalSpeed: number,
+  baseRestitution: number,
+  restitutionLow?: number,
+  restitutionHigh?: number,
+  midSpeedMps?: number,
+  sigmoidK?: number,
+): number {
+  if (restitutionLow === undefined || restitutionHigh === undefined) {
+    return baseRestitution;
+  }
+  const mid = midSpeedMps ?? 2.0;
+  const k = sigmoidK ?? 1.5;
+  const t = 1 / (1 + Math.exp(-k * (absNormalSpeed - mid)));
+  return restitutionLow + (restitutionHigh - restitutionLow) * t;
 }
 
 function computeLowSpeedBallBallRestitution(baseRestitution: number, approachSpeedMps: number): number {
@@ -64,11 +92,11 @@ export function solveBallBallImpulse(
   input: BallBallImpulseInput,
 ): BallBallImpulseResult {
   if (!Number.isFinite(input.normalX) || !Number.isFinite(input.normalY)) {
-    return { collided: false, impulseN: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
   }
   const normalLen = Math.hypot(input.normalX, input.normalY);
   if (normalLen <= 1e-9) {
-    return { collided: false, impulseN: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
   }
   const nx = input.normalX / normalLen;
   const ny = input.normalY / normalLen;
@@ -78,27 +106,50 @@ export function solveBallBallImpulse(
   const invMass2 = mass2 > 0 ? 1 / mass2 : 0;
   const invMassSum = invMass1 + invMass2;
   if (invMassSum <= 0) {
-    return { collided: false, impulseN: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
   }
 
   const relativeVx = second.vx - first.vx;
   const relativeVy = second.vy - first.vy;
   const velocityAlongNormal = relativeVx * nx + relativeVy * ny;
   if (velocityAlongNormal >= 0) {
-    return { collided: false, impulseN: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
   }
-  const approachSpeedMps = -velocityAlongNormal;
-  const effectiveRestitution = computeLowSpeedBallBallRestitution(input.restitution, approachSpeedMps);
-  const impulseN = -((1 + effectiveRestitution) * velocityAlongNormal) / invMassSum;
-  const impulseX = impulseN * nx;
-  const impulseY = impulseN * ny;
+  const impulseN = -((1 + input.restitution) * velocityAlongNormal) / invMassSum;
+
+  // Tangential (spin transfer) impulse via Coulomb friction
+  const tx = -ny;
+  const ty = nx;
+  const mu = input.contactFriction ?? 0;
+  const radius = input.ballRadiusM ?? 0;
+  let tangentialImpulse = 0;
+  if (mu > 0 && radius > 0 && impulseN > 0) {
+    const mass = invMass1 > 0 ? 1 / invMass1 : 1;
+    const firstSpinZ = first.spinZ ?? 0;
+    const secondSpinZ = second.spinZ ?? 0;
+    const tangentRelVel = (relativeVx * tx + relativeVy * ty) + radius * (firstSpinZ + secondSpinZ);
+    const inertia = (2 / 5) * mass * radius * radius;
+    const tangentEffMass = invMassSum + (2 * radius * radius) / inertia;
+    const uncapped = -tangentRelVel / Math.max(1e-9, tangentEffMass);
+    tangentialImpulse = clampNumber(uncapped, -mu * impulseN, mu * impulseN);
+    const spinDelta = (-5 * tangentialImpulse) / (2 * mass * radius);
+    if (first.spinZ !== undefined) {
+      first.spinZ += spinDelta;
+    }
+    if (second.spinZ !== undefined) {
+      second.spinZ += spinDelta;
+    }
+  }
+
+  const impulseX = impulseN * nx + tangentialImpulse * tx;
+  const impulseY = impulseN * ny + tangentialImpulse * ty;
 
   first.vx -= impulseX * invMass1;
   first.vy -= impulseY * invMass1;
   second.vx += impulseX * invMass2;
   second.vy += impulseY * invMass2;
 
-  return { collided: true, impulseN };
+  return { collided: true, impulseN, tangentialImpulse };
 }
 
 export function solveBallCushionImpulse(input: BallCushionImpulseInput): BallCushionImpulseResult {
@@ -145,7 +196,15 @@ export function solveBallCushionImpulse(input: BallCushionImpulseInput): BallCus
     1,
   );
   const restitutionBoost = clampNumber((-Math.sign(rawVn) * longitudinalRatio) * 0.06, -0.06, 0.06);
-  const effectiveRestitution = clampNumber(input.restitution * (1 + restitutionBoost), 0.05, 0.98);
+  const baseRestitution = computeSpeedDependentRestitution(
+    Math.abs(rawVn),
+    input.restitution,
+    input.restitutionLow,
+    input.restitutionHigh,
+    input.restitutionMidSpeedMps,
+    input.restitutionSigmoidK,
+  );
+  const effectiveRestitution = clampNumber(baseRestitution * (1 + restitutionBoost), 0.05, 0.98);
 
   const kn = 1 / m;
   const kt = (1 / m) + (r * r) / inertia;
