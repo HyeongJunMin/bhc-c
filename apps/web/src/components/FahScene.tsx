@@ -496,7 +496,12 @@ function GameWorld() {
       return;
     }
     const indexModel = computeFahShotIndexModel(cue.position, gameStore.fahTestTargetPoint);
-    const firstRailTarget = computeFahCompensatedAimTarget(cue.position, indexModel.firstCushionSide, indexModel.firstCushionIndex);
+    const firstCushionSide = resolveFahFirstCushionSide();
+    const firstRailTarget = computeFahCompensatedAimTarget(
+      cue.position,
+      firstCushionSide,
+      indexModel.firstCushionIndex,
+    );
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
     if (Math.abs(shotDirectionDeg - gameStore.shotInput.shotDirectionDeg) > 0.05) {
       gameStore.setShotDirection(shotDirectionDeg);
@@ -873,15 +878,20 @@ function GameWorld() {
     const correctedTargetPoint = Math.round(clamp(safeTargetPoint, 0, 110));
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
+    const firstCushionSide = resolveFahFirstCushionSide();
     fahLastIndexModelRef.current = indexModel;
-    const firstRailTarget = computeFahCompensatedAimTarget(cue.position, indexModel.firstCushionSide, indexModel.firstCushionIndex);
+    const firstRailTarget = computeFahCompensatedAimTarget(
+      cue.position,
+      firstCushionSide,
+      indexModel.firstCushionIndex,
+    );
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
     const baseFahConfig = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
     const dynamicProfile = deriveFahDynamicPhysicsProfile(
       baseFahConfig,
       indexModel.firstCushionIndex,
       shotDirectionDeg,
-      indexModel.firstCushionSide,
+      firstCushionSide,
     );
     fahDynamicProfileRef.current = dynamicProfile;
     physicsConfigRef.current = createRoomPhysicsStepConfig('fahTest', {
@@ -931,6 +941,11 @@ function GameWorld() {
     const startIndex = computeFahStartIndexFromCue(cue);
     const startSide = inferFahStartSide(cue.x);
     return buildFahIndexModel(startIndex, firstCushionIndex, startSide);
+  };
+
+  const resolveFahFirstCushionSide = (): FahRailSide => {
+    // FAH 앵커 조준 기준은 항상 오른쪽 장쿠션으로 고정.
+    return 'right';
   };
 
   const computeFahFirstRailTarget = (
@@ -1583,7 +1598,8 @@ function GameWorld() {
         setGuideLinePoints(guideObjectPathRef.current, []);
         if (guideFahFirstCushionMarkerRef.current) {
           const indexModel = computeFahShotIndexModel(start, gameStore.fahTestTargetPoint);
-          const firstMarkerPos = computeFahFirstRailTarget(indexModel.firstCushionSide, indexModel.firstCushionIndex, 'marker');
+          const firstCushionSide = resolveFahFirstCushionSide();
+          const firstMarkerPos = computeFahFirstRailTarget(firstCushionSide, indexModel.firstCushionIndex, 'marker');
           guideFahFirstCushionMarkerRef.current.position.copy(firstMarkerPos);
           guideFahFirstCushionMarkerRef.current.visible = true;
         }
