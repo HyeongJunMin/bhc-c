@@ -97,16 +97,16 @@ export function mapFahCushionContactToIndex(
   if (cushion === 'top' || cushion === 'bottom') {
     const leftRailX = -tableWidth / 2;
     const rightRailX = tableWidth / 2;
-    const ratio = clamp((x - leftRailX) / (rightRailX - leftRailX), 0, 1);
-    const index = ratio * SHORT_MAX_INDEX;
-    return Math.round(clamp(index, SHORT_MIN_INDEX, SHORT_MAX_INDEX));
+    const ratio = clamp((rightRailX - x) / (rightRailX - leftRailX), 0, 1);
+    const max = points[points.length - 1] ?? LONG_MAX_INDEX;
+    const index = ratio * max;
+    return Math.round(clamp(index, LONG_MIN_INDEX, LONG_MAX_INDEX));
   }
   const topRailZ = tableHeight / 2;
   const bottomRailZ = -tableHeight / 2;
   const ratio = clamp((topRailZ - z) / (topRailZ - bottomRailZ), 0, 1);
-  const max = points[points.length - 1] ?? LONG_MAX_INDEX;
-  const index = ratio * max;
-  return Math.round(clamp(index, LONG_MIN_INDEX, LONG_MAX_INDEX));
+  const index = ratio * SHORT_MAX_INDEX;
+  return Math.round(clamp(index, SHORT_MIN_INDEX, SHORT_MAX_INDEX));
 }
 
 export function buildFahExpectedCushionSequence(startIndex: number, firstCushionIndex: number): {

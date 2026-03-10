@@ -87,6 +87,7 @@ interface GameStore {
   resetTurnEvents: () => void;
   checkThreeCushionScore: () => boolean;
   handleTurnEnd: () => void;
+  setFahTestTargetPoint: (targetPoint: number) => void;
   requestFahTestShot: (targetPoint: number) => void;
   clearFahTestShotRequest: () => void;
   setFahTestCorrectionOffset: (offset: number) => void;
@@ -440,6 +441,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetPoint,
       requestedAt: Date.now(),
     },
+    fahTestTargetPoint: targetPoint,
+  }),
+  setFahTestTargetPoint: (targetPoint) => set({
     fahTestTargetPoint: targetPoint,
   }),
   clearFahTestShotRequest: () => set({ fahTestShotRequest: null }),

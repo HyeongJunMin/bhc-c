@@ -33,6 +33,7 @@ type CandidateOverrides = {
 
 type ShotEval = {
   first: number;
+  simulateFirst: number;
   routeValid: boolean;
   expected: { second: number; third: number; fourth: number };
   observed: { second: number | null; third: number | null; fourth: number | null };
@@ -47,6 +48,9 @@ type CandidateResult = {
   rmse: number;
   weightedScore: number;
   byPoint: ShotEval[];
+  byPointCorrected: ShotEval[];
+  pointCorrections: Record<string, number>;
+  correctionPenalty: number;
 };
 
 const TABLE_WIDTH = 2.844;
@@ -72,6 +76,11 @@ const SCORE_GLOBAL_WEIGHT = Number(process.env.FAH_SCORE_GLOBAL_WEIGHT ?? '0.25'
 const SCORE_P10_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P10_SECOND_WEIGHT ?? '4.0');
 const SCORE_P10_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P10_THIRD_WEIGHT ?? '0.6');
 const SCORE_P10_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P10_FOURTH_WEIGHT ?? '3.2');
+const SCORE_POINT_CORRECTION_PENALTY = Number(process.env.FAH_SCORE_POINT_CORRECTION_PENALTY ?? '0.18');
+const FAH_POINT_CORRECTION_LIMIT = Number(process.env.FAH_POINT_CORRECTION_LIMIT ?? '18');
+const FAH_POINT_CORRECTION_SECOND_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_SECOND_WEIGHT ?? '0.65');
+const FAH_POINT_CORRECTION_THIRD_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_THIRD_WEIGHT ?? '0.25');
+const FAH_POINT_CORRECTION_FOURTH_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_FOURTH_WEIGHT ?? '0.10');
 
 function normalizeFahCushionId(cushion: CushionId): CushionId {
   if (cushion === 'top') {
@@ -89,6 +98,82 @@ function clamp(value: number, min: number, max: number): number {
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function resolvePointCorrection(pointCorrections: Record<string, number>, targetPoint: number): number {
+  const entries = Object.entries(pointCorrections)
+    .map(([key, value]) => ({ point: Number(key), correction: Number(value) }))
+    .filter((entry) => Number.isFinite(entry.point) && Number.isFinite(entry.correction))
+    .sort((a, b) => a.point - b.point);
+  if (entries.length === 0 || !Number.isFinite(targetPoint)) {
+    return 0;
+  }
+  if (entries.length === 1) {
+    return entries[0].correction;
+  }
+  const clampedTarget = clamp(targetPoint, entries[0].point, entries[entries.length - 1].point);
+  if (clampedTarget <= entries[0].point) {
+    return entries[0].correction;
+  }
+  if (clampedTarget >= entries[entries.length - 1].point) {
+    return entries[entries.length - 1].correction;
+  }
+  for (let i = 0; i < entries.length - 1; i += 1) {
+    const left = entries[i];
+    const right = entries[i + 1];
+    if (clampedTarget >= left.point && clampedTarget <= right.point) {
+      const span = right.point - left.point;
+      if (span <= 0) {
+        return left.correction;
+      }
+      const t = (clampedTarget - left.point) / span;
+      return left.correction + (right.correction - left.correction) * t;
+    }
+  }
+  return 0;
+}
+
+function derivePointCorrections(rows: ShotEval[]): Record<string, number> {
+  const corrections: Record<string, number> = {};
+  for (const row of rows) {
+    const hasSecond = row.observed.second !== null;
+    const hasThird = row.observed.third !== null;
+    const hasFourth = row.observed.fourth !== null;
+    if (!hasSecond && !hasThird && !hasFourth) {
+      continue;
+    }
+
+    let weighted = 0;
+    let weightSum = 0;
+    if (hasSecond) {
+      weighted += (-row.error.second) * FAH_POINT_CORRECTION_SECOND_WEIGHT;
+      weightSum += FAH_POINT_CORRECTION_SECOND_WEIGHT;
+    }
+    if (hasThird) {
+      weighted += (-row.error.third) * FAH_POINT_CORRECTION_THIRD_WEIGHT;
+      weightSum += FAH_POINT_CORRECTION_THIRD_WEIGHT;
+    }
+    if (hasFourth) {
+      weighted += (-row.error.fourth) * FAH_POINT_CORRECTION_FOURTH_WEIGHT;
+      weightSum += FAH_POINT_CORRECTION_FOURTH_WEIGHT;
+    }
+    if (weightSum <= 0) {
+      continue;
+    }
+
+    const correction = clamp(weighted / weightSum, -FAH_POINT_CORRECTION_LIMIT, FAH_POINT_CORRECTION_LIMIT);
+    corrections[String(round3(row.first))] = round3(correction);
+  }
+  return corrections;
+}
+
+function correctionPenalty(pointCorrections: Record<string, number>): number {
+  const values = Object.values(pointCorrections);
+  if (values.length === 0) {
+    return 0;
+  }
+  const averageAbs = values.reduce((sum, value) => sum + Math.abs(value), 0) / values.length;
+  return round3(averageAbs);
 }
 
 function worldToPhysicsXY(x: number, z: number): { x: number; y: number } {
@@ -121,22 +206,22 @@ function computeFahStartIndexFromCue(cueX: number): number {
 
 function computeFahFirstRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailZ = TABLE_HEIGHT / 2;
-  const bottomRailZ = -TABLE_HEIGHT / 2;
-  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
-  const sideXSign = firstSide === 'right' ? 1 : -1;
-  const targetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
+  const leftRailX = -TABLE_WIDTH / 2;
+  const rightRailX = TABLE_WIDTH / 2;
+  const targetX = rightRailX - targetRatio * (rightRailX - leftRailX);
+  const sideZSign = firstSide === 'right' ? 1 : -1;
+  const targetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
   return { x: targetX, z: targetZ };
 }
 
 function computeFahMarkerRailTarget(firstSide: 'left' | 'right', firstIndex: number): { x: number; z: number } {
   const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstIndex));
-  const topRailZ = TABLE_HEIGHT / 2;
-  const bottomRailZ = -TABLE_HEIGHT / 2;
-  const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
+  const leftRailX = -TABLE_WIDTH / 2;
+  const rightRailX = TABLE_WIDTH / 2;
+  const targetX = rightRailX - targetRatio * (rightRailX - leftRailX);
   const cushionThicknessM = 0.058;
-  const sideXSign = firstSide === 'right' ? 1 : -1;
-  const targetX = sideXSign * (TABLE_WIDTH / 2 + cushionThicknessM / 2);
+  const sideZSign = firstSide === 'right' ? 1 : -1;
+  const targetZ = sideZSign * (TABLE_HEIGHT / 2 + cushionThicknessM / 2);
   return { x: targetX, z: targetZ };
 }
 
@@ -148,16 +233,16 @@ function computeFahCompensatedAimTarget(
 ): { x: number; z: number } {
   const marker = computeFahMarkerRailTarget(firstSide, requestedFirstIndex);
   const collision = computeFahFirstRailTarget(firstSide, requestedFirstIndex);
-  const markerDepth = marker.x - cueX;
-  const collisionDepth = collision.x - cueX;
-  if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
+  const markerDepth = marker.z - cueZ;
+  const collisionDepth = collision.z - cueZ;
+  if (Math.abs(markerDepth) <= 1e-6) {
     return collision;
   }
-  const depthScale = markerDepth / collisionDepth;
-  const compensatedZ = cueZ + (collision.z - cueZ) * depthScale;
+  const depthRatio = collisionDepth / markerDepth;
+  const compensatedX = cueX + (marker.x - cueX) * depthRatio;
   return {
-    x: marker.x,
-    z: clamp(compensatedZ, -TABLE_HEIGHT / 2, TABLE_HEIGHT / 2),
+    x: clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2),
+    z: collision.z,
   };
 }
 
@@ -187,11 +272,12 @@ function buildCandidate(random: () => number): CandidateOverrides {
   };
 }
 
-function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): ShotEval {
+function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides, simulateFirst?: number): ShotEval {
   const cueStart = { x: FIXED_CUE_WORLD_X, z: FIXED_CUE_WORLD_Z };
   const startIndex = computeFahStartIndexFromCue(cueStart.x);
   const startSide = inferFahStartSide(cueStart.x);
-  const indexModel = buildFahIndexModel(startIndex, anchor.first, startSide);
+  const targetFirst = quantizeFahIndexToNearestHalfStep(Number.isFinite(simulateFirst) ? simulateFirst : anchor.first);
+  const indexModel = buildFahIndexModel(startIndex, targetFirst, startSide);
   const firstTarget = computeFahCompensatedAimTarget(
     cueStart.x,
     cueStart.z,
@@ -297,6 +383,7 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
 
   return {
     first: anchor.first,
+    simulateFirst: targetFirst,
     routeValid,
     expected: {
       second: anchor.second,
@@ -319,24 +406,42 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides): Shot
 
 function evaluateCandidate(candidate: CandidateOverrides): CandidateResult {
   const byPoint = ANCHORS.map((anchor) => evaluateShot(anchor, candidate));
-  const errors = byPoint.flatMap((row) => [row.error.second, row.error.third, row.error.fourth]);
+  const pointCorrections = derivePointCorrections(byPoint);
+  const byPointCorrected = ANCHORS.map((anchor) => {
+    const correction = resolvePointCorrection(pointCorrections, anchor.first);
+    return evaluateShot(anchor, candidate, anchor.first + correction);
+  });
+  const errors = byPointCorrected.flatMap((row) => [row.error.second, row.error.third, row.error.fourth]);
   const mae = errors.reduce((sum, value) => sum + Math.abs(value), 0) / errors.length;
   const rmse = Math.sqrt(errors.reduce((sum, value) => sum + value * value, 0) / errors.length);
-  const baseScore = byPoint.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPoint.length;
-  const p10 = byPoint.find((row) => row.first === 10);
+  const baseScore = byPointCorrected.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPointCorrected.length;
+  const p10 = byPointCorrected.find((row) => row.first === 10);
   const p10Objective = p10
     ? (Math.abs(p10.error.second) * SCORE_P10_SECOND_WEIGHT)
       + (Math.abs(p10.error.third) * SCORE_P10_THIRD_WEIGHT)
       + (Math.abs(p10.error.fourth) * SCORE_P10_FOURTH_WEIGHT)
     : 0;
-  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p10Objective;
+  const penalty = correctionPenalty(pointCorrections);
+  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p10Objective + (penalty * SCORE_POINT_CORRECTION_PENALTY);
   return {
     overrides: candidate,
     mae: round3(mae),
     rmse: round3(rmse),
     weightedScore: round3(weightedScore),
     byPoint,
+    byPointCorrected,
+    pointCorrections,
+    correctionPenalty: round3(penalty),
   };
+}
+
+function getPointCorrection(row: CandidateResult, point: number): number | '' {
+  const key = String(Math.round(point));
+  const value = row.pointCorrections[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return '';
 }
 
 async function run(): Promise<void> {
@@ -385,6 +490,7 @@ async function run(): Promise<void> {
     'weightedScore',
     'mae',
     'rmse',
+    'correctionPenalty',
     'speedBoost',
     'cushionRestitution',
     'cushionContactFriction',
@@ -405,14 +511,32 @@ async function run(): Promise<void> {
     'p40_e2',
     'p40_e3',
     'p40_e4',
+    'p10_corr2',
+    'p10_corr3',
+    'p10_corr4',
+    'p20_corr2',
+    'p20_corr3',
+    'p20_corr4',
+    'p30_corr2',
+    'p30_corr3',
+    'p30_corr4',
+    'p40_corr2',
+    'p40_corr3',
+    'p40_corr4',
+    'corr_p10',
+    'corr_p20',
+    'corr_p30',
+    'corr_p40',
   ];
   const csvRows = top.map((row) => {
     const at = (first: number) => row.byPoint.find((point) => point.first === first);
+    const atCorrected = (first: number) => row.byPointCorrected.find((point) => point.first === first);
     return [
       row.rank,
       row.weightedScore,
       row.mae,
       row.rmse,
+      row.correctionPenalty,
       row.overrides.speedBoost,
       row.overrides.cushionRestitution,
       row.overrides.cushionContactFriction,
@@ -433,6 +557,22 @@ async function run(): Promise<void> {
       at(40)?.error.second ?? '',
       at(40)?.error.third ?? '',
       at(40)?.error.fourth ?? '',
+      atCorrected(10)?.error.second ?? '',
+      atCorrected(10)?.error.third ?? '',
+      atCorrected(10)?.error.fourth ?? '',
+      atCorrected(20)?.error.second ?? '',
+      atCorrected(20)?.error.third ?? '',
+      atCorrected(20)?.error.fourth ?? '',
+      atCorrected(30)?.error.second ?? '',
+      atCorrected(30)?.error.third ?? '',
+      atCorrected(30)?.error.fourth ?? '',
+      atCorrected(40)?.error.second ?? '',
+      atCorrected(40)?.error.third ?? '',
+      atCorrected(40)?.error.fourth ?? '',
+      getPointCorrection(row, 10),
+      getPointCorrection(row, 20),
+      getPointCorrection(row, 30),
+      getPointCorrection(row, 40),
     ].join(',');
   });
   writeFileSync(csvPath, `${header.join(',')}\n${csvRows.join('\n')}\n`, 'utf8');

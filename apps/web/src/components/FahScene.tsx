@@ -12,7 +12,6 @@ import {
   buildFahIndexModel,
   inferFahStartSide,
   mapFahCushionContactToIndex,
-  mapFahIndexToRailRatio,
   mapFahRailRatioToIndex,
   quantizeFahIndexToNearestHalfStep,
   type FahIndexModel,
@@ -22,6 +21,7 @@ import {
 import {
   FAH_PHYSICS_TUNING_STORAGE_KEY,
   readFahPhysicsTuning,
+  resolveFahPointCorrection,
 } from '../lib/fah-physics-tuning';
 import { deriveFahDynamicPhysicsProfile, type FahDynamicPhysicsProfile } from '../lib/fah-dynamic-physics';
 import { AIM_CONTROL_CONTRACT } from '../../../../packages/shared-types/src/aim-control.ts';
@@ -45,9 +45,12 @@ const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
 const FAH_MAX_CORRECTION_ABS = 20;
+// cam=top 기준 장쿠션 9포인트: 오른쪽 0 -> 왼쪽 80 (10 단위)
+const FAH_POINT_MAX = 80;
 const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
-const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
-const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
+// cam=top debug alignment: fixed cue-ball anchor chosen from the calibrated guide pass.
+const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + 0.36;
+const FAH_FIXED_CUE_WORLD_Z = -0.471637;
 // INPUT drag range(10..400) 기준 30%
 const FAH_FIXED_DRAG_PX = 127;
 const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
@@ -186,6 +189,8 @@ function GameWorld() {
   const guidePostCuePathRef = useRef<THREE.Line | null>(null);
   const guideObjectPathRef = useRef<THREE.Line | null>(null);
   const guideFahPathRef = useRef<THREE.Line | null>(null);
+  const guideFahYellowLineRef = useRef<THREE.Line | null>(null);
+  const guideFahRedLineRef = useRef<THREE.Line | null>(null);
   const guideFahFirstCushionMarkerRef = useRef<THREE.Mesh | null>(null);
   const fahTestShotTraceRef = useRef<{
     shotId: string;
@@ -255,6 +260,8 @@ function GameWorld() {
     guidePostCuePathRef.current = createGuideLine(0x50fa7b);
     guideObjectPathRef.current = createGuideLine(0xffb86c);
     guideFahPathRef.current = createGuideLine(0xff79c6);
+    guideFahYellowLineRef.current = createGuideLine(0xffe85a);
+    guideFahRedLineRef.current = createGuideLine(0xff4d4d);
     const markerGeo = new THREE.SphereGeometry(BALL_RADIUS * 0.35, 24, 24);
     const markerMat = new THREE.MeshStandardMaterial({
       color: 0xff5a5f,
@@ -281,6 +288,8 @@ function GameWorld() {
       disposeLine(guidePostCuePathRef.current);
       disposeLine(guideObjectPathRef.current);
       disposeLine(guideFahPathRef.current);
+      disposeLine(guideFahYellowLineRef.current);
+      disposeLine(guideFahRedLineRef.current);
       if (guideFahFirstCushionMarkerRef.current) {
         scene.remove(guideFahFirstCushionMarkerRef.current);
         guideFahFirstCushionMarkerRef.current.geometry.dispose();
@@ -290,6 +299,8 @@ function GameWorld() {
       guidePostCuePathRef.current = null;
       guideObjectPathRef.current = null;
       guideFahPathRef.current = null;
+      guideFahYellowLineRef.current = null;
+      guideFahRedLineRef.current = null;
       guideFahFirstCushionMarkerRef.current = null;
       ballTrailSegmentsRef.current.forEach((segments) => {
         segments.forEach((mesh) => {
@@ -495,13 +506,7 @@ function GameWorld() {
     if (!cue) {
       return;
     }
-    const indexModel = computeFahShotIndexModel(cue.position, gameStore.fahTestTargetPoint);
-    const firstCushionSide = resolveFahFirstCushionSide();
-    const firstRailTarget = computeFahCompensatedAimTarget(
-      cue.position,
-      firstCushionSide,
-      indexModel.firstCushionIndex,
-    );
+    const firstRailTarget = computeFahDiamondGuideTarget(gameStore.fahTestTargetPoint, cue.position.y);
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
     if (Math.abs(shotDirectionDeg - gameStore.shotInput.shotDirectionDeg) > 0.05) {
       gameStore.setShotDirection(shotDirectionDeg);
@@ -875,14 +880,21 @@ function GameWorld() {
     });
 
     const safeTargetPoint = Number.isFinite(targetPoint) ? targetPoint : 10;
-    const correctedTargetPoint = Math.round(clamp(safeTargetPoint, 0, 110));
+    const autoPointCorrection = gameStore.fahTestAutoCorrectionEnabled
+      ? resolveFahPointCorrection(fahPhysicsTuningRef.current, safeTargetPoint)
+      : 0;
+    const pointCorrection = autoPointCorrection + gameStore.fahTestCorrectionOffset;
+    const correctedTargetPoint = clamp(
+      safeTargetPoint + clamp(pointCorrection, -FAH_MAX_CORRECTION_ABS, FAH_MAX_CORRECTION_ABS),
+      0,
+      FAH_POINT_MAX,
+    );
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
-    const firstCushionSide = resolveFahFirstCushionSide();
     fahLastIndexModelRef.current = indexModel;
     const firstRailTarget = computeFahCompensatedAimTarget(
       cue.position,
-      firstCushionSide,
+      indexModel.firstCushionSide,
       indexModel.firstCushionIndex,
     );
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
@@ -891,7 +903,7 @@ function GameWorld() {
       baseFahConfig,
       indexModel.firstCushionIndex,
       shotDirectionDeg,
-      firstCushionSide,
+      indexModel.firstCushionSide,
     );
     fahDynamicProfileRef.current = dynamicProfile;
     physicsConfigRef.current = createRoomPhysicsStepConfig('fahTest', {
@@ -907,7 +919,10 @@ function GameWorld() {
     // 10시 방향 2팁
     gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | aimX=${firstRailTarget.x.toFixed(3)} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${Math.round(correctedTargetPoint * 1000) / 1000} ` +
+        `(off=${Math.round(pointCorrection * 1000) / 1000}, auto=${Math.round(autoPointCorrection * 1000) / 1000}) | ` +
+        `S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | ` +
+        `aimX=${firstRailTarget.x.toFixed(3)} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
     );
 
     executeShot({
@@ -943,9 +958,12 @@ function GameWorld() {
     return buildFahIndexModel(startIndex, firstCushionIndex, startSide);
   };
 
-  const resolveFahFirstCushionSide = (): FahRailSide => {
-    // FAH 앵커 조준 기준은 항상 오른쪽 장쿠션으로 고정.
-    return 'right';
+  const computeFahDiamondGuideTarget = (point: number, y: number): THREE.Vector3 => {
+    const clampedPoint = clamp(point, 0, FAH_POINT_MAX);
+    const x = TABLE_WIDTH / 2 - (clampedPoint / 10) * DIAMOND_STEP_X;
+    const frameThickness = 0.15;
+    const longRailZ = TABLE_HEIGHT / 2 + PHYSICS.CUSHION_THICKNESS + frameThickness / 2;
+    return new THREE.Vector3(x, y, longRailZ);
   };
 
   const computeFahFirstRailTarget = (
@@ -953,14 +971,10 @@ function GameWorld() {
     firstCushionIndex: number,
     mode: 'aim' | 'marker' = 'aim',
   ): THREE.Vector3 => {
-    const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstCushionIndex));
-    // FAH 화면 기준:
-    // - 좌/우 장쿠션을 side로 사용
-    // - 장쿠션 위 포인트는 X축(좌->우)으로 배치
-    // - 쿠션면 깊이는 Z축에서 결정
+    const targetRatio = clamp(firstCushionIndex, 0, FAH_POINT_MAX) / FAH_POINT_MAX;
     const leftRailX = -TABLE_WIDTH / 2;
     const rightRailX = TABLE_WIDTH / 2;
-    const targetX = leftRailX + targetRatio * (rightRailX - leftRailX);
+    const targetX = rightRailX - targetRatio * (rightRailX - leftRailX);
     const sideZSign = side === 'right' ? 1 : -1;
     const aimTargetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
     const markerTargetZ = sideZSign * (TABLE_HEIGHT / 2 + PHYSICS.CUSHION_THICKNESS / 2);
@@ -983,13 +997,14 @@ function GameWorld() {
     const collisionPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'aim');
     const markerDepth = markerPoint.z - cue.z;
     const collisionDepth = collisionPoint.z - cue.z;
-    if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
+    if (Math.abs(markerDepth) <= 1e-6) {
       return collisionPoint;
     }
-    const depthScale = markerDepth / collisionDepth;
-    const compensatedX = cue.x + (collisionPoint.x - cue.x) * depthScale;
+    // Keep the visual marker line and solve its intersection on the real collision plane.
+    const depthRatio = collisionDepth / markerDepth;
+    const compensatedX = cue.x + (markerPoint.x - cue.x) * depthRatio;
     const clampedX = clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2);
-    return new THREE.Vector3(clampedX, BALL_RADIUS + 0.008, markerPoint.z);
+    return new THREE.Vector3(clampedX, BALL_RADIUS + 0.008, collisionPoint.z);
   };
 
   const estimateObservedCushionIndex = (
@@ -1498,10 +1513,18 @@ function GameWorld() {
     const cueBallRef = ballsRef.current.get(activeCueBallId);
     if (cueBallRef && gameStore.phase === 'AIMING' && !captureParams.capture) {
       if (isFahMode) {
-        // 테스트 모드 화면 기준: 단쿠션 방향이 하단으로 보이도록 좌/우(short rail) 축 기준 시점 고정
-        const targetPos = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X - 1.7, 1.95, FAH_FIXED_CUE_WORLD_Z);
-        camera.position.lerp(targetPos, 0.25);
-        camera.lookAt(FAH_FIXED_CUE_WORLD_X + 1.05, 0.05, FAH_FIXED_CUE_WORLD_Z);
+        if (captureParams.cam === 'top') {
+          camera.position.lerp(new THREE.Vector3(0, 4.4, 0.001), 0.25);
+          camera.lookAt(0, 0, 0);
+        } else if (captureParams.cam === 'side') {
+          camera.position.lerp(new THREE.Vector3(0, 1.5, 3.5), 0.25);
+          camera.lookAt(0, 0.25, 0);
+        } else {
+          // 기본 FAH 시점: 오른쪽 장쿠션이 화면 우측 사선 면으로 보이도록 코너 뷰를 사용한다.
+          const targetPos = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X - 1.45, 1.75, FAH_FIXED_CUE_WORLD_Z + 1.35);
+          camera.position.lerp(targetPos, 0.25);
+          camera.lookAt(FAH_FIXED_CUE_WORLD_X + 1.15, 0.05, FAH_FIXED_CUE_WORLD_Z - 0.25);
+        }
       }
       tempDir.current.copy(cueBallRef.mesh.position).sub(camera.position);
       tempDir.current.y = 0;
@@ -1551,66 +1574,23 @@ function GameWorld() {
       const object2 = ballsRef.current.get(object2Id)?.mesh.position;
       if (isFahMode) {
         const guideY = BALL_RADIUS + 0.01;
-        const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
-        const dir = new THREE.Vector3(Math.sin(directionRad), 0, Math.cos(directionRad)).normalize();
         const start = new THREE.Vector3(cue.x, guideY, cue.z);
-        const minX = -TABLE_WIDTH / 2 + BALL_RADIUS;
-        const maxX = TABLE_WIDTH / 2 - BALL_RADIUS;
-        const minZ = -TABLE_HEIGHT / 2 + BALL_RADIUS;
-        const maxZ = TABLE_HEIGHT / 2 - BALL_RADIUS;
-        const findBoundaryHit = (origin: THREE.Vector3, heading: THREE.Vector3): { point: THREE.Vector3; axis: 'x' | 'y' } => {
-          let bestT = Number.POSITIVE_INFINITY;
-          let bestPoint = origin.clone();
-          let bestAxis: 'x' | 'y' = 'x';
-          if (Math.abs(heading.x) > 1e-8) {
-            const txMin = (minX - origin.x) / heading.x;
-            if (txMin > 0 && txMin < bestT) {
-              bestT = txMin;
-              bestPoint = new THREE.Vector3(minX, guideY, origin.z + heading.z * txMin);
-              bestAxis = 'x';
-            }
-            const txMax = (maxX - origin.x) / heading.x;
-            if (txMax > 0 && txMax < bestT) {
-              bestT = txMax;
-              bestPoint = new THREE.Vector3(maxX, guideY, origin.z + heading.z * txMax);
-              bestAxis = 'x';
-            }
-          }
-          if (Math.abs(heading.z) > 1e-8) {
-            const tzMin = (minZ - origin.z) / heading.z;
-            if (tzMin > 0 && tzMin < bestT) {
-              bestT = tzMin;
-              bestPoint = new THREE.Vector3(origin.x + heading.x * tzMin, guideY, minZ);
-              bestAxis = 'y';
-            }
-            const tzMax = (maxZ - origin.z) / heading.z;
-            if (tzMax > 0 && tzMax < bestT) {
-              bestT = tzMax;
-              bestPoint = new THREE.Vector3(origin.x + heading.x * tzMax, guideY, maxZ);
-              bestAxis = 'y';
-            }
-          }
-          return { point: bestPoint, axis: bestAxis };
-        };
-        const firstHit = findBoundaryHit(start, dir);
-        const reflectedDir = dir.clone();
-        if (firstHit.axis === 'x') reflectedDir.x *= -1;
-        else reflectedDir.z *= -1;
-        const secondHit = findBoundaryHit(firstHit.point, reflectedDir);
-        setGuideLinePoints(guideCuePathRef.current, [start, firstHit.point]);
-        setGuideLinePoints(guidePostCuePathRef.current, [firstHit.point, secondHit.point]);
+        const targetPoint = computeFahDiamondGuideTarget(gameStore.fahTestTargetPoint, guideY);
+        setGuideLinePoints(guideCuePathRef.current, []);
+        setGuideLinePoints(guidePostCuePathRef.current, []);
         setGuideLinePoints(guideObjectPathRef.current, []);
+        setGuideLinePoints(guideFahPathRef.current, []);
+        setGuideLinePoints(guideFahYellowLineRef.current, [start, targetPoint]);
+        setGuideLinePoints(guideFahRedLineRef.current, []);
         if (guideFahFirstCushionMarkerRef.current) {
-          const indexModel = computeFahShotIndexModel(start, gameStore.fahTestTargetPoint);
-          const firstCushionSide = resolveFahFirstCushionSide();
-          const firstMarkerPos = computeFahFirstRailTarget(firstCushionSide, indexModel.firstCushionIndex, 'marker');
-          guideFahFirstCushionMarkerRef.current.position.copy(firstMarkerPos);
-          guideFahFirstCushionMarkerRef.current.visible = true;
+          guideFahFirstCushionMarkerRef.current.visible = false;
         }
       } else if (object1 && object2) {
         if (guideFahFirstCushionMarkerRef.current) {
           guideFahFirstCushionMarkerRef.current.visible = false;
         }
+        setGuideLinePoints(guideFahYellowLineRef.current, []);
+        setGuideLinePoints(guideFahRedLineRef.current, []);
         const guideY = BALL_RADIUS + 0.01;
         const directionRad = (gameStore.shotInput.shotDirectionDeg * Math.PI) / 180;
         const dir = new THREE.Vector3(Math.sin(directionRad), 0, Math.cos(directionRad)).normalize();
@@ -1774,6 +1754,8 @@ function GameWorld() {
       setGuideLinePoints(guidePostCuePathRef.current, []);
       setGuideLinePoints(guideObjectPathRef.current, []);
       setGuideLinePoints(guideFahPathRef.current, []);
+      setGuideLinePoints(guideFahYellowLineRef.current, []);
+      setGuideLinePoints(guideFahRedLineRef.current, []);
       if (guideFahFirstCushionMarkerRef.current) {
         guideFahFirstCushionMarkerRef.current.visible = false;
       }
