@@ -1833,7 +1833,37 @@ function LoadingScreen() {
 /**
  * 메인 게임 씬
  */
-export function GameScene() {
+type GameSceneProps = {
+  mode?: 'game' | 'fah';
+};
+
+export function GameScene({ mode = 'game' }: GameSceneProps) {
+  const setPlayMode = useGameStore((state) => state.setPlayMode);
+  const setSystemMode = useGameStore((state) => state.setSystemMode);
+  const setFahGuide = useGameStore((state) => state.setFahGuide);
+  const playMode = useGameStore((state) => state.playMode);
+  const systemMode = useGameStore((state) => state.systemMode);
+
+  useEffect(() => {
+    if (mode === 'fah') {
+      if (playMode !== 'fahTest') {
+        setPlayMode('fahTest');
+      }
+      if (systemMode !== 'fiveAndHalf') {
+        setSystemMode('fiveAndHalf');
+      }
+      return;
+    }
+
+    if (playMode !== 'game') {
+      setPlayMode('game');
+    }
+    if (systemMode === 'fiveAndHalf') {
+      setSystemMode('half');
+      setFahGuide(null);
+    }
+  }, [mode, playMode, setFahGuide, setPlayMode, setSystemMode, systemMode]);
+
   const captureParams = readCaptureParams();
   const cameraPosition: [number, number, number] =
     captureParams.cam === 'top'
@@ -1856,7 +1886,7 @@ export function GameScene() {
           <PerspectiveCamera makeDefault fov={captureParams.cam === 'side' ? 42 : 50} position={cameraPosition} />
           <GameWorld />
         </Canvas>
-        {!captureParams.capture && <GameUI />}
+        {!captureParams.capture && <GameUI mode={mode} />}
       </Suspense>
     </div>
   );

@@ -7,7 +7,8 @@ import { TestSandboxPage } from './pages/TestSandboxPage';
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<GameScene />} />
+      <Route path="/" element={<GameScene mode="game" />} />
+      <Route path="/fah" element={<GameScene mode="fah" />} />
       <Route path="/test" element={<TestListPage />} />
       <Route path="/test/sandbox" element={<TestSandboxPage />} />
       <Route path="/test/:id" element={<TestRunPage />} />

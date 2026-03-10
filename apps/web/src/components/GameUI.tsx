@@ -58,7 +58,13 @@ type FahCalibrationEntry = {
   };
 };
 
-export function GameUI() {
+type GameUIMode = 'game' | 'fah';
+
+type GameUIProps = {
+  mode?: GameUIMode;
+};
+
+export function GameUI({ mode = 'game' }: GameUIProps) {
   const TURN_DURATION_MS = 20_000;
   const gameStore = useGameStore();
   const { 
@@ -85,7 +91,7 @@ export function GameUI() {
     objectBallsHit,
     resetGame,
   } = gameStore;
-  const showFahPanel = false;
+  const showFahPanel = mode === 'fah';
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
   const [fahLoading, setFahLoading] = useState(false);
   const [fahError, setFahError] = useState('');
@@ -241,6 +247,16 @@ export function GameUI() {
   );
 
   useEffect(() => {
+    if (mode === 'fah') {
+      if (playMode !== 'fahTest') {
+        setPlayMode('fahTest');
+      }
+      if (systemMode !== 'fiveAndHalf') {
+        setSystemMode('fiveAndHalf');
+      }
+      return;
+    }
+
     if (playMode !== 'game') {
       setPlayMode('game');
     }
@@ -248,7 +264,7 @@ export function GameUI() {
       setSystemMode('half');
       setFahGuide(null);
     }
-  }, [playMode, setPlayMode, systemMode, setSystemMode, setFahGuide]);
+  }, [mode, playMode, setPlayMode, systemMode, setSystemMode, setFahGuide]);
 
   const startTenPointRepeat = () => {
     fahRepeatDispatchLockRef.current = false;
@@ -729,21 +745,6 @@ export function GameUI() {
           3-Cushion Billiards
         </h2>
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={() => setPlayMode('game')}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: playMode === 'game' ? '#0f9d58' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            게임 모드
-          </button>
           <button
             type="button"
             onClick={() => gameStore.toggleBallTrail()}
