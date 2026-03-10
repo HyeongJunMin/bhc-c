@@ -1,4 +1,4 @@
-const FAH_FRAME_VERSION = 'fah-frame-v2-piecewise';
+const FAH_FRAME_VERSION = 'fah-frame-v3-rail-fixed';
 
 export type FahRailSide = 'left' | 'right';
 export type FahCushionSide = 'left' | 'right' | 'top' | 'bottom';
@@ -26,9 +26,11 @@ type PointConversionInput = {
   z: number;
 };
 
-const FAH_DIAMOND_INDEX_POINTS = [0, 10, 20, 30, 40, 50, 70, 90, 110] as const;
-const MIN_INDEX = FAH_DIAMOND_INDEX_POINTS[0];
-const MAX_INDEX = FAH_DIAMOND_INDEX_POINTS[FAH_DIAMOND_INDEX_POINTS.length - 1];
+const FAH_LONG_RAIL_INDEX_POINTS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110] as const;
+const LONG_MIN_INDEX = 0;
+const LONG_MAX_INDEX = 110;
+const SHORT_MIN_INDEX = 0;
+const SHORT_MAX_INDEX = 40;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -39,22 +41,17 @@ function round3(value: number): number {
 }
 
 export function getFahIndexScalePoints(): readonly number[] {
-  return FAH_DIAMOND_INDEX_POINTS;
+  return FAH_LONG_RAIL_INDEX_POINTS;
 }
 
-export function quantizeFahIndexToNearestHalfStep(index: number, points: readonly number[] = FAH_DIAMOND_INDEX_POINTS): number {
-  const clamped = clamp(index, MIN_INDEX, MAX_INDEX);
-  const candidates = getFahHalfStepScalePoints(points);
-  let best = candidates[0];
-  let bestDiff = Math.abs(clamped - best);
-  for (let i = 1; i < candidates.length; i += 1) {
-    const diff = Math.abs(clamped - candidates[i]);
-    if (diff < bestDiff) {
-      best = candidates[i];
-      bestDiff = diff;
-    }
-  }
-  return round3(best);
+export function quantizeFahIndexToNearestHalfStep(
+  index: number,
+  points: readonly number[] = FAH_LONG_RAIL_INDEX_POINTS,
+): number {
+  const max = points[points.length - 1] ?? LONG_MAX_INDEX;
+  const clamped = clamp(index, 0, max);
+  // 1 unit == 1/10 point
+  return Math.round(clamped);
 }
 
 export function getFahScaleHalfSteps(points: readonly number[]): number[] {
@@ -69,32 +66,24 @@ export function getFahScaleHalfSteps(points: readonly number[]): number[] {
   return values;
 }
 
-export function getFahHalfStepScalePoints(points: readonly number[] = FAH_DIAMOND_INDEX_POINTS): number[] {
+export function getFahHalfStepScalePoints(points: readonly number[] = FAH_LONG_RAIL_INDEX_POINTS): number[] {
   return getFahScaleHalfSteps(points);
 }
 
-export function mapFahRailRatioToIndex(ratio: number, points: readonly number[] = FAH_DIAMOND_INDEX_POINTS): number {
-  const clampedRatio = clamp(ratio, 0, 1);
-  const segmentCount = points.length - 1;
-  const scaled = clampedRatio * segmentCount;
-  const leftSegment = Math.floor(clamp(scaled, 0, segmentCount - 1));
-  const t = scaled - leftSegment;
-  const left = points[leftSegment];
-  const right = points[leftSegment + 1];
-  return round3(left + (right - left) * t);
+export function mapFahRailRatioToIndex(
+  ratio: number,
+  points: readonly number[] = FAH_LONG_RAIL_INDEX_POINTS,
+): number {
+  const max = points[points.length - 1] ?? LONG_MAX_INDEX;
+  return round3(clamp(ratio, 0, 1) * max);
 }
 
-export function mapFahIndexToRailRatio(index: number, points: readonly number[] = FAH_DIAMOND_INDEX_POINTS): number {
-  const clamped = clamp(index, MIN_INDEX, MAX_INDEX);
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const left = points[i];
-    const right = points[i + 1];
-    if (clamped >= left && clamped <= right) {
-      const local = right === left ? 0 : (clamped - left) / (right - left);
-      return (i + local) / (points.length - 1);
-    }
-  }
-  return clamped <= MIN_INDEX ? 0 : 1;
+export function mapFahIndexToRailRatio(
+  index: number,
+  points: readonly number[] = FAH_LONG_RAIL_INDEX_POINTS,
+): number {
+  const max = points[points.length - 1] ?? LONG_MAX_INDEX;
+  return clamp(index, 0, max) / max;
 }
 
 export function mapFahCushionContactToIndex(
@@ -102,19 +91,22 @@ export function mapFahCushionContactToIndex(
   contact: PointConversionInput,
   tableWidth: number,
   tableHeight: number,
-  points: readonly number[] = FAH_DIAMOND_INDEX_POINTS,
+  points: readonly number[] = FAH_LONG_RAIL_INDEX_POINTS,
 ): number {
   const { x, z } = contact;
   if (cushion === 'top' || cushion === 'bottom') {
-    const topRailX = tableWidth / 2;
-    const bottomRailX = -tableWidth / 2;
-    const ratio = clamp((topRailX - x) / (topRailX - bottomRailX), 0, 1);
-    return quantizeFahIndexToNearestHalfStep(mapFahRailRatioToIndex(ratio, points), points);
+    const leftRailX = -tableWidth / 2;
+    const rightRailX = tableWidth / 2;
+    const ratio = clamp((x - leftRailX) / (rightRailX - leftRailX), 0, 1);
+    const index = ratio * SHORT_MAX_INDEX;
+    return Math.round(clamp(index, SHORT_MIN_INDEX, SHORT_MAX_INDEX));
   }
   const topRailZ = tableHeight / 2;
   const bottomRailZ = -tableHeight / 2;
   const ratio = clamp((topRailZ - z) / (topRailZ - bottomRailZ), 0, 1);
-  return quantizeFahIndexToNearestHalfStep(mapFahRailRatioToIndex(ratio, points), points);
+  const max = points[points.length - 1] ?? LONG_MAX_INDEX;
+  const index = ratio * max;
+  return Math.round(clamp(index, LONG_MIN_INDEX, LONG_MAX_INDEX));
 }
 
 export function buildFahExpectedCushionSequence(startIndex: number, firstCushionIndex: number): {

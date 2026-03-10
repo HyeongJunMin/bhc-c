@@ -108,12 +108,6 @@ type FahCushionHitEvent = {
 };
 
 function normalizeFahCushionId(cushion: CushionId): FahCushionSide {
-  if (cushion === 'top') {
-    return 'bottom';
-  }
-  if (cushion === 'bottom') {
-    return 'top';
-  }
   return cushion;
 }
 
