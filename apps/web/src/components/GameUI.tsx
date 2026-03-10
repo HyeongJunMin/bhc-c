@@ -85,6 +85,7 @@ export function GameUI() {
     objectBallsHit,
     resetGame,
   } = gameStore;
+  const showFahPanel = false;
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
   const [fahLoading, setFahLoading] = useState(false);
   const [fahError, setFahError] = useState('');
@@ -238,6 +239,16 @@ export function GameUI() {
     () => (fahCalibrationEntries.length === 0 ? null : fahCalibrationEntries[fahCalibrationEntries.length - 1]),
     [fahCalibrationEntries],
   );
+
+  useEffect(() => {
+    if (playMode !== 'game') {
+      setPlayMode('game');
+    }
+    if (systemMode === 'fiveAndHalf') {
+      setSystemMode('half');
+      setFahGuide(null);
+    }
+  }, [playMode, setPlayMode, systemMode, setSystemMode, setFahGuide]);
 
   const startTenPointRepeat = () => {
     fahRepeatDispatchLockRef.current = false;
@@ -718,43 +729,7 @@ export function GameUI() {
           3-Cushion Billiards
         </h2>
         <div style={{ fontSize: 13, marginBottom: 10, color: '#8be9fd' }}>
-          {systemMode === 'half' ? '하프 시스템' : systemMode === 'fiveAndHalf' ? '파이브앤하프 시스템' : '플러스투 시스템'}
-        </div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={() => setPlayMode('game')}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: playMode === 'game' ? '#0f9d58' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            게임 모드
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setPlayMode('fahTest');
-              setSystemMode('fiveAndHalf');
-              setFahGuide(null);
-            }}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: playMode === 'fahTest' ? '#0f9d58' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            테스트 모드(FAH)
-          </button>
+          {systemMode === 'plusTwo' ? '플러스투 시스템' : '하프 시스템'}
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
           <button
@@ -777,21 +752,6 @@ export function GameUI() {
           </button>
           <button
             type="button"
-            onClick={() => setSystemMode('fiveAndHalf')}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: systemMode === 'fiveAndHalf' ? '#4f46e5' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            2 파이브
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setSystemMode('plusTwo');
               setFahGuide(null);
@@ -811,7 +771,6 @@ export function GameUI() {
         </div>
         
         {/* 점수판 */}
-        {playMode === 'game' && (
         <div style={{ marginBottom: 15 }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>SCORE (Target: {RULES.WINNING_SCORE})</div>
           <div style={{ display: 'flex', gap: 20 }}>
@@ -839,7 +798,6 @@ export function GameUI() {
             ))}
           </div>
         </div>
-        )}
 
         <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.85 }}>
           TURN: <span style={{ color: '#ffd700', fontWeight: 700 }}>{(turnRemainMs / 1000).toFixed(1)}s</span>
@@ -852,6 +810,7 @@ export function GameUI() {
       </div>
 
       {/* Five & Half API 패널 */}
+      {showFahPanel && (
       <div
         style={{
           position: 'absolute',
@@ -1193,6 +1152,7 @@ export function GameUI() {
           ))}
         </div>
       </div>
+      )}
       
       {/* 3쿠션 상태 패널 */}
       {(phase === 'SHOOTING' || phase === 'SIMULATING') && (
