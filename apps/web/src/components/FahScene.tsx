@@ -954,17 +954,21 @@ function GameWorld() {
     mode: 'aim' | 'marker' = 'aim',
   ): THREE.Vector3 => {
     const targetRatio = mapFahIndexToRailRatio(quantizeFahIndexToNearestHalfStep(firstCushionIndex));
-    const topRailZ = TABLE_HEIGHT / 2;
-    const bottomRailZ = -TABLE_HEIGHT / 2;
-    const targetZ = topRailZ - targetRatio * (topRailZ - bottomRailZ);
-    const sideXSign = side === 'right' ? 1 : -1;
-    const aimTargetX = sideXSign * (TABLE_WIDTH / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
-    const markerTargetX = sideXSign * (TABLE_WIDTH / 2 + PHYSICS.CUSHION_THICKNESS / 2);
+    // FAH 화면 기준:
+    // - 좌/우 장쿠션을 side로 사용
+    // - 장쿠션 위 포인트는 X축(좌->우)으로 배치
+    // - 쿠션면 깊이는 Z축에서 결정
+    const leftRailX = -TABLE_WIDTH / 2;
+    const rightRailX = TABLE_WIDTH / 2;
+    const targetX = leftRailX + targetRatio * (rightRailX - leftRailX);
+    const sideZSign = side === 'right' ? 1 : -1;
+    const aimTargetZ = sideZSign * (TABLE_HEIGHT / 2 - BALL_RADIUS + FAH_FIRST_RAIL_AIM_SIDE_LEAD);
+    const markerTargetZ = sideZSign * (TABLE_HEIGHT / 2 + PHYSICS.CUSHION_THICKNESS / 2);
 
     return new THREE.Vector3(
-      mode === 'marker' ? markerTargetX : aimTargetX,
+      targetX,
       BALL_RADIUS + 0.008,
-      targetZ,
+      mode === 'marker' ? markerTargetZ : aimTargetZ,
     );
   };
 
@@ -977,15 +981,15 @@ function GameWorld() {
   ): THREE.Vector3 => {
     const markerPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'marker');
     const collisionPoint = computeFahFirstRailTarget(side, requestedFirstCushionIndex, 'aim');
-    const markerDepth = markerPoint.x - cue.x;
-    const collisionDepth = collisionPoint.x - cue.x;
+    const markerDepth = markerPoint.z - cue.z;
+    const collisionDepth = collisionPoint.z - cue.z;
     if (Math.abs(collisionDepth) <= 1e-6 || Math.abs(markerDepth) <= 1e-6) {
       return collisionPoint;
     }
     const depthScale = markerDepth / collisionDepth;
-    const compensatedZ = cue.z + (collisionPoint.z - cue.z) * depthScale;
-    const clampedZ = clamp(compensatedZ, -TABLE_HEIGHT / 2, TABLE_HEIGHT / 2);
-    return new THREE.Vector3(markerPoint.x, BALL_RADIUS + 0.008, clampedZ);
+    const compensatedX = cue.x + (collisionPoint.x - cue.x) * depthScale;
+    const clampedX = clamp(compensatedX, -TABLE_WIDTH / 2, TABLE_WIDTH / 2);
+    return new THREE.Vector3(clampedX, BALL_RADIUS + 0.008, markerPoint.z);
   };
 
   const estimateObservedCushionIndex = (
