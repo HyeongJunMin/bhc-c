@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-strip-types src/main.ts",
+    "dev": "node --watch --experimental-strip-types src/main.ts",
     "start": "node --experimental-strip-types src/main.ts",
     "build": "node --experimental-strip-types -e \"import('./src/auth/http.ts'); import('./src/lobby/http.ts');\"",
     "test": "node --experimental-strip-types --test src/**/*.test.ts",

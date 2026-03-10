@@ -37,7 +37,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     await authHandler(req, res);
     return;
   }
-  if (req.url?.startsWith('/lobby/')) {
+  if (req.url?.startsWith('/api/lobby/')) {
+    req.url = req.url.slice(4); // strip '/api' → lobbyHandler는 '/lobby/...' 그대로 처리
     await lobbyHandler(req, res);
     return;
   }

@@ -52,7 +52,8 @@ const server = createServer((req, res) => {
     void authHandler(req, res);
     return;
   }
-  if (req.url?.startsWith('/lobby/')) {
+  if (req.url?.startsWith('/api/lobby/')) {
+    req.url = req.url.slice(4); // strip '/api' → lobbyHandler는 '/lobby/...' 그대로 처리
     void lobbyHandler(req, res);
     return;
   }

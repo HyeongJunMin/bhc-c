@@ -21,7 +21,7 @@ export function compareRoomsForLobby(a: SortableRoom, b: SortableRoom): number {
   }
 
   if (a.playerCount !== b.playerCount) {
-    return a.playerCount - b.playerCount;
+    return b.playerCount - a.playerCount;
   }
 
   return Date.parse(b.createdAt) - Date.parse(a.createdAt);

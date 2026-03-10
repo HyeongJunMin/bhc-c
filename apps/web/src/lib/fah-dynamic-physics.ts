@@ -40,10 +40,10 @@ export function deriveFahDynamicPhysicsProfile(
 
   const restitution = clamp(base.cushionRestitution * (1 - 0.04 * blend), 0.86, 0.94);
   const contactFriction = clamp(base.cushionContactFriction * (1 + 0.28 * blend), 0.03, 0.09);
-  const postSpeedScale = clamp((base.cushionPostCollisionSpeedScale ?? 1.0) * (1 - 0.015 * blend), 0.985, 1.01);
-  const clothSpinCoupling = clamp((base.clothLinearSpinCouplingPerSec ?? 1.0) * (1 + 0.2 * blend), 0.7, 1.8);
-  const spinDamping = clamp((base.spinDampingPerTick ?? 0.989) * (1 - 0.008 * blend), 0.975, 0.997);
-  const linearDamping = clamp((base.linearDampingPerTick ?? 0.983) * (1 + 0.002 * (1 - blend)), 0.975, 0.995);
+  const postSpeedScale = clamp(base.cushionPostCollisionSpeedScale * (1 - 0.015 * blend), 0.985, 1.01);
+  const clothSpinCoupling = clamp(base.clothLinearSpinCouplingPerSec * (1 + 0.2 * blend), 0.7, 1.8);
+  const spinDamping = clamp(base.spinDampingPerTick * (1 - 0.008 * blend), 0.975, 0.997);
+  const linearDamping = clamp(base.linearDampingPerTick * (1 + 0.002 * (1 - blend)), 0.975, 0.995);
   const maxThrowDeg = clamp(base.cushionMaxThrowAngleDeg * (1 + 0.08 * blend), 45, 70);
 
   return {

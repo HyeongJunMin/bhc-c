@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Vector3 } from 'three';
 import { PHYSICS, RULES } from '../lib/constants';
 import { AIM_CONTROL_CONTRACT, type AimControlMode } from '../../../../packages/shared-types/src/aim-control.ts';
+import { isValidThreeCushionScore } from '../../../../packages/physics-core/src/three-cushion-model.ts';
 
 export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'SCORING';
 
@@ -96,6 +97,22 @@ interface GameStore {
   // 잔상 표시
   showBallTrail: boolean;
   toggleBallTrail: () => void;
+
+  // 멀티플레이어
+  multiplayerContext: {
+    roomId: string;
+    memberId: string;
+    members: Array<{ memberId: string; displayName: string }>;
+  } | null;
+  setMultiplayerContext: (ctx: {
+    roomId: string;
+    memberId: string;
+    members: Array<{ memberId: string; displayName: string }>;
+  } | null) => void;
+  isMyTurn: boolean;
+  setIsMyTurn: (v: boolean) => void;
+  applyServerTurnChanged: (data: { currentMemberId: string | null; turnDeadlineMs: number | null; activeCueBallId?: CueBallId }) => void;
+  applyServerGameFinished: (data: { winnerMemberId: string | null; memberGameStates: Record<string, string> }) => void;
 }
 
 // 3쿠션 초구 세팅
@@ -205,6 +222,55 @@ export const useGameStore = create<GameStore>((set, get) => ({
   fahTestAutoCorrectionEnabled: false,
   showBallTrail: false,
   toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
+
+  multiplayerContext: null,
+  setMultiplayerContext: (ctx) => {
+    if (!ctx) {
+      set({ multiplayerContext: null });
+      return;
+    }
+    const players = ctx.members.map((m) => m.displayName);
+    const scores = ctx.members.reduce<Record<string, number>>((acc, m) => {
+      acc[m.displayName] = 0;
+      return acc;
+    }, {});
+    set({ multiplayerContext: ctx, players, scores, isMyTurn: false });
+  },
+  isMyTurn: false,
+  setIsMyTurn: (v) => set({ isMyTurn: v }),
+
+  applyServerTurnChanged: (data) => {
+    const state = get();
+    const ctx = state.multiplayerContext;
+    if (!ctx) return;
+    const currentMemberId = data.currentMemberId;
+    const isMyTurn = currentMemberId === ctx.memberId;
+    const currentMember = ctx.members.find((m) => m.memberId === currentMemberId);
+    const currentPlayerDisplay = currentMember?.displayName ?? currentMemberId ?? '';
+    set({
+      currentPlayer: currentPlayerDisplay,
+      isMyTurn,
+      phase: 'AIMING',
+      activeCueBallId: data.activeCueBallId ?? 'cueBall',
+      turnStartedAtMs: Date.now(),
+      turnEvents: [],
+      cushionContacts: 0,
+      objectBallsHit: new Set(),
+      shotInput: {
+        ...state.shotInput,
+        dragPx: 10,
+        impactOffsetX: 0,
+        impactOffsetY: 0,
+      },
+    });
+  },
+
+  applyServerGameFinished: (data) => {
+    const ctx = get().multiplayerContext;
+    const winnerMember = ctx?.members.find((m) => m.memberId === data.winnerMemberId);
+    const winnerName = winnerMember?.displayName ?? data.winnerMemberId ?? 'Unknown';
+    set({ phase: 'SCORING', turnMessage: `${winnerName} WINS!` });
+  },
 
   // 기본 액션
   setPhase: (phase) => set({ phase }),
@@ -348,21 +414,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   checkThreeCushionScore: () => {
     const state = get();
-    const cushionCount = state.turnEvents.filter(e => e.type === 'cushion').length;
-    const hitBalls = new Set(
-      state.turnEvents
-        .filter((e): e is { type: 'ball'; ballId: string; timestamp: number } => e.type === 'ball')
-        .map(e => e.ballId)
-    );
-    
-    const requiredTargets = state.activeCueBallId === 'cueBall'
+    const cueBallId = state.activeCueBallId;
+    const objectBallIds: [string, string] = cueBallId === 'cueBall'
       ? ['objectBall1', 'objectBall2']
       : ['objectBall1', 'cueBall'];
-    return cushionCount >= 3 && requiredTargets.every((id) => hitBalls.has(id));
+
+    const events = state.turnEvents.map((e) => {
+      if (e.type === 'cushion') {
+        return { type: 'CUSHION_COLLISION' as const, atMs: e.timestamp, sourceBallId: cueBallId, cushionId: e.railId };
+      } else {
+        return { type: 'BALL_COLLISION' as const, atMs: e.timestamp, sourceBallId: cueBallId, targetBallId: e.ballId };
+      }
+    });
+
+    return isValidThreeCushionScore({ cueBallId, objectBallIds, events });
   },
 
   handleTurnEnd: () => {
     const state = get();
+    // 멀티플레이어: 서버가 턴/스코어를 관리하므로 로컬 처리 스킵
+    if (state.multiplayerContext) {
+      return;
+    }
     if (state.playMode === 'fahTest') {
       set({
         currentPlayer: 'player1',

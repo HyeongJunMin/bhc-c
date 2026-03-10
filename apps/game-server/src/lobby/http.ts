@@ -51,6 +51,7 @@ type LobbyRoom = {
   winnerMemberId: string | null;
   memberGameStates: Record<string, 'IN_ROOM' | 'PLAYING' | 'WIN' | 'LOSE' | 'KICKED'>;
   balls: SnapshotBallFrame[];
+  activeCueBallId: 'cueBall' | 'objectBall2';
   shotEvents: PhysicsEvent[];
   shotStartedAtMs: number | null;
   nextShotId: number;
@@ -372,7 +373,7 @@ function clampNumber(value: number, min: number, max: number): number {
 }
 
 function applyShotToRoomBalls(room: LobbyRoom, payload: Record<string, unknown>): void {
-  const cueBall = room.balls.find((ball) => ball.id === 'cueBall');
+  const cueBall = room.balls.find((ball) => ball.id === room.activeCueBallId);
   if (!cueBall) {
     return;
   }
@@ -410,18 +411,19 @@ function appendShotEvent(room: LobbyRoom, event: Omit<PhysicsEvent, 'atMs'>): vo
 }
 
 function appendCueBallCollisionEvent(room: LobbyRoom, first: SnapshotBallFrame, second: SnapshotBallFrame): void {
-  if (first.id === 'cueBall' && second.id !== 'cueBall') {
+  const cueBallId = room.activeCueBallId;
+  if (first.id === cueBallId && second.id !== cueBallId) {
     appendShotEvent(room, {
       type: 'BALL_COLLISION',
-      sourceBallId: 'cueBall',
+      sourceBallId: cueBallId,
       targetBallId: second.id,
     });
     return;
   }
-  if (second.id === 'cueBall' && first.id !== 'cueBall') {
+  if (second.id === cueBallId && first.id !== cueBallId) {
     appendShotEvent(room, {
       type: 'BALL_COLLISION',
-      sourceBallId: 'cueBall',
+      sourceBallId: cueBallId,
       targetBallId: first.id,
     });
   }
@@ -502,8 +504,8 @@ function finalizeShotLifecycle(
   if (resolved) {
     room.shotState = resolved;
     const scoreEvaluation = adaptPhysicsEventsToScore({
-      cueBallId: 'cueBall',
-      objectBallIds: ['objectBall1', 'objectBall2'],
+      cueBallId: room.activeCueBallId,
+      objectBallIds: room.activeCueBallId === 'cueBall' ? ['objectBall1', 'objectBall2'] : ['cueBall', 'objectBall1'],
       events: [
         ...room.shotEvents,
         {
@@ -606,6 +608,7 @@ function finalizeShotLifecycle(
       room.shotState = turnChanged;
       if (room.members.length > 0 && shouldSwitchTurn) {
         room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+        room.activeCueBallId = room.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
       } else if (room.members.length === 0) {
         room.currentTurnIndex = 0;
       }
@@ -616,6 +619,7 @@ function finalizeShotLifecycle(
         turnDeadlineMs: room.turnDeadlineMs,
         scoreBoard: room.scoreBoard,
         serverTimeMs: Date.now(),
+        activeCueBallId: room.activeCueBallId,
       });
     }
   }
@@ -829,6 +833,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     turnDeadlineMs: null,
     winnerMemberId: null,
     memberGameStates: {},
+    activeCueBallId: 'cueBall',
     balls: createInitialRoomBalls(),
     shotEvents: [],
     shotStartedAtMs: null,
