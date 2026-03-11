@@ -253,6 +253,18 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   const prevPhaseRef = useRef(gameStore.phase);
   const activeDebugPresetRef = useRef<DebugPresetName>('CENTER');
 
+  const clearBallTrails = () => {
+    ballTrailLastPosRef.current.clear();
+    ballTrailSegmentsRef.current.forEach((segments) => {
+      segments.forEach((mesh) => {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      });
+    });
+    ballTrailSegmentsRef.current.clear();
+    substepPositionsRef.current.clear();
+  };
 
   useEffect(() => {
     createVisualTable(scene);
@@ -315,15 +327,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       guideObjectPathRef.current = null;
       guideFahPathRef.current = null;
       guideFahFirstCushionMarkerRef.current = null;
-      ballTrailSegmentsRef.current.forEach((segments) => {
-        segments.forEach((mesh) => {
-          scene.remove(mesh);
-          mesh.geometry.dispose();
-          (mesh.material as THREE.Material).dispose();
-        });
-      });
-      ballTrailSegmentsRef.current.clear();
-      ballTrailLastPosRef.current.clear();
+      clearBallTrails();
     };
   }, [scene]);
 
@@ -366,6 +370,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
   useEffect(() => {
     if (gameStore.phase === 'SHOOTING') {
+      clearBallTrails();
       turnEndHandledRef.current = false;
     }
   }, [gameStore.phase]);
@@ -822,6 +827,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         `obj2Z:${(obj2?.z ?? 0).toFixed(4)}`;
       window.sessionStorage.setItem('bhc.lastShotDebugLine', lastShotLine);
     }
+    clearBallTrails();
     debugTracePartsRef.current = [];
     traceEventIndexRef.current = 0;
     traceWasTruncatedRef.current = false;
@@ -1209,15 +1215,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       }
     }
     // trail 클리어
-    ballTrailLastPosRef.current.clear();
-    ballTrailSegmentsRef.current.forEach((segments) => {
-      segments.forEach((mesh) => {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-      });
-    });
-    ballTrailSegmentsRef.current.clear();
+    clearBallTrails();
     turnEndHandledRef.current = false;
     lastReplayFrameIndexRef.current = -1;
     physicsAccumulatorRef.current = 0;
@@ -1542,15 +1540,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
         // 역방향 탐색 시 trail 클리어 + turnEndHandled 리셋
         if (currentFrameIdx < lastReplayFrameIndexRef.current) {
-          ballTrailLastPosRef.current.clear();
-          ballTrailSegmentsRef.current.forEach((segs) => {
-            segs.forEach((m) => {
-              scene.remove(m);
-              m.geometry.dispose();
-              (m.material as THREE.Material).dispose();
-            });
-          });
-          ballTrailSegmentsRef.current.clear();
+          clearBallTrails();
           turnEndHandledRef.current = false;
         }
         lastReplayFrameIndexRef.current = currentFrameIdx;
@@ -1584,15 +1574,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
             if (nextFrameIdx >= frameData.frames.length) {
               if (!turnEndHandledRef.current) {
                 turnEndHandledRef.current = true;
-                ballTrailLastPosRef.current.clear();
-                ballTrailSegmentsRef.current.forEach((segs) => {
-                  segs.forEach((m) => {
-                    scene.remove(m);
-                    m.geometry.dispose();
-                    (m.material as THREE.Material).dispose();
-                  });
-                });
-                ballTrailSegmentsRef.current.clear();
+                clearBallTrails();
                 if (gameStore.selectedHistoryReplayIndex !== null) {
                   gameStore.finishHistoryReplay();
                 } else if (gameStore.multiplayerContext) {
@@ -1961,15 +1943,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
           }
         }
         // 잔상 클리어
-        ballTrailLastPosRef.current.clear();
-        ballTrailSegmentsRef.current.forEach((segments) => {
-          segments.forEach((mesh) => {
-            scene.remove(mesh);
-            mesh.geometry.dispose();
-            (mesh.material as THREE.Material).dispose();
-          });
-        });
-        ballTrailSegmentsRef.current.clear();
+        clearBallTrails();
         // 프레임 녹화 저장
         if (replayRecordingRef.current) {
           gameStore.saveReplayFrameData({
