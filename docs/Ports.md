@@ -6,11 +6,7 @@
 
 ## Default Allocation
 - `@bhc/game-server`: `9900` (`PORT`)
-- `@bhc/web`: `9900` (`WEB_PORT`)
-
-주의:
-- 로컬 호스트에서 game-server와 web을 동시에 실행하면 포트 충돌이 발생할 수 있다.
-- 이 경우 `WEB_PORT` 또는 `PORT` 중 하나를 변경해서 실행한다.
+- `@bhc/web`: `9901` (`WEB_PORT`)
 
 ## Run Commands
 - game server:
@@ -24,4 +20,4 @@
 
 ## Docker Compose Mapping
 - `game-server`: `9900:9900`
-- `web`: `9901:9900` (컨테이너 내부 9900을 호스트 9901로 노출)
+- `web`: `9901:9901`

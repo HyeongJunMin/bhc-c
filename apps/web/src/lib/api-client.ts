@@ -3,8 +3,8 @@ function resolveApiBaseUrl(): string {
   if (fromEnv) {
     return fromEnv.replace(/\/+$/, '');
   }
-  // 기본값: 상대 경로 사용 → Vite 개발 서버 프록시 통과
-  return '';
+  // 기본값: 게임 서버 직접 호출
+  return 'http://localhost:9900';
 }
 
 export type LobbyRoom = {
@@ -89,7 +89,7 @@ export async function startGame(roomId: string, memberId: string): Promise<void>
 }
 
 export function createRoomStream(roomId: string, memberId: string): EventSource {
-  const baseUrl = resolveApiBaseUrl() || window.location.origin;
+  const baseUrl = resolveApiBaseUrl();
   return new EventSource(
     `${baseUrl}/api/lobby/rooms/${roomId}/stream?memberId=${encodeURIComponent(memberId)}`,
   );
