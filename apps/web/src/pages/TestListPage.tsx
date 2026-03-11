@@ -100,6 +100,14 @@ export function TestListPage() {
 
       <p style={styles.sectionTitle}>Scenarios ({ALL_SCENARIOS.length})</p>
       <div style={styles.grid}>
+        <Link to="/test/fah" style={styles.sandboxCard}>
+          <div style={styles.cardTitle}>FAH</div>
+          <div style={styles.cardDesc}>Five-and-Half 테스트 모드 진입</div>
+          <div style={styles.tags}>
+            <span style={{ ...styles.tag, background: '#2d5a2d', color: '#4caf50' }}>fah</span>
+          </div>
+        </Link>
+
         <Link to="/test/sandbox" style={styles.sandboxCard}>
           <div style={styles.cardTitle}>Sandbox</div>
           <div style={styles.cardDesc}>자유 파라미터로 물리 시뮬레이션 테스트</div>

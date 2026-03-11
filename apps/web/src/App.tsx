@@ -1,7 +1,8 @@
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { TestListPage } from './pages/TestListPage';
 import { TestRunPage } from './pages/TestRunPage';
 import { TestSandboxPage } from './pages/TestSandboxPage';
+import { FahScene } from './components/FahScene';
 import { NicknamePage } from './pages/NicknamePage';
 import { LobbyPage } from './pages/LobbyPage';
 import { RoomPage } from './pages/RoomPage';
@@ -16,8 +17,10 @@ function App() {
         <Route path="/room/:roomId" element={<RoomPage />} />
       </Route>
       <Route path="/test" element={<TestListPage />} />
+      <Route path="/test/fah" element={<FahScene />} />
       <Route path="/test/sandbox" element={<TestSandboxPage />} />
       <Route path="/test/:id" element={<TestRunPage />} />
+      <Route path="/fah" element={<Navigate to="/test/fah" replace />} />
     </Routes>
   );
 }
