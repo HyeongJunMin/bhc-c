@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../stores/gameStore';
 import { INPUT_LIMITS, PHYSICS, RULES } from '../lib/constants';
+import { requestReplay, endReplay } from '../lib/api-client';
+import { PlaybackSlider } from './test/PlaybackSlider';
 
 type GameUIProps = {
   mode?: 'game';
@@ -21,6 +23,14 @@ export function GameUI(_props: GameUIProps = {}) {
     objectBallsHit,
     turnEvents,
     checkThreeCushionScore,
+    replayRemainingCount,
+    replayHistory,
+    selectedHistoryReplayIndex,
+    replayScorerMemberId,
+    multiplayerContext,
+    replayFrameData,
+    replayCurrentFrame,
+    replayIsPlaying,
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
@@ -86,6 +96,11 @@ export function GameUI(_props: GameUIProps = {}) {
   const isMissTurnOver = turnMessage.trim().toUpperCase().includes('MISS - TURN OVER');
   const isScoreTurnMessage = turnMessage.trim().toUpperCase().includes('SCORE');
   const isCompactTurnMessage = isMissTurnOver || isScoreTurnMessage;
+
+  // 리플레이: 현재 플레이어가 득점자인지 (멀티플레이어)
+  const isReplayScorer = !multiplayerContext || (replayScorerMemberId === multiplayerContext.memberId);
+  const roomId = multiplayerContext?.roomId;
+  const memberId = multiplayerContext?.memberId;
   const ballColorMap: Record<string, string> = {
     cueBall: '#ffffff',
     objectBall1: '#ff3b30',
@@ -355,6 +370,201 @@ export function GameUI(_props: GameUIProps = {}) {
               })()}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* REPLAY_READY: 리플레이 버튼 */}
+      {phase === 'REPLAY_READY' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '45%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+            zIndex: 200,
+            pointerEvents: 'auto',
+          }}
+        >
+          {isReplayScorer ? (
+            <>
+              <button
+                type="button"
+                disabled={replayRemainingCount <= 0}
+                onClick={() => {
+                  if (replayRemainingCount <= 0) return;
+                  if (multiplayerContext && roomId && memberId) {
+                    requestReplay(roomId, memberId).catch(console.error);
+                  } else {
+                    gameStore.startReplay();
+                  }
+                }}
+                style={{
+                  background: replayRemainingCount > 0 ? '#00ff88' : '#555',
+                  color: replayRemainingCount > 0 ? '#000' : '#999',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '14px 32px',
+                  fontSize: 20,
+                  fontWeight: 'bold',
+                  cursor: replayRemainingCount > 0 ? 'pointer' : 'default',
+                }}
+              >
+                ▶ REPLAY ({replayRemainingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (multiplayerContext && roomId && memberId) {
+                    endReplay(roomId, memberId).catch(console.error);
+                  } else {
+                    gameStore.finishReplay();
+                  }
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: 10,
+                  padding: '10px 28px',
+                  fontSize: 16,
+                  cursor: 'pointer',
+                }}
+              >
+                SKIP ▸
+              </button>
+            </>
+          ) : (
+            <div
+              style={{
+                background: 'rgba(0,0,0,0.8)',
+                color: '#ffd700',
+                padding: '14px 28px',
+                borderRadius: 10,
+                fontSize: 18,
+                fontWeight: 'bold',
+              }}
+            >
+              REPLAY...
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* REPLAYING: 리플레이 진행 중 컨트롤 */}
+      {phase === 'REPLAYING' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '5%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            zIndex: 200,
+            pointerEvents: 'auto',
+            minWidth: 340,
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(0, 200, 255, 0.9)',
+              color: '#000',
+              padding: '6px 20px',
+              borderRadius: 8,
+              fontSize: 16,
+              fontWeight: 'bold',
+            }}
+          >
+            REPLAY
+          </div>
+          {replayFrameData && replayFrameData.frames.length > 0 && (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => gameStore.toggleReplayPlaying()}
+                  style={{
+                    background: replayIsPlaying ? 'rgba(0,200,255,0.8)' : 'rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: 6,
+                    padding: '4px 16px',
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {replayIsPlaying ? '⏸ PAUSE' : '▶ PLAY'}
+                </button>
+              </div>
+              <PlaybackSlider
+                totalFrames={replayFrameData.frames.length - 1}
+                currentFrame={replayCurrentFrame}
+                dtSec={0.05}
+                onFrameChange={(frame) => {
+                  gameStore.setReplayCurrentFrame(frame);
+                  if (gameStore.replayIsPlaying) {
+                    gameStore.toggleReplayPlaying();
+                  }
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SCORING: 승리 화면 리플레이 갤러리 */}
+      {phase === 'SCORING' && replayHistory.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.85)',
+            borderRadius: 12,
+            padding: '14px 20px',
+            minWidth: 300,
+            maxWidth: 480,
+            zIndex: 200,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div style={{ fontSize: 13, color: '#ffd700', fontWeight: 'bold', marginBottom: 8 }}>
+            REPLAY GALLERY
+          </div>
+          {selectedHistoryReplayIndex !== null ? (
+            <div style={{ color: '#00cfff', fontSize: 14, textAlign: 'center', padding: '8px 0' }}>
+              REPLAYING...
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {replayHistory.map((entry, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => gameStore.startHistoryReplay(idx)}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 6,
+                    color: '#fff',
+                    padding: '6px 12px',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  Shot #{entry.shotNumber} — {entry.scorerName} ({entry.scoreAtTime})
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

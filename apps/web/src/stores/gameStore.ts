@@ -4,7 +4,24 @@ import { PHYSICS, RULES } from '../lib/constants';
 import { AIM_CONTROL_CONTRACT, type AimControlMode } from '../../../../packages/shared-types/src/aim-control.ts';
 import { isValidThreeCushionScore } from '../../../../packages/physics-core/src/three-cushion-model.ts';
 
-export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'SCORING';
+export type GamePhase = 'AIMING' | 'SHOOTING' | 'SIMULATING' | 'REPLAY_READY' | 'REPLAYING' | 'SCORING';
+export type CueBallId = 'cueBall' | 'objectBall2';
+
+export interface ReplayFrame {
+  balls: Array<{ id: string; x: number; y: number }>;
+}
+
+export interface ReplayFrameData {
+  frames: ReplayFrame[];
+  activeCueBallId: CueBallId;
+}
+
+export interface ReplayHistoryEntry {
+  frameData: ReplayFrameData;
+  scorerName: string;
+  shotNumber: number;
+  scoreAtTime: string;
+}
 
 export interface BallState {
   id: 'cueBall' | 'objectBall1' | 'objectBall2';
@@ -23,7 +40,6 @@ export interface ShotInput {
   impactOffsetY: number;
 }
 
-export type CueBallId = 'cueBall' | 'objectBall2';
 export type SystemMode = 'half' | 'fiveAndHalf' | 'plusTwo';
 export type PlayMode = 'game' | 'fahTest';
 
@@ -97,6 +113,25 @@ interface GameStore {
   // 잔상 표시
   showBallTrail: boolean;
   toggleBallTrail: () => void;
+
+  // 리플레이
+  replayFrameData: ReplayFrameData | null;
+  replayCurrentFrame: number;
+  replayIsPlaying: boolean;
+  replayRemainingCount: number;
+  replayHistory: ReplayHistoryEntry[];
+  selectedHistoryReplayIndex: number | null;
+  replayScorerMemberId: string | null;
+  shotCount: number;
+  saveReplayFrameData: (frameData: ReplayFrameData) => void;
+  addToReplayHistory: (entry: ReplayHistoryEntry) => void;
+  startReplay: () => void;
+  startHistoryReplay: (index: number) => void;
+  finishReplaySimulation: () => void;
+  finishReplay: () => void;
+  finishHistoryReplay: () => void;
+  setReplayCurrentFrame: (frame: number) => void;
+  toggleReplayPlaying: () => void;
 
   // 멀티플레이어
   multiplayerContext: {
@@ -223,6 +258,76 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showBallTrail: false,
   toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
 
+  // 리플레이 초기 상태
+  replayFrameData: null,
+  replayCurrentFrame: 0,
+  replayIsPlaying: false,
+  replayRemainingCount: 0,
+  replayHistory: [],
+  selectedHistoryReplayIndex: null,
+  replayScorerMemberId: null,
+  shotCount: 0,
+
+  saveReplayFrameData: (frameData) => set({ replayFrameData: frameData }),
+
+  addToReplayHistory: (entry) => set((state) => ({
+    replayHistory: [...state.replayHistory, entry],
+  })),
+
+  startReplay: () => set({ phase: 'REPLAYING', turnMessage: 'REPLAY', replayCurrentFrame: 0, replayIsPlaying: true }),
+
+  startHistoryReplay: (index) => set((state) => ({
+    selectedHistoryReplayIndex: index,
+    replayFrameData: state.replayHistory[index]?.frameData ?? null,
+    phase: 'REPLAYING',
+    replayCurrentFrame: 0,
+    replayIsPlaying: true,
+  })),
+
+  finishReplaySimulation: () => {
+    const state = get();
+    if (state.multiplayerContext) {
+      // 멀티플레이어: 항상 REPLAY_READY로 (서버가 remainingReplays 관리, GameScene에서 auto-end 처리)
+      set({ phase: 'REPLAY_READY' });
+    } else {
+      // 로컬: 카운트가 0이 되면 자동 종료
+      const newCount = state.replayRemainingCount - 1;
+      if (newCount <= 0) {
+        set({
+          replayRemainingCount: 0,
+          phase: 'AIMING',
+          replayFrameData: null,
+          replayCurrentFrame: 0,
+          replayIsPlaying: false,
+          turnMessage: 'SCORE! +1 Point',
+          turnStartedAtMs: Date.now(),
+        });
+      } else {
+        set({ replayRemainingCount: newCount, phase: 'REPLAY_READY' });
+      }
+    }
+  },
+
+  finishReplay: () => set({
+    phase: 'AIMING',
+    replayFrameData: null,
+    replayCurrentFrame: 0,
+    replayIsPlaying: false,
+    replayRemainingCount: 0,
+    replayScorerMemberId: null,
+    turnMessage: 'SCORE! +1 Point',
+    turnStartedAtMs: Date.now(),
+  }),
+
+  finishHistoryReplay: () => set({
+    phase: 'SCORING',
+    selectedHistoryReplayIndex: null,
+    replayIsPlaying: false,
+  }),
+
+  setReplayCurrentFrame: (frame) => set({ replayCurrentFrame: frame }),
+  toggleReplayPlaying: () => set((state) => ({ replayIsPlaying: !state.replayIsPlaying })),
+
   multiplayerContext: null,
   setMultiplayerContext: (ctx) => {
     if (!ctx) {
@@ -256,6 +361,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       turnEvents: [],
       cushionContacts: 0,
       objectBallsHit: new Set(),
+      replayScorerMemberId: null,
+      replayRemainingCount: 0,
       shotInput: {
         ...state.shotInput,
         dragPx: 10,
@@ -376,6 +483,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     fahTestTargetPoint: 10,
     fahTestCorrectionOffset: 0,
     fahTestAutoCorrectionEnabled: false,
+    replayFrameData: null,
+    replayCurrentFrame: 0,
+    replayIsPlaying: false,
+    replayRemainingCount: 0,
+    replayHistory: [],
+    selectedHistoryReplayIndex: null,
+    replayScorerMemberId: null,
+    shotCount: 0,
   })),
 
   // 3쿠션 이벤트 추적
@@ -450,48 +565,86 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     const scored = state.checkThreeCushionScore();
-    
+    const newShotCount = state.shotCount + 1;
+
     if (scored) {
       const currentScore = (state.scores[state.currentPlayer] || 0) + 1;
       const newScores = { ...state.scores, [state.currentPlayer]: currentScore };
-      
+
+      // 히스토리에 리플레이 추가
+      if (state.replayFrameData) {
+        const scoreAtTime = Object.entries(newScores)
+          .map(([p, s]) => s)
+          .join('-');
+        get().addToReplayHistory({
+          frameData: state.replayFrameData,
+          scorerName: state.currentPlayer,
+          shotNumber: newShotCount,
+          scoreAtTime,
+        });
+      }
+
       // 10점 체크
       if (currentScore >= RULES.WINNING_SCORE) {
-        set({ 
+        set({
           scores: newScores,
           phase: 'SCORING',
           turnMessage: `${state.currentPlayer.toUpperCase()} WINS!`,
           turnEvents: [],
           cushionContacts: 0,
           objectBallsHit: new Set(),
+          shotCount: newShotCount,
         });
         return;
       }
-      
-      // 득점 시 턴 유지
-      set({ 
-        scores: newScores,
-        currentPlayer: state.currentPlayer,
-        activeCueBallId: state.activeCueBallId,
-        turnMessage: 'SCORE! +1 Point',
-        phase: 'AIMING',
-        turnStartedAtMs: Date.now(),
-        turnEvents: [],
-        cushionContacts: 0,
-        objectBallsHit: new Set(),
-        shotInput: {
-          ...state.shotInput,
-          dragPx: 10,
-          impactOffsetX: 0,
-          impactOffsetY: 0,
-        },
-      });
+
+      // 득점 시 리플레이 대기 (프레임 데이터 있을 때)
+      if (state.replayFrameData) {
+        set({
+          scores: newScores,
+          currentPlayer: state.currentPlayer,
+          activeCueBallId: state.activeCueBallId,
+          turnMessage: 'SCORE! +1 Point',
+          phase: 'REPLAY_READY',
+          replayRemainingCount: 3,
+          turnEvents: [],
+          cushionContacts: 0,
+          objectBallsHit: new Set(),
+          shotCount: newShotCount,
+          shotInput: {
+            ...state.shotInput,
+            dragPx: 10,
+            impactOffsetX: 0,
+            impactOffsetY: 0,
+          },
+        });
+      } else {
+        set({
+          scores: newScores,
+          currentPlayer: state.currentPlayer,
+          activeCueBallId: state.activeCueBallId,
+          turnMessage: 'SCORE! +1 Point',
+          phase: 'AIMING',
+          turnStartedAtMs: Date.now(),
+          turnEvents: [],
+          cushionContacts: 0,
+          objectBallsHit: new Set(),
+          shotCount: newShotCount,
+          shotInput: {
+            ...state.shotInput,
+            dragPx: 10,
+            impactOffsetX: 0,
+            impactOffsetY: 0,
+          },
+        });
+      }
+      return;
     } else {
       // 실패 시 턴 전환
       const currentIndex = state.players.indexOf(state.currentPlayer);
       const nextPlayer = state.players[(currentIndex + 1) % state.players.length];
       const nextCueBallId: CueBallId = state.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
-      set({ 
+      set({
         currentPlayer: nextPlayer,
         activeCueBallId: nextCueBallId,
         turnMessage: 'MISS - Turn Over',
@@ -500,6 +653,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         turnEvents: [],
         cushionContacts: 0,
         objectBallsHit: new Set(),
+        replayFrameData: null,
+        replayCurrentFrame: 0,
+        replayIsPlaying: false,
+        shotCount: newShotCount,
         shotInput: {
           ...state.shotInput,
           dragPx: 10,

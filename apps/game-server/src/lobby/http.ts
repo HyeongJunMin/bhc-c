@@ -55,6 +55,13 @@ type LobbyRoom = {
   shotEvents: PhysicsEvent[];
   shotStartedAtMs: number | null;
   nextShotId: number;
+  replayFrames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+  replayPhase: {
+    scorerMemberId: string;
+    remainingReplays: number;
+    frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+    activeCueBallId: 'cueBall' | 'objectBall2';
+  } | null;
   activeShotDiagnostics: {
     shotId: string;
     tickCount: number;
@@ -256,6 +263,7 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
     room.shotEvents = Array.isArray(room.shotEvents) ? room.shotEvents : [];
     room.shotStartedAtMs = typeof room.shotStartedAtMs === 'number' ? room.shotStartedAtMs : null;
     room.nextShotId = Number.isInteger(room.nextShotId) ? room.nextShotId : 1;
+    room.replayFrames = Array.isArray(room.replayFrames) ? room.replayFrames : [];
     room.activeShotDiagnostics = room.activeShotDiagnostics && typeof room.activeShotDiagnostics === 'object'
       ? room.activeShotDiagnostics
       : null;
@@ -456,6 +464,10 @@ function stepRoomPhysics(room: LobbyRoom): void {
       appendCueBallCollisionEvent(room, first, second);
     },
   });
+  // 리플레이용 프레임 녹화
+  room.replayFrames.push({
+    balls: room.balls.map((b) => ({ id: b.id, x: b.x, y: b.y })),
+  });
   if (room.activeShotDiagnostics) {
     if (room.activeShotDiagnostics.tickCount === 0) {
       room.activeShotDiagnostics.kineticEnergyStartJ = stats.kineticEnergyStartJ;
@@ -530,6 +542,7 @@ function finalizeShotLifecycle(
       }, {});
       isGameFinished = true;
     }
+    const replayAvailable = scoredAtShotEnd && !isGameFinished;
     broadcastRoomEvent(state, room.roomId, 'shot_resolved', {
       roomId: room.roomId,
       shotState: room.shotState,
@@ -538,6 +551,8 @@ function finalizeShotLifecycle(
       scored: scoreEvaluation.scored,
       winnerMemberId: room.winnerMemberId,
       serverTimeMs: Date.now(),
+      replayAvailable,
+      scorerMemberId: replayAvailable ? actorMemberId : undefined,
     });
     if (isGameFinished) {
       const resetAfterResolve = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
@@ -555,6 +570,7 @@ function finalizeShotLifecycle(
       void persistLobbyState(state);
       room.shotEvents = [];
       room.shotStartedAtMs = null;
+      room.replayFrames = [];
       if (room.activeShotDiagnostics) {
         const fallbackRecoveryTriggered =
           room.activeShotDiagnostics.reasonCounts.POSITION_RECLAMP > 0 || room.activeShotDiagnostics.reasonCounts.NAN_GUARD > 0;
@@ -603,28 +619,40 @@ function finalizeShotLifecycle(
       room.activeShotDiagnostics = null;
       return;
     }
-    const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
-    if (turnChanged) {
-      room.shotState = turnChanged;
-      if (room.members.length > 0 && shouldSwitchTurn) {
-        room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
-        room.activeCueBallId = room.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
-      } else if (room.members.length === 0) {
-        room.currentTurnIndex = 0;
-      }
-      room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
-      broadcastRoomEvent(state, room.roomId, 'turn_changed', {
-        roomId: room.roomId,
-        currentMemberId: getCurrentTurnMemberId(room),
-        turnDeadlineMs: room.turnDeadlineMs,
-        scoreBoard: room.scoreBoard,
-        serverTimeMs: Date.now(),
+    // If scored and not game finished: enter replay phase (defer turn_changed)
+    if (scoredAtShotEnd && !isGameFinished && room.replayFrames.length > 0) {
+      room.replayPhase = {
+        scorerMemberId: actorMemberId,
+        remainingReplays: 3,
+        frames: room.replayFrames,
         activeCueBallId: room.activeCueBallId,
-      });
+      };
+      room.replayFrames = [];
+    } else {
+      const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+      if (turnChanged) {
+        room.shotState = turnChanged;
+        if (room.members.length > 0 && shouldSwitchTurn) {
+          room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+          room.activeCueBallId = room.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
+        } else if (room.members.length === 0) {
+          room.currentTurnIndex = 0;
+        }
+        room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+        broadcastRoomEvent(state, room.roomId, 'turn_changed', {
+          roomId: room.roomId,
+          currentMemberId: getCurrentTurnMemberId(room),
+          turnDeadlineMs: room.turnDeadlineMs,
+          scoreBoard: room.scoreBoard,
+          serverTimeMs: Date.now(),
+          activeCueBallId: room.activeCueBallId,
+        });
+      }
     }
   }
   room.shotEvents = [];
   room.shotStartedAtMs = null;
+  room.replayFrames = [];
   if (room.activeShotDiagnostics) {
     const fallbackRecoveryTriggered =
       room.activeShotDiagnostics.reasonCounts.POSITION_RECLAMP > 0 || room.activeShotDiagnostics.reasonCounts.NAN_GUARD > 0;
@@ -838,6 +866,8 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     shotEvents: [],
     shotStartedAtMs: null,
     nextShotId: 1,
+    replayFrames: [],
+    replayPhase: null,
     activeShotDiagnostics: null,
   };
 
@@ -1266,6 +1296,11 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
       NAN_GUARD: 0,
     },
   };
+  // 리플레이용 프레임 녹화 초기화 및 첫 프레임(샷 직전 위치) 기록
+  room.replayFrames = [];
+  room.replayFrames.push({
+    balls: room.balls.map((b) => ({ id: b.id, x: b.x, y: b.y })),
+  });
   applyShotToRoomBalls(room, validated.payload);
   broadcastRoomEvent(state, room.roomId, 'shot_started', {
     roomId: room.roomId,
@@ -1314,6 +1349,86 @@ async function handleSubmitRoomShot(req: IncomingMessage, res: ServerResponse, s
 
   void persistLobbyState(state);
   writeJson(res, 200, { accepted: true, payload: result.payload });
+}
+
+async function handleReplayRequest(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/replay$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const room = state.rooms.find((r) => r.roomId === roomId);
+  if (!room) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  if (!room.replayPhase) {
+    writeJson(res, 409, { errorCode: 'REPLAY_NOT_ACTIVE' });
+    return;
+  }
+  if (actorMemberId !== room.replayPhase.scorerMemberId) {
+    writeJson(res, 403, { errorCode: 'NOT_SCORER' });
+    return;
+  }
+  if (room.replayPhase.remainingReplays <= 0) {
+    writeJson(res, 409, { errorCode: 'NO_REPLAYS_REMAINING' });
+    return;
+  }
+  room.replayPhase.remainingReplays -= 1;
+  broadcastRoomEvent(state, room.roomId, 'replay_requested', {
+    roomId: room.roomId,
+    frames: room.replayPhase.frames,
+    activeCueBallId: room.replayPhase.activeCueBallId,
+    remainingReplays: room.replayPhase.remainingReplays,
+    serverTimeMs: Date.now(),
+  });
+  writeJson(res, 200, { ok: true });
+}
+
+async function handleReplayEnd(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/replay-end$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const room = state.rooms.find((r) => r.roomId === roomId);
+  if (!room) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  if (!room.replayPhase) {
+    writeJson(res, 409, { errorCode: 'REPLAY_NOT_ACTIVE' });
+    return;
+  }
+  if (actorMemberId !== room.replayPhase.scorerMemberId) {
+    writeJson(res, 403, { errorCode: 'NOT_SCORER' });
+    return;
+  }
+  room.replayPhase = null;
+  // Transition shot state and broadcast turn_changed (scorer keeps turn)
+  const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
+  if (turnChanged) {
+    room.shotState = turnChanged;
+    room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+    broadcastRoomEvent(state, room.roomId, 'turn_changed', {
+      roomId: room.roomId,
+      currentMemberId: getCurrentTurnMemberId(room),
+      turnDeadlineMs: room.turnDeadlineMs,
+      scoreBoard: room.scoreBoard,
+      serverTimeMs: Date.now(),
+      activeCueBallId: room.activeCueBallId,
+    });
+  }
+  void persistLobbyState(state);
+  writeJson(res, 200, { ok: true });
 }
 
 export function getRoomDetail(state: LobbyState, roomId: string): RoomDetailResult {
@@ -1544,6 +1659,16 @@ export function createLobbyRequestHandler(state: LobbyState) {
 
     if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/shot')) {
       await handleSubmitRoomShot(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/replay-end')) {
+      await handleReplayEnd(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/replay')) {
+      await handleReplayRequest(req, res, state);
       return;
     }
 

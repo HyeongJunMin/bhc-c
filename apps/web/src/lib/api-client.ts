@@ -95,6 +95,14 @@ export function createRoomStream(roomId: string, memberId: string): EventSource 
   );
 }
 
+export async function requestReplay(roomId: string, actorMemberId: string): Promise<void> {
+  await postJson(`/api/lobby/rooms/${roomId}/replay`, { actorMemberId });
+}
+
+export async function endReplay(roomId: string, actorMemberId: string): Promise<void> {
+  await postJson(`/api/lobby/rooms/${roomId}/replay-end`, { actorMemberId });
+}
+
 export async function submitShot(
   roomId: string,
   actorMemberId: string,

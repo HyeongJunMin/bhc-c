@@ -1,12 +1,12 @@
 import { useEffect, useRef, Suspense } from 'react';
-import { submitShot } from '../lib/api-client';
+import { submitShot, requestReplay, endReplay } from '../lib/api-client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 
 import { CueStick } from '../ammo/CueStick';
 import { ImpactPoint } from '../ammo/ImpactPoint';
-import { useGameStore } from '../stores/gameStore';
+import { useGameStore, type CueBallId, type ReplayFrameData } from '../stores/gameStore';
 import { PHYSICS, INPUT_LIMITS } from '../lib/constants';
 import { GameUI } from './GameUI';
 import {
@@ -236,6 +236,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
   const serverBallsRef = useRef<SnapshotBall[]>([]);
   const hasSetupTurnRef = useRef(false);
+  const replayRecordingRef = useRef<{ activeCueBallId: CueBallId; frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }> } | null>(null);
+  const lastReplayFrameIndexRef = useRef(-1);
 
   const dragState = useRef<{
     isDragging: boolean;
@@ -833,6 +835,16 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     cueBall.spinX = omegaX * forwardY;
     cueBall.spinY = -omegaX * forwardX;
     cueBall.spinZ = omegaZ;
+
+    // 리플레이 프레임 녹화 시작 (FAH 테스트 모드 제외)
+    if (gameStore.playMode !== 'fahTest') {
+      const initialBalls = physicsBallsRef.current.map((b) => ({ id: b.id, x: b.x, y: b.y }));
+      replayRecordingRef.current = {
+        activeCueBallId: shotCueBallId as CueBallId,
+        frames: [{ balls: initialBalls }],
+      };
+    }
+
     if (gameStore.playMode === 'fahTest') {
       const cueMesh = ballsRef.current.get('cueBall')?.mesh;
       const fallbackCue = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X, BALL_RADIUS, FAH_FIXED_CUE_WORLD_Z);
@@ -988,7 +1000,9 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         if (state.multiplayerContext && snap.balls) {
           const isMyShot = state.isMyTurn &&
             (state.phase === 'SHOOTING' || state.phase === 'SIMULATING');
-          if (!isMyShot) {
+          // 리플레이 중에는 서버 스냅샷 위치 업데이트 무시 (로컬 물리 시뮬 사용)
+          const isReplaying = state.phase === 'REPLAYING';
+          if (!isMyShot && !isReplaying) {
             for (const sb of snap.balls) {
               const worldPos = physicsToWorldXZ(sb.x, sb.y);
               const meshRef = ballsRef.current.get(sb.id);
@@ -1071,6 +1085,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         const data = JSON.parse(e.data as string) as {
           scored?: boolean;
           scoreBoard?: Record<string, number>;
+          replayAvailable?: boolean;
+          scorerMemberId?: string;
         };
         const state = useGameStore.getState();
         const ctx = state.multiplayerContext;
@@ -1083,6 +1099,57 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         }
         const msg = data.scored ? 'SCORED! +1 Point' : 'MISS';
         useGameStore.getState().setTurnMessage(msg);
+        if (data.replayAvailable && data.scorerMemberId) {
+          useGameStore.setState({
+            phase: 'REPLAY_READY',
+            replayScorerMemberId: data.scorerMemberId,
+            replayRemainingCount: 3,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleReplayRequested = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+          activeCueBallId: 'cueBall' | 'objectBall2';
+          remainingReplays: number;
+        };
+        const frameData: ReplayFrameData = {
+          frames: data.frames,
+          activeCueBallId: data.activeCueBallId,
+        };
+        // 첫 프레임 위치를 즉시 메시에 적용 (시각적 점프 방지)
+        if (frameData.frames.length > 0) {
+          for (const ball of frameData.frames[0].balls) {
+            const worldPos = physicsToWorldXZ(ball.x, ball.y);
+            const meshRef = ballsRef.current.get(ball.id);
+            if (meshRef) {
+              meshRef.mesh.position.set(worldPos.x, BALL_RADIUS, worldPos.z);
+            }
+            const physBall = physicsBallsRef.current.find((b) => b.id === ball.id);
+            if (physBall) {
+              physBall.x = ball.x;
+              physBall.y = ball.y;
+              physBall.vx = 0;
+              physBall.vy = 0;
+              physBall.spinX = 0;
+              physBall.spinY = 0;
+              physBall.spinZ = 0;
+            }
+          }
+        }
+        turnEndHandledRef.current = false;
+        useGameStore.setState({
+          phase: 'REPLAYING',
+          replayRemainingCount: data.remainingReplays,
+          replayFrameData: frameData,
+          replayCurrentFrame: 0,
+          replayIsPlaying: true,
+        });
       } catch {
         // ignore
       }
@@ -1105,6 +1172,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     eventSource.addEventListener('turn_changed', handleTurnChanged);
     eventSource.addEventListener('shot_resolved', handleShotResolved);
     eventSource.addEventListener('game_finished', handleGameFinished);
+    eventSource.addEventListener('replay_requested', handleReplayRequested);
 
     return () => {
       eventSource.removeEventListener('room_snapshot', handleSnapshot);
@@ -1112,8 +1180,49 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       eventSource.removeEventListener('turn_changed', handleTurnChanged);
       eventSource.removeEventListener('shot_resolved', handleShotResolved);
       eventSource.removeEventListener('game_finished', handleGameFinished);
+      eventSource.removeEventListener('replay_requested', handleReplayRequested);
     };
   }, [eventSource, roomId, memberId]);
+
+  // phase가 REPLAYING으로 전환될 때: 첫 프레임 위치 적용 + trail 클리어
+  useEffect(() => {
+    if (gameStore.phase !== 'REPLAYING') return;
+    const frameData = gameStore.replayFrameData;
+    if (!frameData || frameData.frames.length === 0) return;
+    // 첫 프레임 위치 복원
+    const firstFrame = frameData.frames[0];
+    for (const ball of firstFrame.balls) {
+      const worldPos = physicsToWorldXZ(ball.x, ball.y);
+      const meshRef = ballsRef.current.get(ball.id);
+      if (meshRef) {
+        meshRef.mesh.position.set(worldPos.x, BALL_RADIUS, worldPos.z);
+      }
+      const physBall = physicsBallsRef.current.find((b) => b.id === ball.id);
+      if (physBall) {
+        physBall.x = ball.x;
+        physBall.y = ball.y;
+        physBall.vx = 0;
+        physBall.vy = 0;
+        physBall.spinX = 0;
+        physBall.spinY = 0;
+        physBall.spinZ = 0;
+      }
+    }
+    // trail 클리어
+    ballTrailLastPosRef.current.clear();
+    ballTrailSegmentsRef.current.forEach((segments) => {
+      segments.forEach((mesh) => {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      });
+    });
+    ballTrailSegmentsRef.current.clear();
+    turnEndHandledRef.current = false;
+    lastReplayFrameIndexRef.current = -1;
+    physicsAccumulatorRef.current = 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStore.phase]);
 
   const computeFahStartIndexFromCue = (cue: THREE.Vector3): number => {
     const topX = TABLE_WIDTH / 2 - BALL_RADIUS;
@@ -1422,6 +1531,95 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       return;
     }
 
+    if (gameStore.phase === 'REPLAYING') {
+      const frameData = gameStore.replayFrameData;
+      const currentFrameIdx = useGameStore.getState().replayCurrentFrame;
+      const isPlaying = gameStore.replayIsPlaying;
+
+      if (frameData && frameData.frames.length > 0) {
+        const frameIdx = Math.min(currentFrameIdx, frameData.frames.length - 1);
+        const frame = frameData.frames[frameIdx];
+
+        // 역방향 탐색 시 trail 클리어 + turnEndHandled 리셋
+        if (currentFrameIdx < lastReplayFrameIndexRef.current) {
+          ballTrailLastPosRef.current.clear();
+          ballTrailSegmentsRef.current.forEach((segs) => {
+            segs.forEach((m) => {
+              scene.remove(m);
+              m.geometry.dispose();
+              (m.material as THREE.Material).dispose();
+            });
+          });
+          ballTrailSegmentsRef.current.clear();
+          turnEndHandledRef.current = false;
+        }
+        lastReplayFrameIndexRef.current = currentFrameIdx;
+
+        // 프레임 위치를 메시에 적용
+        for (const ball of frame.balls) {
+          const worldPos = physicsToWorldXZ(ball.x, ball.y);
+          const meshRef = ballsRef.current.get(ball.id);
+          if (meshRef) {
+            meshRef.mesh.position.set(worldPos.x, BALL_RADIUS, worldPos.z);
+          }
+        }
+
+        // 수구 위치를 trail용 substepPositionsRef에 추가
+        const cueBallFrameBall = frame.balls.find((b) => b.id === activeCueBallId);
+        if (cueBallFrameBall) {
+          const arr = substepPositionsRef.current.get(activeCueBallId);
+          if (arr) {
+            arr.push({ x: cueBallFrameBall.x, y: cueBallFrameBall.y });
+          } else {
+            substepPositionsRef.current.set(activeCueBallId, [{ x: cueBallFrameBall.x, y: cueBallFrameBall.y }]);
+          }
+        }
+
+        // 재생 중이면 physicsAccumulator로 프레임 진행
+        if (isPlaying) {
+          physicsAccumulatorRef.current += delta;
+          while (physicsAccumulatorRef.current >= cfg.dtSec) {
+            const latestFrameIdx = useGameStore.getState().replayCurrentFrame;
+            const nextFrameIdx = latestFrameIdx + 1;
+            if (nextFrameIdx >= frameData.frames.length) {
+              if (!turnEndHandledRef.current) {
+                turnEndHandledRef.current = true;
+                ballTrailLastPosRef.current.clear();
+                ballTrailSegmentsRef.current.forEach((segs) => {
+                  segs.forEach((m) => {
+                    scene.remove(m);
+                    m.geometry.dispose();
+                    (m.material as THREE.Material).dispose();
+                  });
+                });
+                ballTrailSegmentsRef.current.clear();
+                if (gameStore.selectedHistoryReplayIndex !== null) {
+                  gameStore.finishHistoryReplay();
+                } else if (gameStore.multiplayerContext) {
+                  gameStore.finishReplaySimulation();
+                  const currentState = useGameStore.getState();
+                  if (
+                    roomId &&
+                    memberId &&
+                    currentState.replayRemainingCount === 0 &&
+                    currentState.replayScorerMemberId === memberId
+                  ) {
+                    endReplay(roomId, memberId).catch(console.error);
+                  }
+                } else {
+                  gameStore.finishReplaySimulation();
+                }
+              }
+              physicsAccumulatorRef.current = 0;
+              break;
+            } else {
+              useGameStore.setState({ replayCurrentFrame: nextFrameIdx });
+            }
+            physicsAccumulatorRef.current -= cfg.dtSec;
+          }
+        }
+      }
+    } else {
     physicsAccumulatorRef.current += delta;
 
     while (physicsAccumulatorRef.current >= cfg.dtSec) {
@@ -1551,6 +1749,13 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         else gameStore.addBallCollision(e.id);
       });
 
+      // 리플레이용 프레임 녹화
+      if (replayRecordingRef.current) {
+        replayRecordingRef.current.frames.push({
+          balls: balls.map((b) => ({ id: b.id, x: b.x, y: b.y })),
+        });
+      }
+
       physicsAccumulatorRef.current -= cfg.dtSec;
     }
 
@@ -1568,8 +1773,11 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         angularVelocity: new THREE.Vector3(ball.spinX, ball.spinY, ball.spinZ),
       });
     });
+    } // end else (not REPLAYING)
 
-    if (gameStore.showBallTrail && (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING')) {
+    const shouldRenderTrail = gameStore.phase === 'REPLAYING' ||
+      (gameStore.showBallTrail && (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING'));
+    if (shouldRenderTrail) {
       const trailColorById: Record<string, number> = {
         cueBall: 0xffffff,
       };
@@ -1762,6 +1970,14 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
           });
         });
         ballTrailSegmentsRef.current.clear();
+        // 프레임 녹화 저장
+        if (replayRecordingRef.current) {
+          gameStore.saveReplayFrameData({
+            frames: replayRecordingRef.current.frames,
+            activeCueBallId: replayRecordingRef.current.activeCueBallId,
+          });
+          replayRecordingRef.current = null;
+        }
         // 멀티플레이어: 서버 이벤트(turn_changed) 대기
         if (!gameStore.multiplayerContext) {
           gameStore.handleTurnEnd();
