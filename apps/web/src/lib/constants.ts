@@ -43,7 +43,7 @@ export const PHYSICS = {
 export const RULES = {
   WINNING_SCORE: 10,
   REQUIRED_CUSHIONS: 3,
-  TURN_TIMEOUT_SEC: 10,
+  TURN_TIMEOUT_SEC: 20,
   MAX_PLAYERS: 6,
 } as const;
 

@@ -18,8 +18,9 @@ import {
 } from '../../../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
+import { startTurnTimer, type TurnTimer } from '../game/turn-timer.ts';
 
-const TURN_DURATION_MS = 10_000;
+const TURN_DURATION_MS = 20_000;
 const DISCONNECT_GRACE_MS = 10_000;
 const STREAM_HEARTBEAT_INTERVAL_MS = 15_000;
 const REDIS_STATE_VERSION = 1;
@@ -63,6 +64,23 @@ type LobbyRoom = {
     frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
     activeCueBallId: 'cueBall' | 'objectBall2';
   } | null;
+  lastMissReplayData: {
+    requesterMemberId: string;
+    frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+    activeCueBallId: 'cueBall' | 'objectBall2';
+    previousTurnIndex: number;
+    previousActiveCueBallId: 'cueBall' | 'objectBall2';
+  } | null;
+  varPhase: {
+    requesterMemberId: string;
+    stage: 'VOTE_REPLAY' | 'REPLAYING' | 'VOTE_SCORE';
+    votes: Record<string, boolean>;
+    ballPositionsBeforeVAR: SnapshotBallFrame[];
+    previousTurnIndex: number;
+    previousActiveCueBallId: 'cueBall' | 'objectBall2';
+    replayFrames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+    replayActiveCueBallId: 'cueBall' | 'objectBall2';
+  } | null;
   activeShotDiagnostics: {
     shotId: string;
     tickCount: number;
@@ -85,6 +103,7 @@ type LobbyState = {
   roomStreamSubscribers: Record<string, Set<ServerResponse>>;
   shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
   disconnectGraceTimers: Record<string, ReturnType<typeof setTimeout> | null>;
+  turnTimers: Record<string, TurnTimer | null>;
   userLastChatSentAtByRoomAndMember: UserLastSentAtStore;
   lobbyChatMessages: Array<{ senderMemberId: string; senderDisplayName: string; message: string; sentAt: string }>;
   userLastLobbyChatSentAt: UserLastSentAtStore;
@@ -125,7 +144,7 @@ type ShotSubmitResult =
   | {
       ok: false;
       statusCode: 400 | 404 | 409;
-      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID' | 'SHOT_STATE_CONFLICT';
+      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID' | 'SHOT_STATE_CONFLICT' | 'VAR_IN_PROGRESS';
       errors?: string[];
     };
 type RoomStreamOpenResult =
@@ -270,6 +289,7 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
   state.roomStreamSubscribers = {};
   state.shotStateResetTimers = {};
   state.disconnectGraceTimers = {};
+  state.turnTimers = {};
   for (const room of state.rooms) {
     room.shotEvents = Array.isArray(room.shotEvents) ? room.shotEvents : [];
     room.shotStartedAtMs = typeof room.shotStartedAtMs === 'number' ? room.shotStartedAtMs : null;
@@ -280,6 +300,7 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
       : null;
     state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
     state.shotStateResetTimers[room.roomId] = null;
+    state.turnTimers[room.roomId] = null;
   }
 }
 
@@ -349,6 +370,40 @@ function getCurrentTurnMemberId(room: LobbyRoom): string | null {
   return room.members[room.currentTurnIndex]?.memberId ?? null;
 }
 
+function cancelRoomTurnTimer(state: LobbyState, roomId: string): void {
+  const timer = state.turnTimers[roomId];
+  if (timer) {
+    timer.cancel();
+    state.turnTimers[roomId] = null;
+  }
+}
+
+function startRoomTurnTimer(state: LobbyState, room: LobbyRoom): void {
+  cancelRoomTurnTimer(state, room.roomId);
+  if (room.members.length === 0 || room.state !== 'IN_GAME') {
+    room.turnDeadlineMs = null;
+    return;
+  }
+  room.turnDeadlineMs = Date.now() + TURN_DURATION_MS;
+  state.turnTimers[room.roomId] = startTurnTimer(() => {
+    if (room.shotState !== 'idle' || room.members.length === 0 || room.state !== 'IN_GAME') {
+      return;
+    }
+    room.currentTurnIndex = (room.currentTurnIndex + 1) % room.members.length;
+    room.activeCueBallId = room.activeCueBallId === 'cueBall' ? 'objectBall2' : 'cueBall';
+    room.turnDeadlineMs = Date.now() + TURN_DURATION_MS;
+    broadcastRoomEvent(state, room.roomId, 'turn_changed', {
+      roomId: room.roomId,
+      currentMemberId: getCurrentTurnMemberId(room),
+      turnDeadlineMs: room.turnDeadlineMs,
+      scoreBoard: room.scoreBoard,
+      serverTimeMs: Date.now(),
+      activeCueBallId: room.activeCueBallId,
+    });
+    startRoomTurnTimer(state, room);
+  }, TURN_DURATION_MS);
+}
+
 function initializeRoomGameRuntime(room: LobbyRoom): void {
   room.scoreBoard = room.members.reduce<Record<string, number>>((acc, member) => {
     acc[member.memberId] = 0;
@@ -366,6 +421,8 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
   room.shotStartedAtMs = null;
   room.nextShotId = Number.isInteger(room.nextShotId) ? room.nextShotId : 1;
   room.activeShotDiagnostics = null;
+  room.lastMissReplayData = null;
+  room.varPhase = null;
   console.info(
     `[room-physics-config] ${JSON.stringify({
       roomId: room.roomId,
@@ -541,9 +598,22 @@ function finalizeShotLifecycle(
       ? increaseScoreAndCheckGameEnd(room.scoreBoard, actorMemberId)
       : null;
     scoredAtShotEnd = scoreEvaluation.scored;
+    // Save miss replay data for VAR
+    if (!scoreEvaluation.scored) {
+      room.lastMissReplayData = {
+        requesterMemberId: actorMemberId,
+        frames: [...room.replayFrames],
+        activeCueBallId: room.activeCueBallId,
+        previousTurnIndex: room.currentTurnIndex,
+        previousActiveCueBallId: room.activeCueBallId,
+      };
+    } else {
+      room.lastMissReplayData = null;
+    }
     const shouldSwitchTurn = !scoreEvaluation.scored;
     let isGameFinished = false;
     if (scoreResult?.ok && scoreResult.gameEnded) {
+      room.lastMissReplayData = null; // scored (game over) clears miss data
       room.state = 'FINISHED';
       room.winnerMemberId = scoreResult.winnerPlayerId;
       const winnerMemberId = scoreResult.winnerPlayerId;
@@ -564,6 +634,7 @@ function finalizeShotLifecycle(
       serverTimeMs: Date.now(),
       replayAvailable,
       scorerMemberId: replayAvailable ? actorMemberId : undefined,
+      missedByMemberId: !scoreEvaluation.scored ? actorMemberId : undefined,
     });
     if (isGameFinished) {
       const resetAfterResolve = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
@@ -578,6 +649,7 @@ function finalizeShotLifecycle(
         serverTimeMs: Date.now(),
       });
       state.shotStateResetTimers[room.roomId] = null;
+      cancelRoomTurnTimer(state, room.roomId);
       void persistLobbyState(state);
       room.shotEvents = [];
       room.shotStartedAtMs = null;
@@ -649,7 +721,7 @@ function finalizeShotLifecycle(
         } else if (room.members.length === 0) {
           room.currentTurnIndex = 0;
         }
-        room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+        startRoomTurnTimer(state, room);
         broadcastRoomEvent(state, room.roomId, 'turn_changed', {
           roomId: room.roomId,
           currentMemberId: getCurrentTurnMemberId(room),
@@ -738,6 +810,7 @@ function settleSingleSurvivorWin(state: LobbyState, room: LobbyRoom): void {
   room.state = 'FINISHED';
   room.winnerMemberId = winner;
   room.memberGameStates[winner] = 'WIN';
+  cancelRoomTurnTimer(state, room.roomId);
   broadcastRoomEvent(state, room.roomId, 'game_finished', {
     roomId: room.roomId,
     winnerMemberId: room.winnerMemberId,
@@ -817,10 +890,11 @@ function removeMemberFromRoom(
   if (room.members.length === 0) {
     room.currentTurnIndex = 0;
     room.turnDeadlineMs = null;
+    cancelRoomTurnTimer(state, room.roomId);
   } else {
     room.currentTurnIndex = Math.min(room.currentTurnIndex, room.members.length - 1);
     if (room.state === 'IN_GAME') {
-      room.turnDeadlineMs = Date.now() + TURN_DURATION_MS;
+      startRoomTurnTimer(state, room);
     }
   }
   settleSingleSurvivorWin(state, room);
@@ -879,6 +953,8 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     nextShotId: 1,
     replayFrames: [],
     replayPhase: null,
+    lastMissReplayData: null,
+    varPhase: null,
     activeShotDiagnostics: null,
   };
 
@@ -887,6 +963,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
   state.roomStreamSeqByRoomId[room.roomId] = 0;
   state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
   state.shotStateResetTimers[room.roomId] = null;
+  state.turnTimers[room.roomId] = null;
 
   return { ok: true, room };
 }
@@ -1017,6 +1094,7 @@ export function startRoomGame(state: LobbyState, roomId: string, actorMemberId: 
 
   room.state = startResult.nextRoomState;
   initializeRoomGameRuntime(room);
+  startRoomTurnTimer(state, room);
   return { ok: true, room };
 }
 
@@ -1037,6 +1115,7 @@ export function rematchRoomGame(state: LobbyState, roomId: string, actorMemberId
 
   room.state = 'IN_GAME';
   initializeRoomGameRuntime(room);
+  startRoomTurnTimer(state, room);
   return { ok: true, room };
 }
 
@@ -1283,11 +1362,17 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     return { ok: false, statusCode: validated.statusCode, errorCode: validated.errorCode, errors: validated.errors };
   }
 
+  if (room.varPhase) {
+    return { ok: false, statusCode: 409, errorCode: 'VAR_IN_PROGRESS' };
+  }
+  room.lastMissReplayData = null; // New shot expires VAR window
+
   const nextOnSubmit = transitionShotLifecycleState(room.shotState, 'SHOT_SUBMITTED');
   if (!nextOnSubmit) {
     return { ok: false, statusCode: 409, errorCode: 'SHOT_STATE_CONFLICT' };
   }
   room.shotState = nextOnSubmit;
+  cancelRoomTurnTimer(state, room.roomId);
   room.shotEvents = [];
   room.shotStartedAtMs = Date.now();
   const shotId = `${room.roomId}-shot-${room.nextShotId}`;
@@ -1432,7 +1517,7 @@ async function handleReplayEnd(req: IncomingMessage, res: ServerResponse, state:
   const turnChanged = transitionShotLifecycleState(room.shotState, 'TURN_CHANGED');
   if (turnChanged) {
     room.shotState = turnChanged;
-    room.turnDeadlineMs = room.members.length > 0 ? Date.now() + TURN_DURATION_MS : null;
+    startRoomTurnTimer(state, room);
     broadcastRoomEvent(state, room.roomId, 'turn_changed', {
       roomId: room.roomId,
       currentMemberId: getCurrentTurnMemberId(room),
@@ -1635,6 +1720,7 @@ export function createLobbyHttpServer() {
     roomStreamSubscribers: {},
     shotStateResetTimers: {},
     disconnectGraceTimers: {},
+    turnTimers: {},
     userLastChatSentAtByRoomAndMember: new Map(),
     lobbyChatMessages: [],
     userLastLobbyChatSentAt: new Map(),
@@ -1649,6 +1735,224 @@ export function createLobbyHttpServer() {
     state,
     server,
   };
+}
+
+async function handleVarRequest(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/var-request$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const room = state.rooms.find((r) => r.roomId === roomId);
+  if (!room) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  if (!room.lastMissReplayData) {
+    writeJson(res, 409, { errorCode: 'VAR_NO_MISS_DATA' });
+    return;
+  }
+  if (room.lastMissReplayData.requesterMemberId !== actorMemberId) {
+    writeJson(res, 403, { errorCode: 'VAR_NOT_SHOOTER' });
+    return;
+  }
+  if (room.varPhase !== null) {
+    writeJson(res, 409, { errorCode: 'VAR_ALREADY_ACTIVE' });
+    return;
+  }
+  if (room.shotState !== 'idle') {
+    writeJson(res, 409, { errorCode: 'SHOT_IN_PROGRESS' });
+    return;
+  }
+  // Cancel turn timer while VAR is in progress
+  cancelRoomTurnTimer(state, room.roomId);
+  const missData = room.lastMissReplayData;
+  room.varPhase = {
+    requesterMemberId: actorMemberId,
+    stage: 'VOTE_REPLAY',
+    votes: {},
+    ballPositionsBeforeVAR: room.balls.map((b) => ({ ...b })),
+    previousTurnIndex: missData.previousTurnIndex,
+    previousActiveCueBallId: missData.previousActiveCueBallId,
+    replayFrames: missData.frames,
+    replayActiveCueBallId: missData.activeCueBallId,
+  };
+  // totalVoters = all members except requester
+  const totalVoters = room.members.filter((m) => m.memberId !== actorMemberId).length;
+  const requesterMember = room.members.find((m) => m.memberId === actorMemberId);
+  broadcastRoomEvent(state, room.roomId, 'var_vote_started', {
+    roomId: room.roomId,
+    requesterMemberId: actorMemberId,
+    requesterDisplayName: requesterMember?.displayName ?? actorMemberId,
+    stage: 'VOTE_REPLAY',
+    totalVoters,
+  });
+  writeJson(res, 200, { ok: true });
+}
+
+async function handleVarVote(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/var-vote$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const vote = body.vote === true;
+  const room = state.rooms.find((r) => r.roomId === roomId);
+  if (!room) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  if (!room.varPhase) {
+    writeJson(res, 409, { errorCode: 'VAR_NOT_ACTIVE' });
+    return;
+  }
+  const varPhase = room.varPhase;
+  if (varPhase.stage !== 'VOTE_REPLAY' && varPhase.stage !== 'VOTE_SCORE') {
+    writeJson(res, 409, { errorCode: 'VAR_WRONG_STAGE' });
+    return;
+  }
+  if (actorMemberId === varPhase.requesterMemberId) {
+    writeJson(res, 403, { errorCode: 'VAR_REQUESTER_CANNOT_VOTE' });
+    return;
+  }
+  if (actorMemberId in varPhase.votes) {
+    writeJson(res, 409, { errorCode: 'VAR_ALREADY_VOTED' });
+    return;
+  }
+  varPhase.votes[actorMemberId] = vote;
+  const eligibleVoters = room.members.filter((m) => m.memberId !== varPhase.requesterMemberId);
+  const totalVoters = eligibleVoters.length;
+  const votesReceived = Object.keys(varPhase.votes).length;
+  broadcastRoomEvent(state, room.roomId, 'var_vote_update', {
+    roomId: room.roomId,
+    votesReceived,
+    totalVoters,
+  });
+  // Check if all eligible voters have voted
+  if (votesReceived >= totalVoters) {
+    const agreeCount = Object.values(varPhase.votes).filter(Boolean).length;
+    const majority = agreeCount > totalVoters / 2;
+    if (varPhase.stage === 'VOTE_REPLAY') {
+      if (majority) {
+        varPhase.stage = 'REPLAYING';
+        broadcastRoomEvent(state, room.roomId, 'var_replay_start', {
+          roomId: room.roomId,
+          frames: varPhase.replayFrames,
+          activeCueBallId: varPhase.replayActiveCueBallId,
+        });
+      } else {
+        room.varPhase = null;
+        room.lastMissReplayData = null;
+        startRoomTurnTimer(state, room);
+        broadcastRoomEvent(state, room.roomId, 'var_dismissed', {
+          roomId: room.roomId,
+          currentMemberId: getCurrentTurnMemberId(room),
+          turnDeadlineMs: room.turnDeadlineMs,
+          activeCueBallId: room.activeCueBallId,
+        });
+      }
+    } else if (varPhase.stage === 'VOTE_SCORE') {
+      if (majority) {
+        // Grant score: restore turn, apply score
+        room.currentTurnIndex = varPhase.previousTurnIndex;
+        room.activeCueBallId = varPhase.previousActiveCueBallId;
+        // Restore ball positions
+        for (const savedBall of varPhase.ballPositionsBeforeVAR) {
+          const ball = room.balls.find((b) => b.id === savedBall.id);
+          if (ball) {
+            Object.assign(ball, savedBall);
+          }
+        }
+        const scoreResult = increaseScoreAndCheckGameEnd(room.scoreBoard, varPhase.requesterMemberId);
+        if (scoreResult.ok && scoreResult.gameEnded) {
+          room.state = 'FINISHED';
+          room.winnerMemberId = scoreResult.winnerPlayerId;
+          room.memberGameStates = room.members.reduce<Record<string, 'WIN' | 'LOSE'>>((acc, member) => {
+            acc[member.memberId] = member.memberId === scoreResult.winnerPlayerId ? 'WIN' : 'LOSE';
+            return acc;
+          }, {});
+          cancelRoomTurnTimer(state, room.roomId);
+        } else {
+          startRoomTurnTimer(state, room);
+        }
+        room.varPhase = null;
+        room.lastMissReplayData = null;
+        broadcastRoomEvent(state, room.roomId, 'var_score_awarded', {
+          roomId: room.roomId,
+          scoreBoard: room.scoreBoard,
+          currentMemberId: getCurrentTurnMemberId(room),
+          turnDeadlineMs: room.turnDeadlineMs,
+          activeCueBallId: room.activeCueBallId,
+          balls: room.balls,
+          gameFinished: scoreResult?.ok && scoreResult.gameEnded ? true : false,
+          winnerMemberId: room.winnerMemberId,
+        });
+        if (scoreResult?.ok && scoreResult.gameEnded) {
+          broadcastRoomEvent(state, room.roomId, 'game_finished', {
+            roomId: room.roomId,
+            winnerMemberId: room.winnerMemberId,
+            memberGameStates: room.memberGameStates,
+            scoreBoard: room.scoreBoard,
+            serverTimeMs: Date.now(),
+          });
+        }
+      } else {
+        room.varPhase = null;
+        room.lastMissReplayData = null;
+        startRoomTurnTimer(state, room);
+        broadcastRoomEvent(state, room.roomId, 'var_dismissed', {
+          roomId: room.roomId,
+          currentMemberId: getCurrentTurnMemberId(room),
+          turnDeadlineMs: room.turnDeadlineMs,
+          activeCueBallId: room.activeCueBallId,
+        });
+      }
+    }
+  }
+  writeJson(res, 200, { ok: true });
+}
+
+async function handleVarReplayEnd(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const match = req.url?.match(/^\/lobby\/rooms\/([^/]+)\/var-replay-end$/);
+  const roomId = match?.[1];
+  if (!roomId) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+  const actorMemberId = typeof body.actorMemberId === 'string' ? body.actorMemberId : '';
+  const room = state.rooms.find((r) => r.roomId === roomId);
+  if (!room) {
+    writeJson(res, 404, { errorCode: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  if (!room.varPhase) {
+    writeJson(res, 409, { errorCode: 'VAR_NOT_ACTIVE' });
+    return;
+  }
+  if (room.varPhase.stage !== 'REPLAYING') {
+    writeJson(res, 409, { errorCode: 'VAR_WRONG_STAGE' });
+    return;
+  }
+  room.varPhase.stage = 'VOTE_SCORE';
+  room.varPhase.votes = {};
+  const totalVoters = room.members.filter((m) => m.memberId !== room.varPhase!.requesterMemberId).length;
+  broadcastRoomEvent(state, room.roomId, 'var_vote_started', {
+    roomId: room.roomId,
+    requesterMemberId: room.varPhase.requesterMemberId,
+    stage: 'VOTE_SCORE',
+    totalVoters,
+  });
+  writeJson(res, 200, { ok: true });
 }
 
 export function createLobbyRequestHandler(state: LobbyState) {
@@ -1739,6 +2043,21 @@ export function createLobbyRequestHandler(state: LobbyState) {
 
     if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/replay')) {
       await handleReplayRequest(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/var-request')) {
+      await handleVarRequest(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/var-vote')) {
+      await handleVarVote(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url?.startsWith('/lobby/rooms/') && req.url.endsWith('/var-replay-end')) {
+      await handleVarReplayEnd(req, res, state);
       return;
     }
 

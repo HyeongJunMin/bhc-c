@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../stores/gameStore';
 import { INPUT_LIMITS, PHYSICS, RULES } from '../lib/constants';
-import { requestReplay, endReplay, type ChatMessage } from '../lib/api-client';
+import { requestReplay, endReplay, requestVAR, submitVARVote, signalVARReplayEnd, type ChatMessage } from '../lib/api-client';
 import { PlaybackSlider } from './test/PlaybackSlider';
 import { ChatPanel } from './ChatPanel';
 import { SpeechBubble } from './SpeechBubble';
@@ -38,6 +38,8 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
     replayCurrentFrame,
     replayIsPlaying,
     isMyTurn,
+    canRequestVAR,
+    varPhase,
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
@@ -225,6 +227,31 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
         <div style={{ fontSize: 11, opacity: 0.6, marginTop: 10 }}>
           Phase: <span style={{ color: '#ffd700' }}>{phase}</span>
         </div>
+        {canRequestVAR && multiplayerContext && (
+          <button
+            type="button"
+            onClick={() => {
+              if (roomId && memberId) {
+                requestVAR(roomId, memberId).catch(console.error);
+              }
+            }}
+            style={{
+              marginTop: 12,
+              width: '100%',
+              background: '#e53935',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 0',
+              fontSize: 18,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              letterSpacing: 2,
+            }}
+          >
+            VAR
+          </button>
+        )}
       </div>
 
       {(phase === 'SHOOTING' || phase === 'SIMULATING') && (
@@ -503,6 +530,131 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
               REPLAY...
             </div>
           )}
+        </div>
+      )}
+
+      {/* VAR 투표 오버레이 */}
+      {varPhase && (varPhase.stage === 'VOTE_REPLAY' || varPhase.stage === 'VOTE_SCORE') && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '45%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+            zIndex: 200,
+            pointerEvents: 'auto',
+            background: 'rgba(0,0,0,0.9)',
+            borderRadius: 16,
+            padding: '24px 32px',
+            border: '2px solid #e53935',
+            minWidth: 280,
+          }}
+        >
+          <div style={{ color: '#e53935', fontSize: 24, fontWeight: 'bold', letterSpacing: 3 }}>VAR</div>
+          <div style={{ color: '#ffd700', fontSize: 16, textAlign: 'center' }}>
+            {varPhase.stage === 'VOTE_REPLAY'
+              ? '리플레이를 볼까요?'
+              : '맞았나요?'}
+          </div>
+          {/* 요청자가 아닌 경우 투표 버튼 표시 */}
+          {multiplayerContext && varPhase.requesterMemberId !== multiplayerContext.memberId && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                disabled={varPhase.myVote !== null}
+                onClick={() => {
+                  if (roomId && memberId) {
+                    gameStore.setMyVarVote(true);
+                    submitVARVote(roomId, memberId, true).catch(console.error);
+                  }
+                }}
+                style={{
+                  background: varPhase.myVote === true ? '#00ff88' : (varPhase.myVote !== null ? '#333' : '#00c853'),
+                  color: varPhase.myVote === true ? '#000' : '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '10px 20px',
+                  fontSize: 15,
+                  fontWeight: 'bold',
+                  cursor: varPhase.myVote !== null ? 'default' : 'pointer',
+                  opacity: varPhase.myVote !== null && varPhase.myVote !== true ? 0.5 : 1,
+                }}
+              >
+                {varPhase.stage === 'VOTE_REPLAY' ? '동의' : '맞았네'}
+              </button>
+              <button
+                type="button"
+                disabled={varPhase.myVote !== null}
+                onClick={() => {
+                  if (roomId && memberId) {
+                    gameStore.setMyVarVote(false);
+                    submitVARVote(roomId, memberId, false).catch(console.error);
+                  }
+                }}
+                style={{
+                  background: varPhase.myVote === false ? '#ff5252' : (varPhase.myVote !== null ? '#333' : '#c62828'),
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '10px 20px',
+                  fontSize: 15,
+                  fontWeight: 'bold',
+                  cursor: varPhase.myVote !== null ? 'default' : 'pointer',
+                  opacity: varPhase.myVote !== null && varPhase.myVote !== false ? 0.5 : 1,
+                }}
+              >
+                {varPhase.stage === 'VOTE_REPLAY' ? '반대' : '아니야'}
+              </button>
+            </div>
+          )}
+          {/* 요청자인 경우 대기 메시지 */}
+          {multiplayerContext && varPhase.requesterMemberId === multiplayerContext.memberId && (
+            <div style={{ color: '#aaa', fontSize: 14 }}>투표 결과를 기다리는 중...</div>
+          )}
+          {/* 투표 진행 상황 */}
+          <div style={{ color: '#aaa', fontSize: 13 }}>
+            {varPhase.votesReceived} / {varPhase.totalVoters} 투표 완료
+          </div>
+        </div>
+      )}
+
+      {/* VAR 리플레이 중 종료 버튼 */}
+      {varPhase && varPhase.stage === 'REPLAYING' && (phase === 'REPLAYING' || phase === 'REPLAY_READY') && multiplayerContext && varPhase.requesterMemberId === multiplayerContext.memberId && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 201,
+            pointerEvents: 'auto',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (roomId && memberId) {
+                signalVARReplayEnd(roomId, memberId).catch(console.error);
+              }
+            }}
+            style={{
+              background: '#e53935',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 24px',
+              fontSize: 15,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              marginTop: 8,
+            }}
+          >
+            VAR 리플레이 종료
+          </button>
         </div>
       )}
 

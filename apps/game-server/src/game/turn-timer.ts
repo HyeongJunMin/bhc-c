@@ -1,4 +1,4 @@
-export const TURN_TIMEOUT_MS = 10_000;
+export const TURN_TIMEOUT_MS = 20_000;
 
 export type ScheduleTimeout = (callback: () => void, delayMs: number) => unknown;
 export type CancelTimeout = (timerId: unknown) => void;

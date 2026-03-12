@@ -159,3 +159,15 @@ export async function submitShot(
     },
   });
 }
+
+export async function requestVAR(roomId: string, actorMemberId: string): Promise<void> {
+  await postJson(`/api/lobby/rooms/${roomId}/var-request`, { actorMemberId });
+}
+
+export async function submitVARVote(roomId: string, actorMemberId: string, vote: boolean): Promise<void> {
+  await postJson(`/api/lobby/rooms/${roomId}/var-vote`, { actorMemberId, vote });
+}
+
+export async function signalVARReplayEnd(roomId: string, actorMemberId: string): Promise<void> {
+  await postJson(`/api/lobby/rooms/${roomId}/var-replay-end`, { actorMemberId });
+}

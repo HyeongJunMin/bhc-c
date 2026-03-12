@@ -142,6 +142,21 @@ interface GameStore {
   } | null) => void;
   isMyTurn: boolean;
   setIsMyTurn: (v: boolean) => void;
+  canRequestVAR: boolean;
+  varPhase: {
+    stage: 'VOTE_REPLAY' | 'REPLAYING' | 'VOTE_SCORE';
+    requesterMemberId: string;
+    votesReceived: number;
+    totalVoters: number;
+    myVote: boolean | null;
+  } | null;
+  setCanRequestVAR: (can: boolean) => void;
+  applyVarVoteStarted: (data: { stage: 'VOTE_REPLAY' | 'REPLAYING' | 'VOTE_SCORE'; requesterMemberId: string; totalVoters: number }) => void;
+  applyVarVoteUpdate: (data: { votesReceived: number; totalVoters: number }) => void;
+  applyVarReplayStart: (data: { frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>; activeCueBallId: 'cueBall' | 'objectBall2' }) => void;
+  applyVarDismissed: (data: { currentMemberId: string | null; turnDeadlineMs: number | null; activeCueBallId?: CueBallId }) => void;
+  applyVarScoreAwarded: (data: { scoreBoard: Record<string, number>; currentMemberId: string | null; turnDeadlineMs: number | null; activeCueBallId?: CueBallId; balls?: Array<{ id: string; x: number; y: number; vx: number; vy: number; spinX: number; spinY: number; spinZ: number; isPocketed: boolean }> }) => void;
+  setMyVarVote: (vote: boolean) => void;
   applyServerTurnChanged: (data: { currentMemberId: string | null; turnDeadlineMs: number | null; activeCueBallId?: CueBallId }) => void;
   applyServerGameFinished: (data: { winnerMemberId: string | null; memberGameStates: Record<string, string> }) => void;
 }
@@ -338,6 +353,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   isMyTurn: false,
   setIsMyTurn: (v) => set({ isMyTurn: v }),
+  canRequestVAR: false,
+  varPhase: null,
+  setCanRequestVAR: (can) => set({ canRequestVAR: can }),
+  applyVarVoteStarted: (data) => set({
+    varPhase: {
+      stage: data.stage,
+      requesterMemberId: data.requesterMemberId,
+      votesReceived: 0,
+      totalVoters: data.totalVoters,
+      myVote: null,
+    },
+  }),
+  applyVarVoteUpdate: (data) => set((state) => ({
+    varPhase: state.varPhase ? { ...state.varPhase, votesReceived: data.votesReceived, totalVoters: data.totalVoters } : null,
+  })),
+  applyVarReplayStart: (data) => set({
+    phase: 'REPLAYING',
+    replayFrameData: { frames: data.frames, activeCueBallId: data.activeCueBallId },
+    replayCurrentFrame: 0,
+    replayIsPlaying: true,
+    varPhase: (get().varPhase) ? { ...get().varPhase!, stage: 'REPLAYING' } : null,
+  }),
+  applyVarDismissed: (data) => {
+    const ctx = get().multiplayerContext;
+    if (!ctx) {
+      set({ varPhase: null, canRequestVAR: false });
+      return;
+    }
+    const currentMember = ctx.members.find((m) => m.memberId === data.currentMemberId);
+    set({
+      varPhase: null,
+      canRequestVAR: false,
+      currentPlayer: currentMember?.displayName ?? data.currentMemberId ?? '',
+      isMyTurn: data.currentMemberId === ctx.memberId,
+      activeCueBallId: data.activeCueBallId ?? get().activeCueBallId,
+      phase: 'AIMING',
+      turnStartedAtMs: Date.now(),
+    });
+  },
+  applyVarScoreAwarded: (data) => {
+    const state = get();
+    const ctx = state.multiplayerContext;
+    if (!ctx) return;
+    const newScores: Record<string, number> = {};
+    for (const member of ctx.members) {
+      newScores[member.displayName] = data.scoreBoard[member.memberId] ?? 0;
+    }
+    const isMyTurn = data.currentMemberId === ctx.memberId;
+    set({
+      scores: newScores,
+      varPhase: null,
+      canRequestVAR: false,
+      currentPlayer: ctx.members.find((m) => m.memberId === data.currentMemberId)?.displayName ?? data.currentMemberId ?? '',
+      isMyTurn,
+      activeCueBallId: data.activeCueBallId ?? 'cueBall',
+      phase: 'AIMING',
+      turnStartedAtMs: Date.now(),
+    });
+  },
+  setMyVarVote: (vote) => set((state) => ({
+    varPhase: state.varPhase ? { ...state.varPhase, myVote: vote } : null,
+  })),
 
   applyServerTurnChanged: (data) => {
     const state = get();

@@ -1,5 +1,5 @@
 import { useEffect, useRef, Suspense } from 'react';
-import { submitShot, requestReplay, endReplay, sendRoomChatMessage, type ChatMessage } from '../lib/api-client';
+import { submitShot, requestReplay, endReplay, sendRoomChatMessage, signalVARReplayEnd, type ChatMessage } from '../lib/api-client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
@@ -1037,6 +1037,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     const handleShotStarted = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data as string) as { playerId?: string };
+        useGameStore.getState().setCanRequestVAR(false);
         // 상대방 샷이면 시뮬레이션 시작
         if (data.playerId !== memberId) {
           useGameStore.getState().setPhase('SIMULATING');
@@ -1074,6 +1075,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         }
         turnEndHandledRef.current = false;
         hasSetupTurnRef.current = true;
+        clearBallTrails();
         useGameStore.getState().applyServerTurnChanged(data);
       } catch {
         // ignore
@@ -1087,6 +1089,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
           scoreBoard?: Record<string, number>;
           replayAvailable?: boolean;
           scorerMemberId?: string;
+          missedByMemberId?: string;
         };
         const state = useGameStore.getState();
         const ctx = state.multiplayerContext;
@@ -1105,6 +1108,10 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
             replayScorerMemberId: data.scorerMemberId,
             replayRemainingCount: 3,
           });
+        }
+        // VAR: 내가 MISS를 낸 경우 VAR 요청 가능 상태로
+        if (!data.scored && data.missedByMemberId && memberId && data.missedByMemberId === memberId) {
+          useGameStore.getState().setCanRequestVAR(true);
         }
       } catch {
         // ignore
@@ -1167,12 +1174,121 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       }
     };
 
+    const handleVarVoteStarted = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          requesterMemberId: string;
+          stage: 'VOTE_REPLAY' | 'REPLAYING' | 'VOTE_SCORE';
+          totalVoters: number;
+        };
+        useGameStore.getState().applyVarVoteStarted(data);
+        useGameStore.getState().setCanRequestVAR(false);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleVarVoteUpdate = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          votesReceived: number;
+          totalVoters: number;
+        };
+        useGameStore.getState().applyVarVoteUpdate(data);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleVarReplayStart = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
+          activeCueBallId: 'cueBall' | 'objectBall2';
+        };
+        // Apply first frame positions
+        if (data.frames.length > 0) {
+          for (const ball of data.frames[0].balls) {
+            const worldPos = physicsToWorldXZ(ball.x, ball.y);
+            const meshRef = ballsRef.current.get(ball.id);
+            if (meshRef) {
+              meshRef.mesh.position.set(worldPos.x, BALL_RADIUS, worldPos.z);
+            }
+            const physBall = physicsBallsRef.current.find((b) => b.id === ball.id);
+            if (physBall) {
+              physBall.x = ball.x;
+              physBall.y = ball.y;
+              physBall.vx = 0;
+              physBall.vy = 0;
+              physBall.spinX = 0;
+              physBall.spinY = 0;
+              physBall.spinZ = 0;
+            }
+          }
+        }
+        useGameStore.getState().applyVarReplayStart(data);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleVarScoreAwarded = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          scoreBoard: Record<string, number>;
+          currentMemberId: string | null;
+          turnDeadlineMs: number | null;
+          activeCueBallId?: 'cueBall' | 'objectBall2';
+          balls?: Array<{ id: string; x: number; y: number; vx: number; vy: number; spinX: number; spinY: number; spinZ: number; isPocketed: boolean }>;
+        };
+        // Restore ball positions if provided
+        if (data.balls) {
+          for (const ball of data.balls) {
+            const worldPos = physicsToWorldXZ(ball.x, ball.y);
+            const meshRef = ballsRef.current.get(ball.id);
+            if (meshRef) {
+              meshRef.mesh.position.set(worldPos.x, BALL_RADIUS, worldPos.z);
+            }
+            const physBall = physicsBallsRef.current.find((b) => b.id === ball.id);
+            if (physBall) {
+              Object.assign(physBall, ball);
+            }
+          }
+        }
+        useGameStore.getState().applyVarScoreAwarded(data);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleVarDismissed = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as {
+          currentMemberId?: string | null;
+          turnDeadlineMs?: number | null;
+          activeCueBallId?: 'cueBall' | 'objectBall2';
+        };
+        useGameStore.getState().applyVarDismissed({
+          currentMemberId: data.currentMemberId ?? null,
+          turnDeadlineMs: data.turnDeadlineMs ?? null,
+          activeCueBallId: data.activeCueBallId,
+        });
+      } catch {
+        // ignore
+      }
+    };
+
     eventSource.addEventListener('room_snapshot', handleSnapshot);
     eventSource.addEventListener('shot_started', handleShotStarted);
     eventSource.addEventListener('turn_changed', handleTurnChanged);
     eventSource.addEventListener('shot_resolved', handleShotResolved);
     eventSource.addEventListener('game_finished', handleGameFinished);
     eventSource.addEventListener('replay_requested', handleReplayRequested);
+    eventSource.addEventListener('var_vote_started', handleVarVoteStarted);
+    eventSource.addEventListener('var_vote_update', handleVarVoteUpdate);
+    eventSource.addEventListener('var_replay_start', handleVarReplayStart);
+    eventSource.addEventListener('var_score_awarded', handleVarScoreAwarded);
+    eventSource.addEventListener('var_dismissed', handleVarDismissed);
 
     return () => {
       eventSource.removeEventListener('room_snapshot', handleSnapshot);
@@ -1181,6 +1297,11 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       eventSource.removeEventListener('shot_resolved', handleShotResolved);
       eventSource.removeEventListener('game_finished', handleGameFinished);
       eventSource.removeEventListener('replay_requested', handleReplayRequested);
+      eventSource.removeEventListener('var_vote_started', handleVarVoteStarted);
+      eventSource.removeEventListener('var_vote_update', handleVarVoteUpdate);
+      eventSource.removeEventListener('var_replay_start', handleVarReplayStart);
+      eventSource.removeEventListener('var_score_awarded', handleVarScoreAwarded);
+      eventSource.removeEventListener('var_dismissed', handleVarDismissed);
     };
   }, [eventSource, roomId, memberId]);
 
@@ -1577,7 +1698,15 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
                 } else if (gameStore.multiplayerContext) {
                   gameStore.finishReplaySimulation();
                   const currentState = useGameStore.getState();
+                  // VAR 리플레이 완료 시 자동으로 서버에 종료 신호
                   if (
+                    roomId &&
+                    memberId &&
+                    currentState.varPhase?.stage === 'REPLAYING' &&
+                    currentState.varPhase.requesterMemberId === memberId
+                  ) {
+                    signalVARReplayEnd(roomId, memberId).catch(console.error);
+                  } else if (
                     roomId &&
                     memberId &&
                     currentState.replayRemainingCount === 0 &&
