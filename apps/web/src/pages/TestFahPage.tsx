@@ -1,7 +1,5 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { GameScene } from '../components/GameScene';
-import { useGameStore } from '../stores/gameStore';
 
 const styles = {
   header: {
@@ -34,13 +32,6 @@ const styles = {
 };
 
 export function TestFahPage() {
-  useEffect(() => {
-    useGameStore.getState().setPlayMode('fahTest');
-    return () => {
-      useGameStore.getState().setPlayMode('game');
-    };
-  }, []);
-
   return (
     <>
       <div style={styles.header}>

@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import { useGameStore } from '../stores/gameStore';
+import { useFahStore } from '../stores/fahStore';
 import {
   FAH_PHYSICS_TUNING_STORAGE_KEY,
   type FahPhysicsTuningProfile,
@@ -14,6 +15,9 @@ import {
 import { INPUT_LIMITS, PHYSICS } from '../lib/constants';
 
 const FAH_ANCHOR_POINTS = [0, 10, 20, 30, 40, 45] as const;
+const FAH_DEFAULT_DRAG_PX = 70;
+const FAH_DEFAULT_IMPACT_X = -0.0094;
+const FAH_DEFAULT_IMPACT_Y = 0.009;
 
 type SliderKey =
   | 'speedBoost'
@@ -54,21 +58,24 @@ function getProfileSliderValue(profile: FahPhysicsTuningProfile, key: SliderKey)
 
 export function FahUI() {
   const {
-    fahTestTargetPoint,
-    setFahTestTargetPoint,
     showBallTrail,
     toggleBallTrail,
     shotInput,
     setDragPower,
     setImpactOffset,
-    requestFahTestShot,
   } = useGameStore();
+  const {
+    fahTestTargetPoint,
+    setFahTestTargetPoint,
+    requestFahTestShot,
+  } = useFahStore();
 
   const [fahTuningText, setFahTuningText] = useState('');
   const [tuningMessage, setTuningMessage] = useState('');
   const [liveProfile, setLiveProfile] = useState<FahPhysicsTuningProfile>(() => readFahPhysicsTuning(null));
   const tipPadRef = useRef<HTMLDivElement | null>(null);
   const [isTipDragging, setIsTipDragging] = useState(false);
+  const didInitShotInputRef = useRef(false);
 
   const previewProfile = useMemo(
     () => (fahTuningText.trim() ? readFahPhysicsTuning(fahTuningText) : null),
@@ -232,6 +239,15 @@ export function FahUI() {
       window.removeEventListener('bhc:fah-physics-tuning-updated', syncFromStorage);
     };
   }, []);
+
+  useEffect(() => {
+    if (didInitShotInputRef.current) {
+      return;
+    }
+    didInitShotInputRef.current = true;
+    setDragPower(FAH_DEFAULT_DRAG_PX);
+    setImpactOffset(FAH_DEFAULT_IMPACT_X, FAH_DEFAULT_IMPACT_Y);
+  }, [setDragPower, setImpactOffset]);
 
   const canSelectPoint = true;
 
