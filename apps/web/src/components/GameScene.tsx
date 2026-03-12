@@ -20,11 +20,6 @@ import {
   type FahCushionSide,
   type FahRailSide,
 } from '../lib/fah-index-system';
-import {
-  FAH_PHYSICS_TUNING_STORAGE_KEY,
-  readFahPhysicsTuning,
-} from '../lib/fah-physics-tuning';
-import { deriveFahDynamicPhysicsProfile, type FahDynamicPhysicsProfile } from '../lib/fah-dynamic-physics';
 import { AIM_CONTROL_CONTRACT } from '../../../../packages/shared-types/src/aim-control.ts';
 import { createRoomPhysicsStepConfig } from '../../../../packages/physics-core/src/room-physics-config.ts';
 import { stepRoomPhysicsWorld, type PhysicsBallState, type CushionId } from '../../../../packages/physics-core/src/room-physics-step.ts';
@@ -45,12 +40,19 @@ const CUE_DEBUG_X = -TABLE_WIDTH / 2 + DIAMOND_STEP_X * 3;
 const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
-const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
 const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
 const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
-// INPUT drag range(10..400) 기준 30%
-const FAH_FIXED_DRAG_PX = 127;
 const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
+const FAH_REALISM_OVERRIDES = {
+  cushionRestitution: 0.72,
+  cushionContactFriction: 0.14,
+  clothLinearSpinCouplingPerSec: 1.03,
+  spinDampingPerTick: 0.988,
+  linearDampingPerTick: 0.985,
+  cushionPostCollisionSpeedScale: 1.0,
+  cushionSpinMonotonicRetention: 0.93,
+};
+const FAH_SPEED_BOOST = 1.0;
 // FAH 좌표계 기준(화면 기준 가로 테이블):
 // - 하단/상단은 단쿠션, 좌측/우측은 장쿠션으로만 표기한다.
 // - 1쿠션 인덱스는 0,10,20,30,40,50,70,90,110 스케일 + 구간별 반칸 인덱스 규칙을 사용한다.
@@ -164,6 +166,12 @@ function directionDegFromCueToTarget(cue: THREE.Vector3, target: THREE.Vector3):
   return (deg + 360) % 360;
 }
 
+function createPhysicsConfigForMode(playMode: string) {
+  return playMode === 'fahTest'
+    ? createRoomPhysicsStepConfig('default', FAH_REALISM_OVERRIDES)
+    : createRoomPhysicsStepConfig('default');
+}
+
 type SnapshotBall = {
   id: 'cueBall' | 'objectBall1' | 'objectBall2';
   x: number;
@@ -191,10 +199,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   const captureParams = readCaptureParams();
   const gameStore = useGameStore();
 
-  const physicsConfigRef = useRef(createRoomPhysicsStepConfig(gameStore.playMode === 'fahTest' ? 'fahTest' : 'default'));
-  const fahPhysicsTuningRef = useRef(readFahPhysicsTuning(
-    typeof window === 'undefined' ? null : window.localStorage.getItem(FAH_PHYSICS_TUNING_STORAGE_KEY),
-  ));
+  const physicsConfigRef = useRef(createPhysicsConfigForMode(gameStore.playMode));
   const physicsAccumulatorRef = useRef(0);
   const physicsBallsRef = useRef<PhysicsBallState[]>([]);
   const cueStickRef = useRef<CueStick | null>(null);
@@ -223,7 +228,6 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     points: Array<{ tMs: number; x: number; z: number; speedMps: number; headingDeg: number }>;
   } | null>(null);
   const fahLastIndexModelRef = useRef<FahIndexModel | null>(null);
-  const fahDynamicProfileRef = useRef<FahDynamicPhysicsProfile | null>(null);
   const debugTracePartsRef = useRef<string[]>([]);
   const traceEventIndexRef = useRef(0);
   const traceWasTruncatedRef = useRef(false);
@@ -337,35 +341,9 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   }, [scene, gameStore.playMode]);
 
   useEffect(() => {
-    const tuning = fahPhysicsTuningRef.current;
-    const overrides = gameStore.playMode === 'fahTest' ? tuning.overrides : undefined;
-    physicsConfigRef.current = createRoomPhysicsStepConfig(
-      gameStore.playMode === 'fahTest' ? 'fahTest' : 'default',
-      overrides,
-    );
+    physicsConfigRef.current = createPhysicsConfigForMode(gameStore.playMode);
     physicsAccumulatorRef.current = 0;
   }, [gameStore.playMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const syncTuning = () => {
-      fahPhysicsTuningRef.current = readFahPhysicsTuning(
-        window.localStorage.getItem(FAH_PHYSICS_TUNING_STORAGE_KEY),
-      );
-      if (useGameStore.getState().playMode === 'fahTest') {
-        physicsConfigRef.current = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
-        physicsAccumulatorRef.current = 0;
-      }
-    };
-    window.addEventListener('bhc:fah-physics-tuning-updated', syncTuning);
-    window.addEventListener('storage', syncTuning);
-    return () => {
-      window.removeEventListener('bhc:fah-physics-tuning-updated', syncTuning);
-      window.removeEventListener('storage', syncTuning);
-    };
-  }, []);
 
   useEffect(() => {
     if (gameStore.phase === 'SHOOTING') {
@@ -510,9 +488,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       angularVelocity: new THREE.Vector3(0, 0, 0),
       isPocketed: false,
     });
-    gameStore.setDragPower(FAH_FIXED_DRAG_PX);
     gameStore.setCueElevation(0);
-    gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
   }, [gameStore.playMode, gameStore.phase]);
 
   useEffect(() => {
@@ -760,10 +736,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       ...(overrideShotInput ?? {}),
     };
     if (gameStore.playMode === 'fahTest') {
-      shotInput.dragPx = FAH_FIXED_DRAG_PX;
       shotInput.cueElevationDeg = 0;
-      shotInput.impactOffsetX = -FAH_FIXED_TWO_TIP_OFFSET;
-      shotInput.impactOffsetY = FAH_FIXED_TWO_TIP_OFFSET;
     }
     const shotCueBallId = gameStore.playMode === 'fahTest' ? 'cueBall' : gameStore.activeCueBallId;
     const cueBall = physicsBallsRef.current.find((ball) => ball.id === shotCueBallId);
@@ -784,13 +757,11 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     let initialBallSpeedMps = shotInit.initialBallSpeedMps;
     let omegaX = shotInit.omegaX;
     let omegaZ = shotInit.omegaZ;
-    const fahSpeedBoost = fahPhysicsTuningRef.current.speedBoost;
     if (gameStore.playMode === 'fahTest') {
-      initialBallSpeedMps *= fahSpeedBoost;
-      omegaX *= fahSpeedBoost;
-      omegaZ *= fahSpeedBoost;
+      initialBallSpeedMps *= FAH_SPEED_BOOST;
+      omegaX *= FAH_SPEED_BOOST;
+      omegaZ *= FAH_SPEED_BOOST;
     }
-
     if (typeof window !== 'undefined') {
       const cue = gameStore.balls.find((ball) => ball.id === shotCueBallId)?.position;
       const obj1 = gameStore.balls.find((ball) => ball.id === 'objectBall1')?.position;
@@ -809,15 +780,12 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         `directionDeg:${shotInput.shotDirectionDeg.toFixed(1)} ` +
         `speedMps:${initialBallSpeedMps.toFixed(3)} ` +
         `spinZ:${omegaZ.toFixed(3)} ` +
-        `speedBoost:${(gameStore.playMode === 'fahTest' ? fahSpeedBoost : 1).toFixed(2)} ` +
+        `speedBoost:${(gameStore.playMode === 'fahTest' ? FAH_SPEED_BOOST : 1).toFixed(3)} ` +
         `dragPx:${shotInput.dragPx.toFixed(1)} ` +
         `impactOffsetX(UI):${shotInput.impactOffsetX.toFixed(4)} ` +
         `impactOffsetX(phys):${impactOffsetXForPhysics.toFixed(4)} ` +
         `impactOffsetY:${shotInput.impactOffsetY.toFixed(4)} ` +
-        `dynProfile:${fahDynamicProfileRef.current ? 'Y' : 'N'} ` +
-        `dynBlend:g${(fahDynamicProfileRef.current?.grazingFactor ?? 0).toFixed(3)}_c${(fahDynamicProfileRef.current?.cornerFactor ?? 0).toFixed(3)} ` +
-        `dynRest:${(fahDynamicProfileRef.current?.overrides.cushionRestitution ?? 0).toFixed(3)} ` +
-        `dynFric:${(fahDynamicProfileRef.current?.overrides.cushionContactFriction ?? 0).toFixed(3)} ` +
+        `dynProfile:N dynBlend:g0.000_c0.000 dynRest:0.000 dynFric:0.000 ` +
         `cueX:${(cue?.x ?? 0).toFixed(4)} ` +
         `cueZ:${(cue?.z ?? 0).toFixed(4)} ` +
         `obj1X:${(obj1?.x ?? 0).toFixed(4)} ` +
@@ -927,36 +895,24 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     fahLastIndexModelRef.current = indexModel;
     const firstRailTarget = computeFahCompensatedAimTarget(cue.position, indexModel.firstCushionSide, indexModel.firstCushionIndex);
     const shotDirectionDeg = directionDegFromCueToTarget(cue.position, firstRailTarget);
-    const baseFahConfig = createRoomPhysicsStepConfig('fahTest', fahPhysicsTuningRef.current.overrides);
-    const dynamicProfile = deriveFahDynamicPhysicsProfile(
-      baseFahConfig,
-      indexModel.firstCushionIndex,
-      shotDirectionDeg,
-      indexModel.firstCushionSide,
-    );
-    fahDynamicProfileRef.current = dynamicProfile;
-    physicsConfigRef.current = createRoomPhysicsStepConfig('fahTest', {
-      ...fahPhysicsTuningRef.current.overrides,
-      ...dynamicProfile.overrides,
-    });
+    physicsConfigRef.current = createPhysicsConfigForMode('fahTest');
     physicsAccumulatorRef.current = 0;
 
     gameStore.setSystemMode('fiveAndHalf');
     gameStore.setShotDirection(shotDirectionDeg);
-    gameStore.setDragPower(FAH_FIXED_DRAG_PX);
+    gameStore.setDragPower(gameStore.shotInput.dragPx);
     gameStore.setCueElevation(0);
-    // 10시 방향 2팁
-    gameStore.setImpactOffset(-FAH_FIXED_TWO_TIP_OFFSET, FAH_FIXED_TWO_TIP_OFFSET);
+    gameStore.setImpactOffset(gameStore.shotInput.impactOffsetX, gameStore.shotInput.impactOffsetY);
     gameStore.setTurnMessage(
-      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | aimX=${firstRailTarget.x.toFixed(3)} | dyn(re=${dynamicProfile.overrides.cushionRestitution},fr=${dynamicProfile.overrides.cushionContactFriction},sc=${dynamicProfile.overrides.clothLinearSpinCouplingPerSec})`,
+      `FAH TEST SHOT req=${safeTargetPoint} corr=${correctedTargetPoint} | S${indexModel.startIndex} - F${indexModel.firstCushionIndex} = T${indexModel.expectedThirdIndex} | aimX=${firstRailTarget.x.toFixed(3)} | dyn(off)`,
     );
 
     executeShot({
       shotDirectionDeg,
-      dragPx: FAH_FIXED_DRAG_PX,
+      dragPx: gameStore.shotInput.dragPx,
       cueElevationDeg: 0,
-      impactOffsetX: -FAH_FIXED_TWO_TIP_OFFSET,
-      impactOffsetY: FAH_FIXED_TWO_TIP_OFFSET,
+      impactOffsetX: gameStore.shotInput.impactOffsetX,
+      impactOffsetY: gameStore.shotInput.impactOffsetY,
       requestedTargetPoint: safeTargetPoint,
       correctedTargetPoint: correctedTargetIndex,
     });
@@ -2055,10 +2011,10 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
               })(),
               shotDirectionDeg: tracePayload.shotInput.shotDirectionDeg,
               physicsTuning: {
-                speedBoost: fahPhysicsTuningRef.current.speedBoost,
-                overrides: fahPhysicsTuningRef.current.overrides,
+                speedBoost: FAH_SPEED_BOOST,
+                overrides: FAH_REALISM_OVERRIDES,
               },
-              dynamicPhysics: fahDynamicProfileRef.current,
+              dynamicPhysics: null,
             });
             window.localStorage.setItem(
               FAH_CALIBRATION_STORAGE_KEY,
