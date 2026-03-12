@@ -254,6 +254,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
   const shiftPressedRef = useRef(false);
   const orbitControlsRef = useRef<any>(null);
+  const lastAutoAimTurnRef = useRef(0);
 
   const tempDir = useRef(new THREE.Vector3());
   const prevPhaseRef = useRef(gameStore.phase);
@@ -2073,6 +2074,44 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         const targetPos = new THREE.Vector3(FAH_FIXED_CUE_WORLD_X - 1.7, 1.95, FAH_FIXED_CUE_WORLD_Z);
         camera.position.lerp(targetPos, 0.25);
         camera.lookAt(FAH_FIXED_CUE_WORLD_X + 1.05, 0.05, FAH_FIXED_CUE_WORLD_Z);
+      } else if (gameStore.turnStartedAtMs !== lastAutoAimTurnRef.current) {
+        // 새 턴 시작 시 가장 가까운 적구 방향으로 카메라 자동 조준
+        lastAutoAimTurnRef.current = gameStore.turnStartedAtMs;
+
+        const cueBallPos = cueBallRef.mesh.position;
+        const activeCueBallId = gameStore.activeCueBallId;
+        const objectBallIds: string[] = activeCueBallId === 'cueBall'
+          ? ['objectBall1', 'objectBall2']
+          : ['objectBall1', 'cueBall'];
+
+        let nearestBallPos: THREE.Vector3 | null = null;
+        let nearestDistSq = Infinity;
+        for (const id of objectBallIds) {
+          const ballRef = ballsRef.current.get(id);
+          if (!ballRef) continue;
+          const distSq = cueBallPos.distanceToSquared(ballRef.mesh.position);
+          if (distSq < nearestDistSq) {
+            nearestDistSq = distSq;
+            nearestBallPos = ballRef.mesh.position;
+          }
+        }
+
+        if (nearestBallPos) {
+          const nearestDir = directionDegFromCueToTarget(cueBallPos, nearestBallPos);
+          const dirRad = nearestDir * Math.PI / 180;
+          const distFromBall = camera.position.distanceTo(cueBallPos);
+          const height = camera.position.y;
+          const horizontalDist = Math.sqrt(Math.max(0, distFromBall * distFromBall - height * height));
+          camera.position.set(
+            cueBallPos.x - Math.sin(dirRad) * horizontalDist,
+            height,
+            cueBallPos.z - Math.cos(dirRad) * horizontalDist,
+          );
+          if (orbitControlsRef.current) {
+            orbitControlsRef.current.target.copy(cueBallPos);
+            orbitControlsRef.current.update();
+          }
+        }
       }
       tempDir.current.copy(cueBallRef.mesh.position).sub(camera.position);
       tempDir.current.y = 0;
