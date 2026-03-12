@@ -1029,6 +1029,7 @@ function GameWorld() {
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.closest?.('[data-chat-panel]')) return;
       if (isFahMode) return;
       if (gameStore.phase !== 'AIMING' || e.button !== 0) return;
 
@@ -1071,6 +1072,8 @@ function GameWorld() {
       if (isFahMode) {
         return;
       }
+      const activeTag = (document.activeElement as HTMLElement)?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
       const step = 0.002;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.85;

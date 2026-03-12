@@ -1,25 +1,12 @@
 services:
-  game-server:
+  bhc:
     build:
       context: ..
-      dockerfile: docker/game-server.Dockerfile
-    container_name: bhc-game-server
+      dockerfile: docker/Dockerfile
+    container_name: bhc
     environment:
       PORT: "9900"
+      STATIC_DIR: "/app/static"
     ports:
       - "9900:9900"
-    restart: unless-stopped
-
-  web:
-    build:
-      context: ..
-      dockerfile: docker/web.Dockerfile
-    container_name: bhc-web
-    depends_on:
-      - game-server
-    environment:
-      WEB_PORT: "9900"
-      API_SERVER_URL: "http://game-server:9900"
-    ports:
-      - "9901:9900"
     restart: unless-stopped

@@ -1,5 +1,5 @@
 import { useEffect, useRef, Suspense } from 'react';
-import { submitShot, requestReplay, endReplay } from '../lib/api-client';
+import { submitShot, requestReplay, endReplay, sendRoomChatMessage, type ChatMessage } from '../lib/api-client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
@@ -1298,6 +1298,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.closest?.('[data-chat-panel]')) return;
       if (gameStore.playMode === 'fahTest') return;
       if (gameStore.multiplayerContext && !gameStore.isMyTurn) return;
       if (gameStore.phase !== 'AIMING' || e.button !== 0) return;
@@ -1342,6 +1343,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       if (gameStore.playMode === 'fahTest') {
         return;
       }
+      const activeTag = (document.activeElement as HTMLElement)?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
       const step = 0.002;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.85;
@@ -2320,12 +2323,14 @@ type GameSceneProps = {
   memberId?: string;
   members?: Array<{ memberId: string; displayName: string }>;
   eventSource?: EventSource;
+  chatMessages?: ChatMessage[];
+  onSendChat?: (text: string) => void;
 };
 
 /**
  * 메인 게임 씬
  */
-export function GameScene({ roomId, memberId, members, eventSource }: GameSceneProps = {}) {
+export function GameScene({ roomId, memberId, members, eventSource, chatMessages = [], onSendChat }: GameSceneProps = {}) {
   const captureParams = readCaptureParams();
   const cameraPosition: [number, number, number] =
     captureParams.cam === 'top'
@@ -2333,6 +2338,14 @@ export function GameScene({ roomId, memberId, members, eventSource }: GameSceneP
       : captureParams.cam === 'side'
         ? [0, 1.5, 3.5]
         : [0, 4, 0];
+
+  function handleSendChat(text: string) {
+    if (onSendChat) {
+      onSendChat(text);
+    } else if (roomId && memberId) {
+      sendRoomChatMessage(roomId, memberId, text).catch(() => { /* non-fatal */ });
+    }
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -2348,7 +2361,14 @@ export function GameScene({ roomId, memberId, members, eventSource }: GameSceneP
           <PerspectiveCamera makeDefault fov={captureParams.cam === 'side' ? 42 : 50} position={cameraPosition} />
           <GameWorld roomId={roomId} memberId={memberId} members={members} eventSource={eventSource} />
         </Canvas>
-        {!captureParams.capture && <GameUI />}
+        {!captureParams.capture && (
+          <GameUI
+            chatMessages={chatMessages}
+            onSendChat={handleSendChat}
+            currentMemberId={memberId}
+            members={members}
+          />
+        )}
       </Suspense>
     </div>
   );

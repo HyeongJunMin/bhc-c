@@ -3,8 +3,8 @@ function resolveApiBaseUrl(): string {
   if (fromEnv) {
     return fromEnv.replace(/\/+$/, '');
   }
-  // 기본값: 게임 서버 직접 호출
-  return 'http://localhost:9900';
+  // 기본값: same-origin (프로덕션에서 game-server가 정적 파일 서빙)
+  return '';
 }
 
 export type LobbyRoom = {
@@ -56,6 +56,37 @@ async function getJson<T>(path: string): Promise<T> {
     throw new Error((error as { errorCode?: string }).errorCode ?? 'UNKNOWN');
   }
   return response.json() as Promise<T>;
+}
+
+export type ChatMessage = {
+  senderMemberId: string;
+  senderDisplayName: string;
+  message: string;
+  sentAt: string;
+};
+
+export async function getLobbyChatMessages(): Promise<{ items: ChatMessage[] }> {
+  return getJson<{ items: ChatMessage[] }>('/api/lobby/chat');
+}
+
+export async function sendLobbyChatMessage(
+  senderMemberId: string,
+  senderDisplayName: string,
+  message: string,
+): Promise<{ item: ChatMessage }> {
+  return postJson<{ item: ChatMessage }>('/api/lobby/chat', { senderMemberId, senderDisplayName, message });
+}
+
+export async function getRoomChatMessages(roomId: string): Promise<{ items: ChatMessage[] }> {
+  return getJson<{ items: ChatMessage[] }>(`/api/lobby/rooms/${roomId}/chat`);
+}
+
+export async function sendRoomChatMessage(
+  roomId: string,
+  senderMemberId: string,
+  message: string,
+): Promise<{ item: ChatMessage }> {
+  return postJson<{ item: ChatMessage }>(`/api/lobby/rooms/${roomId}/chat`, { senderMemberId, message });
 }
 
 export async function authGuest(nickname: string): Promise<GuestLoginResponse> {

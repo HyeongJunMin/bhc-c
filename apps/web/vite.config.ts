@@ -11,6 +11,11 @@ export default defineConfig({
     fs: {
       allow: [resolve(__dirname, '../..')],
     },
+    proxy: {
+      '/auth': 'http://localhost:9900',
+      '/api/lobby': 'http://localhost:9900',
+      '/v1/systems': 'http://localhost:9900',
+    },
   },
   optimizeDeps: {
     exclude: ['ammo.js'],

@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../stores/gameStore';
 import { INPUT_LIMITS, PHYSICS, RULES } from '../lib/constants';
-import { requestReplay, endReplay } from '../lib/api-client';
+import { requestReplay, endReplay, type ChatMessage } from '../lib/api-client';
 import { PlaybackSlider } from './test/PlaybackSlider';
+import { ChatPanel } from './ChatPanel';
+import { SpeechBubble } from './SpeechBubble';
 
 type GameUIProps = {
   mode?: 'game';
+  chatMessages?: ChatMessage[];
+  onSendChat?: (text: string) => void;
+  currentMemberId?: string;
+  members?: Array<{ memberId: string; displayName: string }>;
 };
 
-export function GameUI(_props: GameUIProps = {}) {
+export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members }: GameUIProps = {}) {
   const TURN_DURATION_MS = 20_000;
   const gameStore = useGameStore();
   const {
@@ -109,6 +115,19 @@ export function GameUI(_props: GameUIProps = {}) {
   const overlappingRows = overlapRows.filter((row) => row.hittable && row.overlap > 0);
   const overlayBallSize = 34;
   const overlayTrackWidth = 112;
+
+  // 말풍선: 발신자별 마지막 메시지 (members 순서 기준 인덱스)
+  const speechBubbles = useMemo(() => {
+    if (!members || members.length === 0) return [];
+    const latestByMember = new Map<string, ChatMessage>();
+    for (const msg of chatMessages) {
+      latestByMember.set(msg.senderMemberId, msg);
+    }
+    return members.slice(0, 2).map((member, idx) => {
+      const msg = latestByMember.get(member.memberId);
+      return msg ? { msg, idx } : null;
+    }).filter((x): x is { msg: ChatMessage; idx: number } => x !== null);
+  }, [chatMessages, members]);
 
   return (
     <div
@@ -626,6 +645,20 @@ export function GameUI(_props: GameUIProps = {}) {
           {overlappingRows.length > 0 && <div>Object overlap detected: {overlappingRows.length}</div>}
         </div>
       )}
+
+      {/* 게임 중 채팅 패널 */}
+      {currentMemberId && onSendChat && (
+        <ChatPanel
+          messages={chatMessages}
+          onSend={onSendChat}
+          currentMemberId={currentMemberId}
+        />
+      )}
+
+      {/* 말풍선 */}
+      {speechBubbles.map(({ msg, idx }) => (
+        <SpeechBubble key={`${msg.senderMemberId}-${msg.sentAt}`} message={msg} playerIndex={idx} />
+      ))}
     </div>
   );
 }

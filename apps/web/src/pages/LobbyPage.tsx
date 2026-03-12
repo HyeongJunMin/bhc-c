@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { listRooms, createRoom, joinRoom, type LobbyRoom } from '../lib/api-client';
+import { listRooms, createRoom, joinRoom, getLobbyChatMessages, sendLobbyChatMessage, type LobbyRoom, type ChatMessage } from '../lib/api-client';
+import { ChatPanel } from '../components/ChatPanel';
 
 const MAX_PLAYERS = 6;
 const POLL_INTERVAL_MS = 5000;
+const CHAT_POLL_INTERVAL_MS = 3000;
 
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
@@ -25,18 +27,46 @@ export function LobbyPage() {
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
   const [joiningRoomId, setJoiningRoomId] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     void fetchRooms();
     pollingRef.current = setInterval(() => { void fetchRooms(); }, POLL_INTERVAL_MS);
+
+    void fetchLobbyChat();
+    chatPollingRef.current = setInterval(() => { void fetchLobbyChat(); }, CHAT_POLL_INTERVAL_MS);
+
     return () => {
       if (pollingRef.current !== null) {
         clearInterval(pollingRef.current);
       }
+      if (chatPollingRef.current !== null) {
+        clearInterval(chatPollingRef.current);
+      }
     };
   }, [memberId]);
+
+  async function fetchLobbyChat() {
+    try {
+      const result = await getLobbyChatMessages();
+      setChatMessages(result.items);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  async function handleSendChat(text: string) {
+    if (!memberId || !nickname) return;
+    try {
+      await sendLobbyChatMessage(memberId, nickname, text);
+      void fetchLobbyChat();
+    } catch {
+      // non-fatal
+    }
+  }
 
   async function fetchRooms() {
     try {
@@ -301,6 +331,14 @@ export function LobbyPage() {
           </div>
         )}
       </div>
+
+      {memberId && (
+        <ChatPanel
+          messages={chatMessages}
+          onSend={(text) => { void handleSendChat(text); }}
+          currentMemberId={memberId}
+        />
+      )}
     </div>
   );
 }

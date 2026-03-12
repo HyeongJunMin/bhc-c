@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { getRoomDetail, leaveRoom, startGame, createRoomStream, type LobbyRoom } from '../lib/api-client';
+import { getRoomDetail, leaveRoom, startGame, createRoomStream, getRoomChatMessages, sendRoomChatMessage, type LobbyRoom, type ChatMessage } from '../lib/api-client';
 import { GameScene } from '../components/GameScene';
+import { ChatPanel } from '../components/ChatPanel';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -15,6 +16,7 @@ export function RoomPage() {
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -29,8 +31,14 @@ export function RoomPage() {
 
     pollingRef.current = setInterval(() => { void fetchRoom(); }, POLL_INTERVAL_MS);
 
+    if (!memberId) return;
     const es = createRoomStream(roomId, memberId);
     eventSourceRef.current = es;
+
+    void getRoomChatMessages(roomId).then((result) => {
+      setChatMessages(result.items);
+    }).catch(() => { /* non-fatal */ });
+
     es.addEventListener('room_snapshot', (e: MessageEvent) => {
       try {
         const snapshot = JSON.parse(e.data as string) as { state: LobbyRoom['state'] };
@@ -45,6 +53,16 @@ export function RoomPage() {
         // ignore parse errors
       }
     });
+
+    es.addEventListener('chat_message', (e: MessageEvent) => {
+      try {
+        const msg = JSON.parse(e.data as string) as ChatMessage;
+        setChatMessages((prev) => [...prev, msg]);
+      } catch {
+        // ignore parse errors
+      }
+    });
+
     es.onerror = () => {
       // SSE errors are non-fatal; polling handles updates
     };
@@ -65,6 +83,15 @@ export function RoomPage() {
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : '방 정보를 불러오지 못했습니다.');
+    }
+  }
+
+  async function handleSendChat(text: string) {
+    if (!roomId || !memberId) return;
+    try {
+      await sendRoomChatMessage(roomId, memberId, text);
+    } catch {
+      // non-fatal
     }
   }
 
@@ -152,6 +179,8 @@ export function RoomPage() {
         memberId={memberId!}
         members={room.members}
         eventSource={eventSourceRef.current ?? undefined}
+        chatMessages={chatMessages}
+        onSendChat={(text) => { void handleSendChat(text); }}
       />
     );
   }
@@ -280,6 +309,14 @@ export function RoomPage() {
           )}
         </div>
       </div>
+
+      {memberId && (
+        <ChatPanel
+          messages={chatMessages}
+          onSend={(text) => { void handleSendChat(text); }}
+          currentMemberId={memberId}
+        />
+      )}
     </div>
   );
 }

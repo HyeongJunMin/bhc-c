@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { createAuthRequestHandler } from './auth/http.ts';
 import { createLobbyRequestHandler } from './lobby/http.ts';
 import { createFiveAndHalfRequestHandler } from './system/five-and-half.ts';
+import { serveStatic } from './static-serve.ts';
 
 const PORT_MIN = 1;
 const PORT_MAX = 65535;
@@ -20,6 +21,7 @@ function parsePort(name: string, fallback: number): number {
 }
 
 const port = parsePort('PORT', DEFAULT_PORT);
+const staticDir = process.env['STATIC_DIR']?.trim() || null;
 
 const authState = {
   nextUserId: 1,
@@ -35,13 +37,15 @@ const lobbyState = {
   shotStateResetTimers: {},
   disconnectGraceTimers: {},
   userLastChatSentAtByRoomAndMember: new Map(),
+  lobbyChatMessages: [],
+  userLastLobbyChatSentAt: new Map(),
 };
 
 const authHandler = createAuthRequestHandler(authState);
 const lobbyHandler = createLobbyRequestHandler(lobbyState);
 const fiveAndHalfHandler = createFiveAndHalfRequestHandler();
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   if (req.url === '/health') {
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json; charset=utf-8');
@@ -60,6 +64,10 @@ const server = createServer((req, res) => {
   if (req.url?.startsWith('/v1/systems/five-and-half/')) {
     void fiveAndHalfHandler(req, res);
     return;
+  }
+  if (staticDir) {
+    const served = await serveStatic(staticDir, req, res);
+    if (served) return;
   }
   res.statusCode = 404;
   res.setHeader('content-type', 'application/json; charset=utf-8');

@@ -24,6 +24,7 @@ export function InputHandler() {
   });
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
+    if ((e.target as HTMLElement)?.closest?.('[data-chat-panel]')) return;
     if (!isAiming || e.button !== 0) return;
     
     setIsDragging(true);
@@ -63,7 +64,9 @@ export function InputHandler() {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isAiming) return;
-      
+      const activeTag = (document.activeElement as HTMLElement)?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
       const step = 0.005;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.9;
       

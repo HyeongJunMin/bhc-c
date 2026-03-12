@@ -79,6 +79,16 @@ export type StepRoomPhysicsConfig = {
   cushionRestitutionSigmoidK?: number;
   // Ball-ball friction (optional)
   ballBallContactFriction?: number;
+  // Damping per tick (optional)
+  linearDampingPerTick?: number;
+  spinDampingPerTick?: number;
+  // Cushion post-collision speed scale (optional)
+  cushionPostCollisionSpeedScale?: number;
+  // Cloth linear-spin coupling (optional)
+  clothLinearSpinCouplingPerSec?: number;
+  // Cushion spin monotonic mode (optional)
+  cushionSpinMonotonicEnabled?: boolean;
+  cushionSpinMonotonicRetention?: number;
 };
 
 export type StepRoomPhysicsHooks = {

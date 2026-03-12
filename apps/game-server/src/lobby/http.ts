@@ -41,6 +41,7 @@ type LobbyRoom = {
   }>;
   chatMessages: Array<{
     senderMemberId: string;
+    senderDisplayName: string;
     message: string;
     sentAt: string;
   }>;
@@ -85,6 +86,8 @@ type LobbyState = {
   shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
   disconnectGraceTimers: Record<string, ReturnType<typeof setTimeout> | null>;
   userLastChatSentAtByRoomAndMember: UserLastSentAtStore;
+  lobbyChatMessages: Array<{ senderMemberId: string; senderDisplayName: string; message: string; sentAt: string }>;
+  userLastLobbyChatSentAt: UserLastSentAtStore;
 };
 
 type CreateRoomResult =
@@ -163,6 +166,8 @@ type PersistedLobbyState = {
   rooms: LobbyRoom[];
   roomStreamSeqByRoomId: Record<string, number>;
   userLastChatSentAtEntries: Array<[string, number]>;
+  lobbyChatMessages?: Array<{ senderMemberId: string; senderDisplayName: string; message: string; sentAt: string }>;
+  userLastLobbyChatSentAtEntries?: Array<[string, number]>;
 };
 
 let stateHydrationPromise: Promise<void> | null = null;
@@ -240,6 +245,8 @@ function snapshotLobbyState(state: LobbyState): PersistedLobbyState {
     rooms: state.rooms,
     roomStreamSeqByRoomId: state.roomStreamSeqByRoomId,
     userLastChatSentAtEntries: [...state.userLastChatSentAtByRoomAndMember.entries()],
+    lobbyChatMessages: state.lobbyChatMessages,
+    userLastLobbyChatSentAtEntries: [...state.userLastLobbyChatSentAt.entries()],
   };
 }
 
@@ -255,6 +262,10 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
       : {};
   state.userLastChatSentAtByRoomAndMember = new Map(
     Array.isArray(persisted.userLastChatSentAtEntries) ? persisted.userLastChatSentAtEntries : [],
+  );
+  state.lobbyChatMessages = Array.isArray(persisted.lobbyChatMessages) ? persisted.lobbyChatMessages : [];
+  state.userLastLobbyChatSentAt = new Map(
+    Array.isArray(persisted.userLastLobbyChatSentAtEntries) ? persisted.userLastLobbyChatSentAtEntries : [],
   );
   state.roomStreamSubscribers = {};
   state.shotStateResetTimers = {};
@@ -1107,8 +1118,10 @@ export function sendRoomChatMessage(
   }
 
   recordLastChatSentAt(state.userLastChatSentAtByRoomAndMember, rateLimitKey, nowMs);
+  const senderMember = room.members.find((m) => m.memberId === senderMemberId);
   room.chatMessages.push({
     senderMemberId,
+    senderDisplayName: senderMember?.displayName ?? senderMemberId,
     message: normalizedMessage,
     sentAt: new Date().toISOString(),
   });
@@ -1248,8 +1261,10 @@ async function handleSendRoomChat(req: IncomingMessage, res: ServerResponse, sta
     writeJson(res, result.statusCode, { errorCode: result.errorCode, retryAfterMs: result.retryAfterMs ?? null });
     return;
   }
+  const sentItem = result.room.chatMessages[result.room.chatMessages.length - 1];
+  broadcastRoomEvent(state, roomId, 'chat_message', sentItem);
   void persistLobbyState(state);
-  writeJson(res, 201, { item: result.room.chatMessages[result.room.chatMessages.length - 1] });
+  writeJson(res, 201, { item: sentItem });
 }
 
 export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId: string, payload: unknown): ShotSubmitResult {
@@ -1569,6 +1584,49 @@ function handleGetRoomDetail(req: IncomingMessage, res: ServerResponse, state: L
   writeJson(res, 200, { room: result.room });
 }
 
+function handleGetLobbyChat(_req: IncomingMessage, res: ServerResponse, state: LobbyState): void {
+  writeJson(res, 200, { items: state.lobbyChatMessages });
+}
+
+async function handleSendLobbyChat(req: IncomingMessage, res: ServerResponse, state: LobbyState): Promise<void> {
+  const body = await parseJsonBody(req, res);
+  if (!body) {
+    return;
+  }
+
+  const senderMemberId = typeof body.senderMemberId === 'string' ? body.senderMemberId : '';
+  const senderDisplayName = typeof body.senderDisplayName === 'string' ? body.senderDisplayName : senderMemberId;
+  const message = typeof body.message === 'string' ? body.message : '';
+
+  const normalizedMessage = message.trim();
+  if (normalizedMessage.length === 0) {
+    writeJson(res, 400, { errorCode: 'CHAT_INVALID_INPUT' });
+    return;
+  }
+
+  const rateLimitKey = senderMemberId;
+  const nowMs = Date.now();
+  const rateLimited = evaluateChatRateLimit(state.userLastLobbyChatSentAt, rateLimitKey, nowMs);
+  if (!rateLimited.ok) {
+    writeJson(res, 429, { errorCode: rateLimited.errorCode, retryAfterMs: rateLimited.retryAfterMs });
+    return;
+  }
+
+  recordLastChatSentAt(state.userLastLobbyChatSentAt, rateLimitKey, nowMs);
+  const item = {
+    senderMemberId,
+    senderDisplayName,
+    message: normalizedMessage,
+    sentAt: new Date().toISOString(),
+  };
+  state.lobbyChatMessages.push(item);
+  if (state.lobbyChatMessages.length > 50) {
+    state.lobbyChatMessages = state.lobbyChatMessages.slice(-50);
+  }
+  void persistLobbyState(state);
+  writeJson(res, 201, { item });
+}
+
 export function createLobbyHttpServer() {
   const state: LobbyState = {
     nextRoomId: 1,
@@ -1578,6 +1636,8 @@ export function createLobbyHttpServer() {
     shotStateResetTimers: {},
     disconnectGraceTimers: {},
     userLastChatSentAtByRoomAndMember: new Map(),
+    lobbyChatMessages: [],
+    userLastLobbyChatSentAt: new Map(),
   };
 
   const requestHandler = createLobbyRequestHandler(state);
@@ -1601,6 +1661,16 @@ export function createLobbyRequestHandler(state: LobbyState) {
     }
 
     await ensureLobbyStateHydrated(state);
+
+    if (req.method === 'GET' && req.url === '/lobby/chat') {
+      handleGetLobbyChat(req, res, state);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/lobby/chat') {
+      await handleSendLobbyChat(req, res, state);
+      return;
+    }
 
     if (req.method === 'GET' && req.url?.startsWith('/lobby/rooms/') && req.url.includes('/stream')) {
       handleRoomSnapshotStream(req, res, state);

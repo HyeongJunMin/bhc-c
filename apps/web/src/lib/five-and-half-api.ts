@@ -61,7 +61,8 @@ function resolveApiBaseUrl(): string {
   if (fromEnv) {
     return fromEnv.replace(/\/+$/, '');
   }
-  return 'http://localhost:9900';
+  // 기본값: same-origin (프로덕션에서 game-server가 정적 파일 서빙)
+  return '';
 }
 
 function toEnvelope(payloadType: string, payload: Record<string, unknown>): Record<string, unknown> {

@@ -25,5 +25,8 @@
     "qa:test-agent-summary": "SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_test_agent.sh | node --experimental-strip-types scripts/qa/parse-test-agent-summary.ts",
     "qa:v2-auto-loop": "AUTO_LOOPS=1 MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_auto_loop.sh",
     "qa:v2-auto-loop-summary": "AUTO_LOOPS=1 MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_auto_loop.sh | node --experimental-strip-types scripts/qa/parse-auto-loop-summary.ts"
+  },
+  "pnpm": {
+    "allowBuild": ["esbuild"]
   }
 }
