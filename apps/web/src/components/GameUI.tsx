@@ -37,6 +37,7 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
     replayFrameData,
     replayCurrentFrame,
     replayIsPlaying,
+    isMyTurn,
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
@@ -104,6 +105,7 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
   const isMissTurnOver = turnMessage.trim().toUpperCase().includes('MISS - TURN OVER');
   const isScoreTurnMessage = turnMessage.trim().toUpperCase().includes('SCORE');
   const isCompactTurnMessage = isMissTurnOver || isScoreTurnMessage;
+  const isMissMessage = turnMessage.trim().toUpperCase().includes('MISS');
 
   // 리플레이: 현재 플레이어가 득점자인지 (멀티플레이어)
   const isReplayScorer = !multiplayerContext || (replayScorerMemberId === multiplayerContext.memberId);
@@ -311,24 +313,47 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
         <div
           style={{
             position: 'absolute',
-            top: isCompactTurnMessage ? '13%' : '35%',
+            top: isMissMessage ? '5%' : (isCompactTurnMessage ? '13%' : '35%'),
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            background: turnMessage.includes('SCORE')
-              ? 'rgba(0, 255, 136, 0.95)'
-              : turnMessage.includes('WINS')
-                ? 'rgba(255, 215, 0, 0.95)'
-                : 'rgba(255, 100, 100, 0.9)',
-            padding: isCompactTurnMessage ? '10px 18px' : '25px 50px',
-            borderRadius: isCompactTurnMessage ? 10 : 16,
-            fontSize: isCompactTurnMessage ? 18 : 32,
-            fontWeight: 'bold',
-            color: turnMessage.includes('SCORE') || turnMessage.includes('WINS') ? '#000' : '#fff',
-            animation: 'pulse 0.5s ease-in-out',
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
             zIndex: 100,
           }}
         >
-          {turnMessage}
+          <div
+            style={{
+              background: turnMessage.includes('SCORE')
+                ? 'rgba(0, 255, 136, 0.95)'
+                : turnMessage.includes('WINS')
+                  ? 'rgba(255, 215, 0, 0.95)'
+                  : 'rgba(255, 100, 100, 0.9)',
+              padding: isMissMessage ? '8px 16px' : (isCompactTurnMessage ? '10px 18px' : '25px 50px'),
+              borderRadius: isMissMessage ? 10 : (isCompactTurnMessage ? 10 : 16),
+              fontSize: isMissMessage ? 22 : (isCompactTurnMessage ? 18 : 32),
+              fontWeight: 'bold',
+              color: turnMessage.includes('SCORE') || turnMessage.includes('WINS') ? '#000' : '#fff',
+              animation: 'pulse 0.5s ease-in-out',
+            }}
+          >
+            {turnMessage}
+          </div>
+          {isMissMessage && isMyTurn && (
+            <div
+              style={{
+                background: 'rgba(0, 255, 136, 0.95)',
+                padding: '8px 16px',
+                borderRadius: 10,
+                fontSize: 22,
+                fontWeight: 'bold',
+                color: '#000',
+                animation: 'pulse 0.5s ease-in-out',
+              }}
+            >
+              MY TURN
+            </div>
+          )}
         </div>
       )}
 
