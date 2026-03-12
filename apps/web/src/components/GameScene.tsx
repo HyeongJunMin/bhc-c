@@ -252,6 +252,9 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     currentPower: INPUT_LIMITS.DRAG_MIN,
   });
 
+  const shiftPressedRef = useRef(false);
+  const orbitControlsRef = useRef<any>(null);
+
   const tempDir = useRef(new THREE.Vector3());
   const prevPhaseRef = useRef(gameStore.phase);
   const activeDebugPresetRef = useRef<DebugPresetName>('CENTER');
@@ -1408,6 +1411,13 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       }
     };
 
+    const handleShiftDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressedRef.current = true;
+    };
+    const handleShiftUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftPressedRef.current = false;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameStore.phase !== 'AIMING') return;
       if (gameStore.multiplayerContext && !gameStore.isMyTurn) return;
@@ -1417,7 +1427,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       const activeTag = (document.activeElement as HTMLElement)?.tagName;
       if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
-      const step = 0.002;
+      const baseStep = 0.002;
+      const step = e.shiftKey ? baseStep * 0.2 : baseStep;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.85;
 
       switch (e.key.toLowerCase()) {
@@ -1499,16 +1510,24 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleShiftDown);
+    window.addEventListener('keyup', handleShiftUp);
 
     return () => {
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleShiftDown);
+      window.removeEventListener('keyup', handleShiftUp);
     };
   }, [gameStore.phase, gameStore.shotInput]);
 
   useFrame((_, delta) => {
+    if (orbitControlsRef.current) {
+      orbitControlsRef.current.rotateSpeed = shiftPressedRef.current ? 0.2 : 1.0;
+    }
+
     const balls = physicsBallsRef.current;
     if (balls.length === 0) {
       return;
@@ -2360,6 +2379,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       <directionalLight position={[5, 5, 5]} intensity={0.5} />
 
       <OrbitControls
+        ref={orbitControlsRef}
         enabled={!captureParams.capture && gameStore.playMode !== 'fahTest' && gameStore.phase === 'AIMING' && !gameStore.isDragging}
         mouseButtons={{ LEFT: undefined, MIDDLE: undefined, RIGHT: 0 }}
         enablePan={false}

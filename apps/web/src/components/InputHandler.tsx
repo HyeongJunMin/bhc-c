@@ -67,7 +67,8 @@ export function InputHandler() {
       const activeTag = (document.activeElement as HTMLElement)?.tagName;
       if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
-      const step = 0.005;
+      const baseStep = 0.005;
+      const step = e.shiftKey ? baseStep * 0.2 : baseStep;
       const maxOffset = INPUT_LIMITS.OFFSET_MAX * 0.9;
       
       // e.code로 물리적 키 위치 확인 (KeyW, KeyA, KeyS, KeyD)
