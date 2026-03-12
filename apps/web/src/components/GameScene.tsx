@@ -1651,7 +1651,13 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         camera.lookAt(0, 0, 0);
         // fixedViewMode 해제 시 불필요한 auto-aim 카메라 점프 방지
         lastAutoAimTurnRef.current = gameStore.turnStartedAtMs;
-      } else if (gameStore.turnStartedAtMs !== lastAutoAimTurnRef.current) {
+      } else {
+        // fixedViewMode 해제 시 camera.up 복원 (OrbitControls 기본 up 벡터)
+        if (camera.up.z !== 0) {
+          camera.up.set(0, 1, 0);
+        }
+      }
+      if (!gameStore.fixedViewMode && gameStore.turnStartedAtMs !== lastAutoAimTurnRef.current) {
         // 새 턴 시작 시 가장 가까운 적구 방향으로 카메라 자동 조준
         lastAutoAimTurnRef.current = gameStore.turnStartedAtMs;
 
