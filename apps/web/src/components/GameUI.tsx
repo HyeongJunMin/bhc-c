@@ -41,6 +41,8 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
 
+  const myDisplayName = members?.find((m) => m.memberId === currentMemberId)?.displayName;
+
   const powerPercent = Math.round(
     ((shotInput.dragPx - INPUT_LIMITS.DRAG_MIN) /
       (INPUT_LIMITS.DRAG_MAX - INPUT_LIMITS.DRAG_MIN)) *
@@ -191,6 +193,9 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
                   opacity: currentPlayer === player ? 1 : 0.5,
                   transform: currentPlayer === player ? 'scale(1.1)' : 'scale(1)',
                   transition: 'all 0.3s',
+                  border: currentPlayer === player ? '2px solid #00ff88' : '2px solid transparent',
+                  borderRadius: 8,
+                  padding: '4px 8px',
                 }}
               >
                 <div
@@ -203,6 +208,9 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
                   {score}
                 </div>
                 <div style={{ fontSize: 11, textTransform: 'uppercase' }}>{player}</div>
+                {player === myDisplayName && (
+                  <div style={{ fontSize: 10, color: '#00ff88', marginTop: 2 }}>me</div>
+                )}
               </div>
             ))}
           </div>
