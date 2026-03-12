@@ -19,7 +19,6 @@ export type FahPhysicsTuningProfile = {
   updatedAt: string;
   sampleCount: number;
   speedBoost: number;
-  pointCorrections: Record<string, number>;
   overrides: Partial<StepRoomPhysicsConfig>;
   stats: {
     meanDelta: number;
@@ -29,11 +28,18 @@ export type FahPhysicsTuningProfile = {
 
 const DEFAULT_PROFILE: FahPhysicsTuningProfile = {
   schemaVersion: '1.0.0',
-  updatedAt: new Date(0).toISOString(),
+  updatedAt: '2026-03-12T00:00:00.000Z',
   sampleCount: 0,
-  speedBoost: 2.0,
-  pointCorrections: {},
-  overrides: {},
+  speedBoost: 1.0,
+  overrides: {
+    cushionRestitution: 0.89,
+    cushionContactFriction: 0.055,
+    clothLinearSpinCouplingPerSec: 1.03,
+    spinDampingPerTick: 0.988,
+    linearDampingPerTick: 0.985,
+    cushionPostCollisionSpeedScale: 1.0,
+    cushionSpinMonotonicRetention: 0.93,
+  },
   stats: {
     meanDelta: 0,
     meanAbsDelta: 0,
@@ -60,16 +66,6 @@ export function readFahPhysicsTuning(raw: string | null): FahPhysicsTuningProfil
     const speedBoost = typeof parsed.speedBoost === 'number' ? parsed.speedBoost : DEFAULT_PROFILE.speedBoost;
     const sampleCount = typeof parsed.sampleCount === 'number' ? parsed.sampleCount : 0;
     const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date(0).toISOString();
-    const pointCorrectionsRaw =
-      parsed.pointCorrections && typeof parsed.pointCorrections === 'object'
-        ? (parsed.pointCorrections as Record<string, unknown>)
-        : {};
-    const pointCorrections = Object.entries(pointCorrectionsRaw).reduce<Record<string, number>>((acc, [key, value]) => {
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        acc[key] = round3(value);
-      }
-      return acc;
-    }, {});
     const meanDelta =
       typeof parsed.stats?.meanDelta === 'number' ? parsed.stats.meanDelta : 0;
     const meanAbsDelta =
@@ -79,7 +75,6 @@ export function readFahPhysicsTuning(raw: string | null): FahPhysicsTuningProfil
       updatedAt,
       sampleCount,
       speedBoost,
-      pointCorrections,
       overrides: parsed.overrides && typeof parsed.overrides === 'object' ? parsed.overrides : {},
       stats: {
         meanDelta,
@@ -105,8 +100,6 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
     return DEFAULT_PROFILE;
   }
 
-  const pointBuckets = new Map<number, Array<{ weightedDelta: number }>>();
-
   const perSampleSummary = usable.map((sample) => {
     let weightSum = 0;
     let weightedDelta = 0;
@@ -130,10 +123,6 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
       weightedDelta: weightedDelta / weightSum,
       weightedAbsDelta: weightedAbsDelta / weightSum,
     };
-    const point = Math.round(sample.targetPoint);
-    const bucket = pointBuckets.get(point) ?? [];
-    bucket.push({ weightedDelta: summary.weightedDelta });
-    pointBuckets.set(point, bucket);
     return summary;
   }).filter((entry): entry is { weightedDelta: number; weightedAbsDelta: number } => entry !== null);
 
@@ -155,23 +144,11 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
   const cushionPostCollisionSpeedScale = clamp(1.0 + correction * 0.004 - spread * 0.004, 0.985, 1.01);
   const clothLinearSpinCouplingPerSec = clamp(1.0 - correction * 0.3 + spread * 0.5, 0.7, 1.8);
 
-  const pointCorrections = Array.from(pointBuckets.entries())
-    .sort((a, b) => a[0] - b[0])
-    .reduce<Record<string, number>>((acc, [point, bucket]) => {
-      if (bucket.length < 3) {
-        return acc;
-      }
-      const avgDelta = bucket.reduce((sum, item) => sum + item.weightedDelta, 0) / bucket.length;
-      acc[String(point)] = round3(clamp(-avgDelta, -20, 20));
-      return acc;
-    }, {});
-
   return {
     schemaVersion: '1.0.0',
     updatedAt: new Date().toISOString(),
     sampleCount: usable.length,
     speedBoost: round3(speedBoost),
-    pointCorrections,
     overrides: {
       linearDampingPerTick: round3(linearDampingPerTick),
       spinDampingPerTick: round3(spinDampingPerTick),
@@ -185,36 +162,4 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
       meanAbsDelta: round3(meanAbsDelta),
     },
   };
-}
-
-export function resolveFahPointCorrection(profile: FahPhysicsTuningProfile, targetPoint: number): number {
-  const entries = Object.entries(profile.pointCorrections)
-    .map(([point, correction]) => ({ point: Number(point), correction }))
-    .filter((item) => Number.isFinite(item.point) && Number.isFinite(item.correction))
-    .sort((a, b) => a.point - b.point);
-  if (entries.length === 0 || !Number.isFinite(targetPoint)) {
-    return 0;
-  }
-
-  const clampedTarget = clamp(targetPoint, 0, 110);
-  if (clampedTarget <= entries[0].point) {
-    return entries[0].correction;
-  }
-  if (clampedTarget >= entries[entries.length - 1].point) {
-    return entries[entries.length - 1].correction;
-  }
-
-  for (let i = 0; i < entries.length - 1; i += 1) {
-    const left = entries[i];
-    const right = entries[i + 1];
-    if (clampedTarget >= left.point && clampedTarget <= right.point) {
-      const span = right.point - left.point;
-      if (span <= 0) {
-        return left.correction;
-      }
-      const t = (clampedTarget - left.point) / span;
-      return round3(left.correction + (right.correction - left.correction) * t);
-    }
-  }
-  return 0;
 }

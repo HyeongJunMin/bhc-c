@@ -45,7 +45,6 @@ const CUE_DEBUG_X = -TABLE_WIDTH / 2 + DIAMOND_STEP_X * 3;
 const CUE_DEBUG_Z = -TABLE_HEIGHT / 2 + DIAMOND_STEP_Z * 3;
 const FAH_TEST_SHOT_TRACE_STORAGE_KEY = 'bhc.fah.test.shot-trace.v1';
 const FAH_CALIBRATION_STORAGE_KEY = 'bhc.fah.calibration.v1';
-const FAH_MAX_CORRECTION_ABS = 20;
 const FAH_FIXED_TWO_TIP_OFFSET = BALL_RADIUS * 0.4;
 const FAH_FIXED_CUE_WORLD_X = -TABLE_WIDTH / 2 + TABLE_WIDTH / 8;
 const FAH_FIXED_CUE_WORLD_Z = -TABLE_HEIGHT / 2 + TABLE_HEIGHT / 4;
@@ -922,12 +921,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     });
 
     const safeTargetPoint = Number.isFinite(targetPoint) ? targetPoint : 10;
-    const rawCorrection =
-      gameStore.fahTestAutoCorrectionEnabled && Number.isFinite(gameStore.fahTestCorrectionOffset)
-        ? gameStore.fahTestCorrectionOffset
-        : 0;
-    const boundedCorrection = clamp(rawCorrection, -FAH_MAX_CORRECTION_ABS, FAH_MAX_CORRECTION_ABS);
-    const correctedTargetPoint = Math.round(clamp(safeTargetPoint + boundedCorrection, 0, 110));
+    const correctedTargetPoint = Math.round(clamp(safeTargetPoint, 0, 110));
     const correctedTargetIndex = quantizeFahIndexToNearestHalfStep(correctedTargetPoint);
     const indexModel = computeFahShotIndexModel(cue.position, correctedTargetIndex);
     fahLastIndexModelRef.current = indexModel;

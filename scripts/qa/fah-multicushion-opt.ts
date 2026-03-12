@@ -18,6 +18,7 @@ type AnchorTarget = {
   second: number;
   third: number;
   fourth: number;
+  fourthRail: 'short' | 'long';
 };
 
 type CandidateOverrides = {
@@ -64,23 +65,54 @@ const FIXED_IMPACT_OFFSET_Y = BALL_RADIUS * 0.4;
 const FAH_FIRST_RAIL_AIM_SIDE_LEAD = 0.12;
 
 const ANCHORS: AnchorTarget[] = [
-  // Right long-cushion starts only: P10/P20/P30/P40.
-  // P10/P20 목표는 현재 튜닝용 임시 기준값.
-  { first: 10, second: 30, third: 30, fourth: 50 },
-  { first: 20, second: 25, third: 25, fourth: 80 },
-  { first: 30, second: 20, third: 20, fourth: 110 },
-  { first: 40, second: 30, third: 10, fourth: 100 },
+  // User-confirmed FAH anchors (P0~P45)
+  { first: 0, second: 37, third: 50, fourth: 20, fourthRail: 'short' },
+  { first: 10, second: 32, third: 40, fourth: 25, fourthRail: 'short' },
+  { first: 20, second: 27, third: 30, fourth: 32, fourthRail: 'short' },
+  { first: 30, second: 20, third: 20, fourth: 40, fourthRail: 'short' },
+  { first: 40, second: 10, third: 10, fourth: 100, fourthRail: 'long' },
+  { first: 45, second: 5, third: 5, fourth: 95, fourthRail: 'long' },
 ];
 
-const SCORE_GLOBAL_WEIGHT = Number(process.env.FAH_SCORE_GLOBAL_WEIGHT ?? '0.25');
-const SCORE_P10_SECOND_WEIGHT = Number(process.env.FAH_SCORE_P10_SECOND_WEIGHT ?? '4.0');
-const SCORE_P10_THIRD_WEIGHT = Number(process.env.FAH_SCORE_P10_THIRD_WEIGHT ?? '0.6');
-const SCORE_P10_FOURTH_WEIGHT = Number(process.env.FAH_SCORE_P10_FOURTH_WEIGHT ?? '3.2');
+const SCORE_GLOBAL_WEIGHT = Number(process.env.FAH_SCORE_GLOBAL_WEIGHT ?? '1.0');
 const SCORE_POINT_CORRECTION_PENALTY = Number(process.env.FAH_SCORE_POINT_CORRECTION_PENALTY ?? '0.18');
 const FAH_POINT_CORRECTION_LIMIT = Number(process.env.FAH_POINT_CORRECTION_LIMIT ?? '18');
 const FAH_POINT_CORRECTION_SECOND_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_SECOND_WEIGHT ?? '0.65');
 const FAH_POINT_CORRECTION_THIRD_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_THIRD_WEIGHT ?? '0.25');
 const FAH_POINT_CORRECTION_FOURTH_WEIGHT = Number(process.env.FAH_POINT_CORRECTION_FOURTH_WEIGHT ?? '0.10');
+const FAH_STAGE = process.env.FAH_STAGE ?? 'all';
+const FAH_SHORT_FOURTH_MODE = process.env.FAH_SHORT_FOURTH_MODE ?? 'first';
+const SCORE_FOCUS_POINT = Number(process.env.FAH_SCORE_FOCUS_POINT ?? '30');
+const SCORE_FOCUS_WEIGHT = Number(process.env.FAH_SCORE_FOCUS_WEIGHT ?? '0.15');
+const FAH_SPAN_SCALE = Number(process.env.FAH_SPAN_SCALE ?? '1.0');
+const FAH_ROUTE_PENALTY = Number(process.env.FAH_ROUTE_PENALTY ?? '18');
+const FAH_MISS_PENALTY_BASE = Number(process.env.FAH_MISS_PENALTY_BASE ?? '16');
+const FAH_TARGET_FIRSTS = (process.env.FAH_TARGET_FIRSTS ?? '')
+  .split(',')
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isFinite(value));
+
+function parseEnvNumber(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveSearchBase(): CandidateOverrides {
+  return {
+    speedBoost: parseEnvNumber('FAH_BASE_SPEED_BOOST', 2.0),
+    cushionRestitution: parseEnvNumber('FAH_BASE_CUSHION_RESTITUTION', 0.9),
+    cushionContactFriction: parseEnvNumber('FAH_BASE_CUSHION_CONTACT_FRICTION', 0.05),
+    clothLinearSpinCouplingPerSec: parseEnvNumber('FAH_BASE_CLOTH_LINEAR_SPIN_COUPLING_PER_SEC', 1.0),
+    spinDampingPerTick: parseEnvNumber('FAH_BASE_SPIN_DAMPING_PER_TICK', 0.989),
+    linearDampingPerTick: parseEnvNumber('FAH_BASE_LINEAR_DAMPING_PER_TICK', 0.983),
+    cushionPostCollisionSpeedScale: parseEnvNumber('FAH_BASE_CUSHION_POST_COLLISION_SPEED_SCALE', 1.0),
+    cushionSpinMonotonicRetention: parseEnvNumber('FAH_BASE_CUSHION_SPIN_MONOTONIC_RETENTION', 0.92),
+  };
+}
 
 function normalizeFahCushionId(cushion: CushionId): CushionId {
   if (cushion === 'top') {
@@ -257,18 +289,18 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function buildCandidate(random: () => number): CandidateOverrides {
+function buildCandidate(random: () => number, baseCenter: CandidateOverrides): CandidateOverrides {
   const jitter = (center: number, span: number, min: number, max: number): number =>
-    round3(clamp(center + (random() * 2 - 1) * span, min, max));
+    round3(clamp(center + (random() * 2 - 1) * span * FAH_SPAN_SCALE, min, max));
   return {
-    speedBoost: jitter(2.0, 0.22, 1.7, 2.4),
-    cushionRestitution: jitter(0.9, 0.05, 0.84, 0.95),
-    cushionContactFriction: jitter(0.05, 0.03, 0.03, 0.11),
-    clothLinearSpinCouplingPerSec: jitter(1.0, 0.45, 0.7, 1.9),
-    spinDampingPerTick: jitter(0.989, 0.004, 0.983, 0.995),
-    linearDampingPerTick: jitter(0.983, 0.004, 0.976, 0.992),
-    cushionPostCollisionSpeedScale: jitter(1.0, 0.02, 0.97, 1.02),
-    cushionSpinMonotonicRetention: jitter(0.92, 0.06, 0.84, 0.98),
+    speedBoost: jitter(baseCenter.speedBoost, 0.28, 0.5, 2.4),
+    cushionRestitution: jitter(baseCenter.cushionRestitution, 0.05, 0.84, 0.95),
+    cushionContactFriction: jitter(baseCenter.cushionContactFriction, 0.03, 0.03, 0.11),
+    clothLinearSpinCouplingPerSec: jitter(baseCenter.clothLinearSpinCouplingPerSec, 0.45, 0.7, 1.9),
+    spinDampingPerTick: jitter(baseCenter.spinDampingPerTick, 0.004, 0.983, 0.995),
+    linearDampingPerTick: jitter(baseCenter.linearDampingPerTick, 0.004, 0.976, 0.992),
+    cushionPostCollisionSpeedScale: jitter(baseCenter.cushionPostCollisionSpeedScale, 0.02, 0.97, 1.02),
+    cushionSpinMonotonicRetention: jitter(baseCenter.cushionSpinMonotonicRetention, 0.06, 0.84, 0.98),
   };
 }
 
@@ -354,7 +386,11 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides, simul
     }
   }
 
-  const fahRoute: CushionId[] = ['right', 'top', 'left', 'bottom'];
+  const firstCushion = indexModel.firstCushionSide === 'right' ? 'right' : 'left';
+  const thirdCushion = firstCushion === 'right' ? 'left' : 'right';
+  const shortFourth = FAH_SHORT_FOURTH_MODE === 'third' ? thirdCushion : firstCushion;
+  const fourthCushion: CushionId = anchor.fourthRail === 'long' ? 'bottom' : shortFourth;
+  const fahRoute: CushionId[] = [firstCushion, 'top', thirdCushion, fourthCushion];
   let routeCursor = 0;
   const fahHits: Array<{ cushion: CushionId; index: number }> = [];
   for (const hit of rawHits) {
@@ -376,10 +412,25 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides, simul
   const error2 = (obs2 ?? anchor.second) - anchor.second;
   const error3 = (obs3 ?? anchor.third) - anchor.third;
   const error4 = (obs4 ?? anchor.fourth) - anchor.fourth;
-  const missPenalty = (obs2 === null ? 12 : 0) + (obs3 === null ? 12 : 0) + (obs4 === null ? 12 : 0);
-  const routePenalty = routeValid ? 0 : 20;
+  const stageWeights =
+    FAH_STAGE === '12'
+      ? { second: 0.75, third: 0.25, fourth: 0.0 }
+      : FAH_STAGE === '23'
+        ? { second: 0.15, third: 0.65, fourth: 0.20 }
+        : FAH_STAGE === '34'
+          ? { second: 0.0, third: 0.35, fourth: 0.65 }
+          : { second: 0.30, third: 0.35, fourth: 0.35 };
+  const missPenalty =
+    (obs2 === null ? FAH_MISS_PENALTY_BASE * stageWeights.second : 0)
+    + (obs3 === null ? FAH_MISS_PENALTY_BASE * stageWeights.third : 0)
+    + (obs4 === null ? FAH_MISS_PENALTY_BASE * stageWeights.fourth : 0);
+  const routePenalty = routeValid ? 0 : FAH_ROUTE_PENALTY;
   const weightedAbsError =
-    (Math.abs(error2) * 0.4) + (Math.abs(error3) * 0.35) + (Math.abs(error4) * 0.25) + missPenalty + routePenalty;
+    (Math.abs(error2) * stageWeights.second)
+    + (Math.abs(error3) * stageWeights.third)
+    + (Math.abs(error4) * stageWeights.fourth)
+    + missPenalty
+    + routePenalty;
 
   return {
     first: anchor.first,
@@ -405,9 +456,12 @@ function evaluateShot(anchor: AnchorTarget, candidate: CandidateOverrides, simul
 }
 
 function evaluateCandidate(candidate: CandidateOverrides): CandidateResult {
-  const byPoint = ANCHORS.map((anchor) => evaluateShot(anchor, candidate));
+  const activeAnchors = FAH_TARGET_FIRSTS.length > 0
+    ? ANCHORS.filter((anchor) => FAH_TARGET_FIRSTS.includes(anchor.first))
+    : ANCHORS;
+  const byPoint = activeAnchors.map((anchor) => evaluateShot(anchor, candidate));
   const pointCorrections = derivePointCorrections(byPoint);
-  const byPointCorrected = ANCHORS.map((anchor) => {
+  const byPointCorrected = activeAnchors.map((anchor) => {
     const correction = resolvePointCorrection(pointCorrections, anchor.first);
     return evaluateShot(anchor, candidate, anchor.first + correction);
   });
@@ -415,14 +469,15 @@ function evaluateCandidate(candidate: CandidateOverrides): CandidateResult {
   const mae = errors.reduce((sum, value) => sum + Math.abs(value), 0) / errors.length;
   const rmse = Math.sqrt(errors.reduce((sum, value) => sum + value * value, 0) / errors.length);
   const baseScore = byPointCorrected.reduce((sum, row) => sum + row.weightedAbsError, 0) / byPointCorrected.length;
-  const p10 = byPointCorrected.find((row) => row.first === 10);
-  const p10Objective = p10
-    ? (Math.abs(p10.error.second) * SCORE_P10_SECOND_WEIGHT)
-      + (Math.abs(p10.error.third) * SCORE_P10_THIRD_WEIGHT)
-      + (Math.abs(p10.error.fourth) * SCORE_P10_FOURTH_WEIGHT)
+  const focus = byPointCorrected.find((row) => Math.round(row.first) === Math.round(SCORE_FOCUS_POINT));
+  const focusObjective = focus
+    ? (Math.abs(focus.error.second) + Math.abs(focus.error.third) + Math.abs(focus.error.fourth)) / 3
     : 0;
   const penalty = correctionPenalty(pointCorrections);
-  const weightedScore = (baseScore * SCORE_GLOBAL_WEIGHT) + p10Objective + (penalty * SCORE_POINT_CORRECTION_PENALTY);
+  const weightedScore =
+    (baseScore * SCORE_GLOBAL_WEIGHT)
+    + (focusObjective * SCORE_FOCUS_WEIGHT)
+    + (penalty * SCORE_POINT_CORRECTION_PENALTY);
   return {
     overrides: candidate,
     mae: round3(mae),
@@ -449,21 +504,13 @@ async function run(): Promise<void> {
   const searchCount = Math.max(20, Number(process.env.FAH_SEARCH_COUNT ?? '120'));
   const randomSeed = Number(process.env.FAH_RANDOM_SEED ?? '3901');
   const rand = mulberry32(randomSeed);
+  const baseCenter = resolveSearchBase();
 
   const candidates: CandidateResult[] = [];
-  const baseline: CandidateOverrides = {
-    speedBoost: 2.0,
-    cushionRestitution: 0.9,
-    cushionContactFriction: 0.05,
-    clothLinearSpinCouplingPerSec: 1.0,
-    spinDampingPerTick: 0.989,
-    linearDampingPerTick: 0.983,
-    cushionPostCollisionSpeedScale: 1.0,
-    cushionSpinMonotonicRetention: 0.92,
-  };
+  const baseline: CandidateOverrides = baseCenter;
   candidates.push(evaluateCandidate(baseline));
   for (let i = 0; i < searchCount; i += 1) {
-    candidates.push(evaluateCandidate(buildCandidate(rand)));
+    candidates.push(evaluateCandidate(buildCandidate(rand, baseCenter)));
   }
 
   candidates.sort((a, b) => a.weightedScore - b.weightedScore);
@@ -478,6 +525,11 @@ async function run(): Promise<void> {
     best,
     top,
   };
+
+  if (process.env.FAH_NO_WRITE === '1') {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 
   const outDir = resolve(process.cwd(), 'tmp', 'fah');
   mkdirSync(outDir, { recursive: true });

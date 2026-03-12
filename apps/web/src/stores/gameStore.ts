@@ -87,8 +87,6 @@ interface GameStore {
   turnEvents: TurnEvent[];
   fahTestShotRequest: { targetPoint: number; requestedAt: number } | null;
   fahTestTargetPoint: number;
-  fahTestCorrectionOffset: number;
-  fahTestAutoCorrectionEnabled: boolean;
   
   // 액션
   addScore: (player: string) => void;
@@ -107,8 +105,6 @@ interface GameStore {
   setFahTestTargetPoint: (targetPoint: number) => void;
   requestFahTestShot: (targetPoint: number) => void;
   clearFahTestShotRequest: () => void;
-  setFahTestCorrectionOffset: (offset: number) => void;
-  setFahTestAutoCorrectionEnabled: (enabled: boolean) => void;
 
   // 잔상 표시
   showBallTrail: boolean;
@@ -154,6 +150,9 @@ interface GameStore {
 const headSpotX = -PHYSICS.TABLE_WIDTH * 0.25;
 const footSpotX = PHYSICS.TABLE_WIDTH * 0.25;
 const AIM_MODE_STORAGE_KEY = 'bhc.aimControlMode';
+const FAH_DEFAULT_DRAG_PX = 127;
+const FAH_DEFAULT_IMPACT_OFFSET_X = -PHYSICS.BALL_RADIUS * 0.4;
+const FAH_DEFAULT_IMPACT_OFFSET_Y = PHYSICS.BALL_RADIUS * 0.4;
 
 function readInitialAimControlMode(): AimControlMode {
   if (typeof window === 'undefined') {
@@ -216,16 +215,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       aimControlMode: AIM_CONTROL_CONTRACT.defaultMode,
       shotDirectionDeg: 90,
       cueElevationDeg: 0,
-      dragPx: 10,
-      impactOffsetX: 0,
-      impactOffsetY: 0,
+      dragPx: mode === 'fahTest' ? FAH_DEFAULT_DRAG_PX : 10,
+      impactOffsetX: mode === 'fahTest' ? FAH_DEFAULT_IMPACT_OFFSET_X : 0,
+      impactOffsetY: mode === 'fahTest' ? FAH_DEFAULT_IMPACT_OFFSET_Y : 0,
     },
     turnMessage: mode === 'fahTest' ? 'FAH TEST MODE' : '',
     turnStartedAtMs: Date.now(),
     fahTestShotRequest: null,
     fahTestTargetPoint: 10,
-    fahTestCorrectionOffset: 0,
-    fahTestAutoCorrectionEnabled: false,
   })),
   phase: 'AIMING',
   balls: createInitialBalls('game'),
@@ -253,8 +250,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   turnEvents: [],
   fahTestShotRequest: null,
   fahTestTargetPoint: 10,
-  fahTestCorrectionOffset: 0,
-  fahTestAutoCorrectionEnabled: false,
   showBallTrail: false,
   toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
 
@@ -481,8 +476,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
     fahTestShotRequest: null,
     fahTestTargetPoint: 10,
-    fahTestCorrectionOffset: 0,
-    fahTestAutoCorrectionEnabled: false,
     replayFrameData: null,
     replayCurrentFrame: 0,
     replayIsPlaying: false,
@@ -677,6 +670,4 @@ export const useGameStore = create<GameStore>((set, get) => ({
     fahTestTargetPoint: targetPoint,
   }),
   clearFahTestShotRequest: () => set({ fahTestShotRequest: null }),
-  setFahTestCorrectionOffset: (offset) => set({ fahTestCorrectionOffset: offset }),
-  setFahTestAutoCorrectionEnabled: (enabled) => set({ fahTestAutoCorrectionEnabled: enabled }),
 }));

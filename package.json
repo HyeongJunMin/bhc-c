@@ -19,6 +19,7 @@
   "qa:cushion-spin-flow": "node --experimental-strip-types scripts/qa/cushion-spin-flow-sandbox.ts",
   "qa:fah-multicushion-opt": "node --experimental-strip-types scripts/qa/fah-multicushion-opt.ts",
   "qa:fah-multiopt-profile": "node --experimental-strip-types scripts/qa/fah-multiopt-profile-export.ts",
+  "qa:fah-guideline-verify": "node --experimental-strip-types scripts/qa/fah-guideline-verify.ts",
   "qa:fah-system-batch": "node --experimental-strip-types scripts/qa/fah-physics-batch.ts",
     "qa:fah-live-run": "node --experimental-strip-types scripts/qa/five-and-half-live-run.ts",
     "qa:team-loop-summary": "MAX_ITERATIONS=1 SOAK_DURATION_MS=1000 SOAK_TICK_MS=100 scripts/agents/v2_team_loop.sh | node --experimental-strip-types scripts/qa/parse-team-loop-summary.ts",
