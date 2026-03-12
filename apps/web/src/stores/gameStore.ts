@@ -100,6 +100,10 @@ interface GameStore {
   showBallTrail: boolean;
   toggleBallTrail: () => void;
 
+  // 시점고정모드
+  fixedViewMode: boolean;
+  toggleFixedViewMode: () => void;
+
   // 리플레이
   replayFrameData: ReplayFrameData | null;
   replayCurrentFrame: number;
@@ -155,6 +159,7 @@ interface GameStore {
 const headSpotX = -PHYSICS.TABLE_WIDTH * 0.25;
 const footSpotX = PHYSICS.TABLE_WIDTH * 0.25;
 const AIM_MODE_STORAGE_KEY = 'bhc.aimControlMode';
+const FIXED_VIEW_MODE_STORAGE_KEY = 'bhc.fixedViewMode';
 
 function readInitialAimControlMode(): AimControlMode {
   if (typeof window === 'undefined') {
@@ -162,6 +167,11 @@ function readInitialAimControlMode(): AimControlMode {
   }
   const raw = window.sessionStorage.getItem(AIM_MODE_STORAGE_KEY);
   return raw === 'MANUAL_AIM' || raw === 'AUTO_SYNC' ? raw : AIM_CONTROL_CONTRACT.defaultMode;
+}
+
+function readInitialFixedViewMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.sessionStorage.getItem(FIXED_VIEW_MODE_STORAGE_KEY) === 'true';
 }
 
 const createInitialBalls = (): BallState[] => {
@@ -216,6 +226,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   turnEvents: [],
   showBallTrail: false,
   toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
+
+  fixedViewMode: readInitialFixedViewMode(),
+  toggleFixedViewMode: () => {
+    const next = !get().fixedViewMode;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(FIXED_VIEW_MODE_STORAGE_KEY, String(next));
+    }
+    set({ fixedViewMode: next });
+  },
 
   // 리플레이 초기 상태
   replayFrameData: null,

@@ -1066,11 +1066,26 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStore.phase]);
 
+
+  const fixedViewDragRef = useRef<{ lastX: number } | null>(null);
+
+
   useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      if (gameStore.fixedViewMode) e.preventDefault();
+    };
+
     const handleMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.closest?.('[data-chat-panel]')) return;
       if (gameStore.multiplayerContext && !gameStore.isMyTurn) return;
-      if (gameStore.phase !== 'AIMING' || e.button !== 0) return;
+      if (gameStore.phase !== 'AIMING') return;
+
+      if (e.button === 2 && gameStore.fixedViewMode) {
+        fixedViewDragRef.current = { lastX: e.clientX };
+        return;
+      }
+
+      if (e.button !== 0) return;
 
       dragState.current.isDragging = true;
       dragState.current.startY = e.clientY;
@@ -1080,6 +1095,17 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+      if (fixedViewDragRef.current !== null) {
+        const deltaX = e.clientX - fixedViewDragRef.current.lastX;
+        fixedViewDragRef.current.lastX = e.clientX;
+        const sensitivity = shiftPressedRef.current ? 0.06 : 0.3;
+        const current = gameStore.shotInput.shotDirectionDeg;
+        const next = ((current + deltaX * sensitivity) % 360 + 360) % 360;
+        gameStore.setShotDirection(next);
+        return;
+      }
+
+
       if (!dragState.current.isDragging) return;
 
       const deltaY = e.clientY - dragState.current.startY;
@@ -1091,7 +1117,13 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       gameStore.setDragPower(newPower as number);
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 2 && fixedViewDragRef.current !== null) {
+        fixedViewDragRef.current = null;
+        return;
+      }
+
+
       if (!dragState.current.isDragging) return;
 
       dragState.current.isDragging = false;
@@ -1194,6 +1226,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       }
     };
 
+    window.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -1202,6 +1235,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     window.addEventListener('keyup', handleShiftUp);
 
     return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -1209,7 +1243,9 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       window.removeEventListener('keydown', handleShiftDown);
       window.removeEventListener('keyup', handleShiftUp);
     };
-  }, [gameStore.phase, gameStore.shotInput]);
+  }, [gameStore.phase, gameStore.shotInput, gameStore.fixedViewMode]);
+
+  const topDownPos = useRef(new THREE.Vector3(0, 4.4, 0.001)).current;
 
   useFrame((_, delta) => {
     if (orbitControlsRef.current) {
@@ -1607,7 +1643,15 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       !captureParams.capture &&
       (!gameStore.multiplayerContext || gameStore.isMyTurn);
     if (showCue) {
-      if (gameStore.turnStartedAtMs !== lastAutoAimTurnRef.current) {
+      if (gameStore.fixedViewMode) {
+        // FahScene cam=top 패턴: OrbitControls는 enabled=false로 두고 카메라만 직접 제어
+        // saveState()/reset() 호출 제거 — reset() 내부 update()가 camera.up을 덮어쓰는 버그 방지
+        camera.position.lerp(topDownPos, 0.25);
+        camera.up.set(0, 0, -1);
+        camera.lookAt(0, 0, 0);
+        // fixedViewMode 해제 시 불필요한 auto-aim 카메라 점프 방지
+        lastAutoAimTurnRef.current = gameStore.turnStartedAtMs;
+      } else if (gameStore.turnStartedAtMs !== lastAutoAimTurnRef.current) {
         // 새 턴 시작 시 가장 가까운 적구 방향으로 카메라 자동 조준
         lastAutoAimTurnRef.current = gameStore.turnStartedAtMs;
 
@@ -1651,7 +1695,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       if (
         tempDir.current.lengthSq() > 1e-6 &&
         !gameStore.isDragging &&
-        gameStore.shotInput.aimControlMode === 'AUTO_SYNC'
+        gameStore.shotInput.aimControlMode === 'AUTO_SYNC' &&
+        !gameStore.fixedViewMode
       ) {
         tempDir.current.normalize();
         const cameraSyncedDeg = ((Math.atan2(tempDir.current.x, tempDir.current.z) * 180) / Math.PI + 360) % 360;
@@ -1867,7 +1912,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
       <OrbitControls
         ref={orbitControlsRef}
-        enabled={!captureParams.capture && gameStore.phase === 'AIMING' && !gameStore.isDragging}
+        enabled={!captureParams.capture && gameStore.phase === 'AIMING' && !gameStore.isDragging && !gameStore.fixedViewMode}
         mouseButtons={{ LEFT: undefined, MIDDLE: undefined, RIGHT: 0 }}
         enablePan={false}
         minDistance={2}

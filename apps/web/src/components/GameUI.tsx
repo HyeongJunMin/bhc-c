@@ -43,6 +43,7 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
+  const [menuOpen, setMenuOpen] = useState(true);
 
   const myDisplayName = members?.find((m) => m.memberId === currentMemberId)?.displayName;
 
@@ -165,24 +166,6 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
         <h2 style={{ margin: '0 0 15px 0', fontSize: 20, color: '#00ff88' }}>
           3-Cushion Billiards
         </h2>
-
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={() => gameStore.toggleBallTrail()}
-            style={{
-              border: 'none',
-              borderRadius: 6,
-              background: gameStore.showBallTrail ? '#0f9d58' : '#2e2e2e',
-              color: '#fff',
-              padding: '4px 8px',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            수구궤적 {gameStore.showBallTrail ? 'ON' : 'OFF'}
-          </button>
-        </div>
 
         <div style={{ marginBottom: 15 }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
@@ -830,6 +813,110 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
           {overlappingRows.length > 0 && <div>Object overlap detected: {overlappingRows.length}</div>}
         </div>
       )}
+
+      {/* 햄버거 메뉴 (우측 상단) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          background: 'rgba(0,0,0,0.8)',
+          borderRadius: 10,
+          border: '1px solid rgba(255,255,255,0.1)',
+          minWidth: 160,
+          overflow: 'hidden',
+          pointerEvents: 'auto',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          style={{
+            width: '100%',
+            background: 'none',
+            border: 'none',
+            color: '#fff',
+            padding: '10px 14px',
+            fontSize: 14,
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            textAlign: 'left',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 18 }}>☰</span> 설정
+        </button>
+        {menuOpen && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '8px 0' }}>
+            <button
+              type="button"
+              onClick={() => gameStore.toggleFixedViewMode()}
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                padding: '7px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: gameStore.fixedViewMode ? '#00ff88' : '#555',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  flexShrink: 0,
+                }}
+              />
+              시점고정모드
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: gameStore.fixedViewMode ? '#00ff88' : '#888' }}>
+                {gameStore.fixedViewMode ? 'ON' : 'OFF'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => gameStore.toggleBallTrail()}
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                padding: '7px 14px',
+                fontSize: 13,
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: gameStore.showBallTrail ? '#00ff88' : '#555',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  flexShrink: 0,
+                }}
+              />
+              수구궤적
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: gameStore.showBallTrail ? '#00ff88' : '#888' }}>
+                {gameStore.showBallTrail ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 게임 중 채팅 패널 */}
       {currentMemberId && onSendChat && (
