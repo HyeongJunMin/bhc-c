@@ -39,6 +39,7 @@ export function NicknamePage() {
         backgroundColor: '#1a1a2e',
         color: '#ffffff',
         fontFamily: 'sans-serif',
+        position: 'relative',
       }}
     >
       <h1 style={{ fontSize: '2rem', marginBottom: '2rem', letterSpacing: '0.1em' }}>
@@ -90,6 +91,17 @@ export function NicknamePage() {
           {loading ? '입장 중...' : '입장'}
         </button>
       </form>
+      <span
+        style={{
+          position: 'absolute',
+          bottom: '1rem',
+          right: '1rem',
+          fontSize: '0.75rem',
+          color: '#555',
+        }}
+      >
+        v{import.meta.env.VITE_APP_VERSION}
+      </span>
     </div>
   );
 }

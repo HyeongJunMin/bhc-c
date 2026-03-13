@@ -2,7 +2,7 @@
 # 런타임: game-server + web static
 FROM node:24-alpine
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && apk add --no-cache docker-cli
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/game-server/package.json apps/game-server/
 COPY packages/physics-core/package.json packages/physics-core/

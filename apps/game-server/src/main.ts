@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 
 import { createAuthRequestHandler } from './auth/http.ts';
+import { createDeployRequestHandler } from './deploy/http.ts';
 import { createLobbyRequestHandler } from './lobby/http.ts';
 import { createFiveAndHalfRequestHandler } from './system/five-and-half.ts';
 import { serveStatic } from './static-serve.ts';
@@ -43,6 +44,7 @@ const lobbyState = {
 };
 
 const authHandler = createAuthRequestHandler(authState);
+const deployHandler = createDeployRequestHandler();
 const lobbyHandler = createLobbyRequestHandler(lobbyState);
 const fiveAndHalfHandler = createFiveAndHalfRequestHandler();
 
@@ -51,6 +53,10 @@ const server = createServer(async (req, res) => {
     res.statusCode = 200;
     res.setHeader('content-type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (req.url?.startsWith('/deploy')) {
+    void deployHandler(req, res);
     return;
   }
   if (req.url?.startsWith('/auth/')) {
