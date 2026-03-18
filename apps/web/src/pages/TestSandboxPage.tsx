@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { runSimulation } from '../../../../packages/physics-core/src/standalone-simulator.ts';
 import type { SimResult } from '../../../../packages/physics-core/src/standalone-simulator.ts';
 import { TestScene } from '../components/test/TestScene.tsx';
 import { PlaybackSlider } from '../components/test/PlaybackSlider.tsx';
@@ -63,12 +62,25 @@ export function TestSandboxPage() {
   const [result, setResult] = useState<SimResult | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
 
-  const handleRun = useCallback(() => {
+  const [loading, setLoading] = useState(false);
+
+  const handleRun = useCallback(async () => {
     const activeBalls = config.balls.filter((b) => b.enabled);
     if (activeBalls.length === 0) return;
-    const simResult = runSimulation(activeBalls, config.shot, { dtSec: 0.0125, substeps: 3 });
-    setResult(simResult);
-    setCurrentFrame(0);
+    setLoading(true);
+    try {
+      const response = await fetch('/simulate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ balls: activeBalls, shot: config.shot }),
+      });
+      if (!response.ok) throw new Error(`simulate failed: ${response.status}`);
+      const simResult = (await response.json()) as SimResult;
+      setResult(simResult);
+      setCurrentFrame(0);
+    } finally {
+      setLoading(false);
+    }
   }, [config]);
 
   const handleExport = useCallback(() => {

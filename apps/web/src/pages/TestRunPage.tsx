@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getScenario } from '../test-scenarios/index.ts';
-import { runSimulation } from '../../../../packages/physics-core/src/standalone-simulator.ts';
 import type { SimResult } from '../../../../packages/physics-core/src/standalone-simulator.ts';
 import {
   saveBaseline,
@@ -100,12 +99,25 @@ export function TestRunPage() {
     return bl?.result ?? null;
   });
 
-  const handleRun = useCallback(() => {
+  const [loading, setLoading] = useState(false);
+
+  const handleRun = useCallback(async () => {
     if (!scenario) return;
-    const simResult = runSimulation(config.balls, config.shot, { dtSec: 0.0125, substeps: 3 });
-    setResult(simResult);
-    setCurrentFrame(0);
-    setAnalysis(null);
+    setLoading(true);
+    try {
+      const response = await fetch('/simulate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ balls: config.balls, shot: config.shot }),
+      });
+      if (!response.ok) throw new Error(`simulate failed: ${response.status}`);
+      const simResult = (await response.json()) as SimResult;
+      setResult(simResult);
+      setCurrentFrame(0);
+      setAnalysis(null);
+    } finally {
+      setLoading(false);
+    }
   }, [scenario, config]);
 
   const handleSaveBaseline = useCallback(() => {
@@ -159,6 +171,7 @@ export function TestRunPage() {
             result={result}
             hasBaseline={!!baselineLoaded}
             onRun={handleRun}
+            loading={loading}
             onSaveBaseline={handleSaveBaseline}
             onDeleteBaseline={handleDeleteBaseline}
             onCompare={handleCompare}

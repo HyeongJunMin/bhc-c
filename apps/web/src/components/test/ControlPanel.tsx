@@ -74,6 +74,7 @@ type Props = {
   result: SimResult | null;
   hasBaseline: boolean;
   onRun: () => void;
+  loading?: boolean;
   onSaveBaseline: () => void;
   onDeleteBaseline: () => void;
   onCompare: () => void;
@@ -87,6 +88,7 @@ export function ControlPanel({
   result,
   hasBaseline,
   onRun,
+  loading,
   onSaveBaseline,
   onDeleteBaseline,
   onCompare,
@@ -184,7 +186,7 @@ export function ControlPanel({
       )}
 
       <div style={styles.btnRow}>
-        <button style={styles.btnPrimary} onClick={onRun}>Run</button>
+        <button style={styles.btnPrimary} onClick={onRun} disabled={loading}>{loading ? 'Running...' : 'Run'}</button>
         <button style={styles.btnReset} onClick={handleReset}>Reset</button>
         {result && <button style={styles.btn} onClick={onSaveBaseline}>Save Baseline</button>}
         {result && <button style={styles.btn} onClick={onDownload}>Download</button>}

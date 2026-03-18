@@ -68,6 +68,10 @@ const server = createServer(async (req, res) => {
     void lobbyHandler(req, res);
     return;
   }
+  if (req.url === '/simulate' && req.method === 'POST') {
+    void lobbyHandler(req, res);
+    return;
+  }
   if (req.url?.startsWith('/v1/systems/five-and-half/')) {
     void fiveAndHalfHandler(req, res);
     return;

@@ -50,8 +50,8 @@ function DirectionLine({ cueBallX, cueBallY, directionDeg, impactOffsetX }: Dire
     ballRadiusM: BALL_RADIUS,
   });
   const rad = (directionDeg * Math.PI) / 180 - squirtRad;
-  const dx = Math.sin(rad);
-  const dz = Math.cos(rad);
+  const dx = Math.cos(rad);
+  const dz = Math.sin(rad);
   const tx = cueBallX - TABLE_WIDTH / 2;
   const tz = cueBallY - TABLE_HEIGHT / 2;
   const y = BALL_RADIUS + 0.005;

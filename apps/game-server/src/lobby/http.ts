@@ -19,6 +19,8 @@ import {
 import { stepRoomPhysicsWorld } from '../../../../packages/physics-core/src/room-physics-step.ts';
 import { computeShotInitialization } from '../../../../packages/physics-core/src/shot-init.ts';
 import { startTurnTimer, type TurnTimer } from '../game/turn-timer.ts';
+import { initShotEndTracker, evaluateShotEndWithFrames } from '../../../../packages/physics-core/src/shot-end.ts';
+import type { PhysicsBallState } from '../../../../packages/physics-core/src/room-physics-step.ts';
 
 const TURN_DURATION_MS = 20_000;
 const DISCONNECT_GRACE_MS = 10_000;
@@ -1955,12 +1957,126 @@ async function handleVarReplayEnd(req: IncomingMessage, res: ServerResponse, sta
   writeJson(res, 200, { ok: true });
 }
 
+const SIMULATE_MAX_FRAMES = 3000;
+
+async function handleSimulate(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await parseJsonBody(req, res);
+  if (!body) return;
+
+  const rawBalls = body.balls;
+  const rawShot = body.shot;
+  if (!Array.isArray(rawBalls) || rawBalls.length === 0 || typeof rawShot !== 'object' || rawShot === null) {
+    writeJson(res, 400, { errorCode: 'INVALID_INPUT' });
+    return;
+  }
+
+  const shot = rawShot as Record<string, unknown>;
+  const cueBallId = String(shot.cueBallId ?? 'cueBall');
+  const directionDeg = Number(shot.directionDeg);
+  const dragPx = Number(shot.dragPx);
+  const impactOffsetX = -clampNumber(Number(shot.impactOffsetX), -0.9, 0.9);
+  const impactOffsetY = clampNumber(Number(shot.impactOffsetY), -0.9, 0.9);
+
+  const balls: PhysicsBallState[] = (rawBalls as Array<Record<string, unknown>>).map((b) => ({
+    id: String(b.id),
+    x: Number(b.x),
+    y: Number(b.y),
+    vx: 0,
+    vy: 0,
+    spinX: 0,
+    spinY: 0,
+    spinZ: 0,
+    isPocketed: false,
+  }));
+
+  // Apply shot — identical to applyShotToRoomBalls
+  const cueBall = balls.find((b) => b.id === cueBallId);
+  if (!cueBall) {
+    writeJson(res, 400, { errorCode: 'CUE_BALL_NOT_FOUND' });
+    return;
+  }
+
+  const directionRad = (directionDeg * Math.PI) / 180;
+  const shotInit = computeShotInitialization({ dragPx, impactOffsetX, impactOffsetY });
+  const forwardX = Math.cos(directionRad);
+  const forwardY = Math.sin(directionRad);
+  cueBall.vx = forwardX * shotInit.initialBallSpeedMps;
+  cueBall.vy = forwardY * shotInit.initialBallSpeedMps;
+  cueBall.spinX = shotInit.omegaX * forwardY;
+  cueBall.spinY = -shotInit.omegaX * forwardX;
+  cueBall.spinZ = shotInit.omegaZ;
+
+  type SimFrameBall = {
+    id: string; x: number; y: number; vx: number; vy: number;
+    spinX: number; spinY: number; spinZ: number; speed: number;
+  };
+  type SimFrame = { frameIndex: number; timeSec: number; balls: SimFrameBall[] };
+  type SimEvent = { type: 'CUSHION' | 'BALL_BALL'; frameIndex: number; timeSec: number; ballId: string; targetId: string };
+
+  const frames: SimFrame[] = [];
+  const events: SimEvent[] = [];
+  const tracker = initShotEndTracker();
+
+  const captureFrame = (fi: number): void => {
+    frames.push({
+      frameIndex: fi,
+      timeSec: fi * ROOM_PHYSICS_STEP_CONFIG.dtSec,
+      balls: balls.map((b) => ({
+        id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy,
+        spinX: b.spinX, spinY: b.spinY, spinZ: b.spinZ,
+        speed: Math.hypot(b.vx, b.vy),
+      })),
+    });
+  };
+
+  captureFrame(0);
+
+  let frameIndex = 0;
+  while (frameIndex < SIMULATE_MAX_FRAMES) {
+    frameIndex += 1;
+    const timeSec = frameIndex * ROOM_PHYSICS_STEP_CONFIG.dtSec;
+
+    stepRoomPhysicsWorld(balls, ROOM_PHYSICS_STEP_CONFIG, {
+      onCushionCollision: (ball, cushionId) => {
+        events.push({ type: 'CUSHION', frameIndex, timeSec, ballId: ball.id, targetId: cushionId });
+      },
+      onBallCollision: (first, second) => {
+        events.push({ type: 'BALL_BALL', frameIndex, timeSec, ballId: first.id, targetId: second.id });
+      },
+    });
+
+    captureFrame(frameIndex);
+
+    let maxLinearSpeed = 0;
+    for (const ball of balls) {
+      if (!ball.isPocketed) {
+        maxLinearSpeed = Math.max(maxLinearSpeed, Math.hypot(ball.vx, ball.vy));
+      }
+    }
+
+    const { isShotEnded } = evaluateShotEndWithFrames(tracker, { linearSpeedMps: maxLinearSpeed });
+    if (isShotEnded) break;
+  }
+
+  writeJson(res, 200, {
+    frames,
+    events,
+    totalTimeSec: frameIndex * ROOM_PHYSICS_STEP_CONFIG.dtSec,
+    totalFrames: frameIndex,
+  });
+}
+
 export function createLobbyRequestHandler(state: LobbyState) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     applyCorsHeaders(req, res);
     if (req.method === 'OPTIONS') {
       res.statusCode = 204;
       res.end();
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/simulate') {
+      await handleSimulate(req, res);
       return;
     }
 

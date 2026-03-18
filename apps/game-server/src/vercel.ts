@@ -42,5 +42,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     await lobbyHandler(req, res);
     return;
   }
+  if (req.url === '/simulate' && req.method === 'POST') {
+    await lobbyHandler(req, res);
+    return;
+  }
   writeJson(res, 404, { errorCode: 'NOT_FOUND' });
 }
