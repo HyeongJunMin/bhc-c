@@ -5,6 +5,7 @@ import { requestReplay, endReplay, requestVAR, submitVARVote, signalVARReplayEnd
 import { PlaybackSlider } from './test/PlaybackSlider';
 import { ChatPanel } from './ChatPanel';
 import { SpeechBubble } from './SpeechBubble';
+import { HelpOverlay } from './HelpOverlay';
 
 type GameUIProps = {
   mode?: 'game';
@@ -44,6 +45,7 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
   const [menuOpen, setMenuOpen] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   const myDisplayName = members?.find((m) => m.memberId === currentMemberId)?.displayName;
 
@@ -814,6 +816,33 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
         </div>
       )}
 
+      {/* 도움말 버튼 */}
+      <button
+        type="button"
+        onClick={() => setShowHelp((v) => !v)}
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: 190,
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          background: 'rgba(0,0,0,0.8)',
+          color: '#ffd700',
+          border: '1px solid rgba(255,255,255,0.1)',
+          fontSize: 18,
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          pointerEvents: 'auto',
+          zIndex: 250,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ?
+      </button>
+
       {/* 햄버거 메뉴 (우측 상단) */}
       <div
         style={{
@@ -917,6 +946,8 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
           </div>
         )}
       </div>
+
+      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
 
       {/* 게임 중 채팅 패널 */}
       {currentMemberId && onSendChat && (
