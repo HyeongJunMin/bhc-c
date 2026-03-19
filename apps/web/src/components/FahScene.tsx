@@ -1149,7 +1149,8 @@ function GameWorld() {
     }
 
     if (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING') {
-      const allStopped = balls.every((ball) => ball.isPocketed || Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps);
+      const ANGULAR_THRESHOLD = 0.2;
+      const allStopped = balls.every((ball) => ball.isPocketed || (Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps && Math.hypot(ball.spinX, ball.spinY, ball.spinZ) < ANGULAR_THRESHOLD));
       if (allStopped && !turnEndHandledRef.current) {
         turnEndHandledRef.current = true;
         // Keep runtime trace only in-memory for current shot. Do not persist trace in storage.

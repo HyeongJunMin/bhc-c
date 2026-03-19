@@ -1691,7 +1691,8 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     }
 
     if (gameStore.phase === 'SHOOTING' || gameStore.phase === 'SIMULATING') {
-      const allStopped = balls.every((ball) => ball.isPocketed || Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps);
+      const ANGULAR_THRESHOLD = 0.2;
+      const allStopped = balls.every((ball) => ball.isPocketed || (Math.hypot(ball.vx, ball.vy) < cfg.shotEndLinearSpeedThresholdMps && Math.hypot(ball.spinX, ball.spinY, ball.spinZ) < ANGULAR_THRESHOLD));
       if (allStopped && !turnEndHandledRef.current) {
         turnEndHandledRef.current = true;
         // 잔상 클리어

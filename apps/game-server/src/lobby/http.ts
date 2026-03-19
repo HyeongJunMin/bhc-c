@@ -569,11 +569,15 @@ function stepRoomPhysics(room: LobbyRoom): void {
 }
 
 function areRoomBallsSettled(room: LobbyRoom): boolean {
+  const ANGULAR_THRESHOLD = 0.2;
   for (const ball of room.balls) {
     if (ball.isPocketed) {
       continue;
     }
     if (Math.hypot(ball.vx, ball.vy) >= ROOM_PHYSICS_STEP_CONFIG.shotEndLinearSpeedThresholdMps) {
+      return false;
+    }
+    if (Math.hypot(ball.spinX, ball.spinY, ball.spinZ) >= ANGULAR_THRESHOLD) {
       return false;
     }
   }
@@ -2098,13 +2102,15 @@ async function handleSimulate(req: IncomingMessage, res: ServerResponse): Promis
     captureFrame(frameIndex);
 
     let maxLinearSpeed = 0;
+    let maxAngularSpeed = 0;
     for (const ball of balls) {
       if (!ball.isPocketed) {
         maxLinearSpeed = Math.max(maxLinearSpeed, Math.hypot(ball.vx, ball.vy));
+        maxAngularSpeed = Math.max(maxAngularSpeed, Math.hypot(ball.spinX, ball.spinY, ball.spinZ));
       }
     }
 
-    const { isShotEnded } = evaluateShotEndWithFrames(tracker, { linearSpeedMps: maxLinearSpeed });
+    const { isShotEnded } = evaluateShotEndWithFrames(tracker, { linearSpeedMps: maxLinearSpeed, angularSpeedRadps: maxAngularSpeed });
     if (isShotEnded) break;
   }
 
