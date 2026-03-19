@@ -161,6 +161,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   const cueStickRef = useRef<CueStick | null>(null);
   const impactPointRef = useRef<ImpactPoint | null>(null);
   const ballsRef = useRef<Map<string, { mesh: THREE.Mesh }>>(new Map());
+  const cueBallRingRef = useRef<THREE.Mesh | null>(null);
   const guideCuePathRef = useRef<THREE.Line | null>(null);
   const guidePostCuePathRef = useRef<THREE.Line | null>(null);
   const guideObjectPathRef = useRef<THREE.Line | null>(null);
@@ -174,6 +175,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
   const substepPositionsRef = useRef<Map<string, Array<{ x: number; y: number }>>>(new Map());
 
   const serverBallsRef = useRef<SnapshotBall[]>([]);
+  const opponentFiredThisTurnRef = useRef(false);
   const hasSetupTurnRef = useRef(false);
   const replayRecordingRef = useRef<{ activeCueBallId: CueBallId; frames: Array<{ balls: Array<{ id: string; x: number; y: number }> }> } | null>(null);
   const lastReplayFrameIndexRef = useRef(-1);
@@ -393,6 +395,12 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     }
     ballsRef.current.clear();
     physicsBallsRef.current = [];
+    if (cueBallRingRef.current) {
+      scene.remove(cueBallRingRef.current);
+      cueBallRingRef.current.geometry.dispose();
+      (cueBallRingRef.current.material as THREE.Material).dispose();
+      cueBallRingRef.current = null;
+    }
   };
 
   const createBalls = () => {
@@ -436,6 +444,20 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     });
 
     physicsBallsRef.current = physicsBalls;
+
+    // 상대 수구 표시 링
+    const ringGeo = new THREE.TorusGeometry(BALL_RADIUS * 1.5, 0.003, 8, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.visible = false;
+    scene.add(ring);
+    cueBallRingRef.current = ring;
   };
 
   const createVisualTable = (scene3d: THREE.Scene) => {
@@ -769,6 +791,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
         useGameStore.getState().setCanRequestVAR(false);
         // 상대방 샷이면 시뮬레이션 시작
         if (data.playerId !== memberId) {
+          opponentFiredThisTurnRef.current = true;
           useGameStore.getState().setPhase('SIMULATING');
         }
       } catch {
@@ -803,6 +826,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
           }
         }
         turnEndHandledRef.current = false;
+        opponentFiredThisTurnRef.current = false;
         hasSetupTurnRef.current = true;
         clearBallTrails();
         useGameStore.getState().applyServerTurnChanged(data);
@@ -1260,6 +1284,20 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     const cfg = physicsConfigRef.current;
     const activeCueBallId = gameStore.activeCueBallId;
 
+    // ★ 수구 링 가시성 (early return 전에 반드시 처리)
+    if (cueBallRingRef.current) {
+      const showRing = !!gameStore.multiplayerContext && !gameStore.isMyTurn && gameStore.phase === 'AIMING' && !opponentFiredThisTurnRef.current;
+      cueBallRingRef.current.visible = showRing;
+      if (showRing) {
+        const cueBallMesh = ballsRef.current.get(activeCueBallId);
+        if (cueBallMesh) {
+          const pos = cueBallMesh.mesh.position;
+          cueBallRingRef.current.position.set(pos.x, 0.002, pos.z);
+          cueBallRingRef.current.rotation.z += delta * 2;
+        }
+      }
+    }
+
     // 멀티플레이어: 상대방 턴일 때 서버 스냅샷 위치 적용, 로컬 물리 스킵
     if (
       gameStore.multiplayerContext &&
@@ -1638,6 +1676,7 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
     }
 
     const cueBallRef = ballsRef.current.get(activeCueBallId);
+
     const showCue = cueBallRef &&
       gameStore.phase === 'AIMING' &&
       !captureParams.capture &&
