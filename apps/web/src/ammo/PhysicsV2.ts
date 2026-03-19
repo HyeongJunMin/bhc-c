@@ -51,8 +51,11 @@ export class PhysicsV2 {
    * 미스큐 체크
    */
   checkMiscue(offsetX: number, offsetY: number): boolean {
-    const r_off = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-    return r_off > this.R * PHYSICS.MISCUE_THRESHOLD_RATIO;
+    const ratio = Math.sqrt(offsetX * offsetX + offsetY * offsetY) / this.R;
+    if (ratio <= PHYSICS.MISCUE_SAFE_RATIO) return false;
+    if (ratio >= PHYSICS.MISCUE_CERTAIN_RATIO) return true;
+    const t = (ratio - PHYSICS.MISCUE_SAFE_RATIO) / (PHYSICS.MISCUE_CERTAIN_RATIO - PHYSICS.MISCUE_SAFE_RATIO);
+    return Math.random() < t * t;
   }
   
   /**

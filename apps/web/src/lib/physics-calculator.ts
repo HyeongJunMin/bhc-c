@@ -51,8 +51,11 @@ export function computeInitialAngularVelocity(
  * 미스큐 판정
  */
 export function isMiscue(impactOffsetX: number, impactOffsetY: number): boolean {
-  const offsetDistance = Math.hypot(impactOffsetX, impactOffsetY);
-  return offsetDistance > PHYSICS.MISCUE_THRESHOLD_RATIO * PHYSICS.BALL_RADIUS;
+  const ratio = Math.hypot(impactOffsetX, impactOffsetY) / PHYSICS.BALL_RADIUS;
+  if (ratio <= PHYSICS.MISCUE_SAFE_RATIO) return false;
+  if (ratio >= PHYSICS.MISCUE_CERTAIN_RATIO) return true;
+  const t = (ratio - PHYSICS.MISCUE_SAFE_RATIO) / (PHYSICS.MISCUE_CERTAIN_RATIO - PHYSICS.MISCUE_SAFE_RATIO);
+  return Math.random() < t * t;
 }
 
 /**

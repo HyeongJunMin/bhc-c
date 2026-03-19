@@ -30,7 +30,8 @@ export const PHYSICS = {
   CUSHION_FRICTION: 0.14,
   
   // 미스큐
-  MISCUE_THRESHOLD_RATIO: 0.9,
+  MISCUE_SAFE_RATIO: 0.5,
+  MISCUE_CERTAIN_RATIO: 0.85,
   
   // 샷 속도 매핑
   MIN_DRAG_PX: 10,
