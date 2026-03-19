@@ -347,6 +347,26 @@ export function stepRoomPhysicsWorld(
       let collidedTop = false;
       let collidedBottom = false;
 
+      // Surface friction BEFORE position update (Semi-implicit Euler)
+      const frResult = applyBallSurfaceFriction({
+        vx: ball.vx,
+        vy: ball.vy,
+        spinX: ball.spinX,
+        spinY: ball.spinY,
+        spinZ: ball.spinZ,
+        radiusM: config.ballRadiusM,
+        dtSec: substepDtSec,
+        slidingFriction: config.slidingFriction,
+        rollingFriction: config.rollingFriction,
+        gravityMps2: config.gravityMps2,
+        swerveCoefficient: config.swerveCoefficient,
+      });
+      ball.vx = frResult.vx;
+      ball.vy = frResult.vy;
+      ball.spinX = frResult.spinX;
+      ball.spinY = frResult.spinY;
+      ball.spinZ = frResult.spinZ;
+
       ball.x += ball.vx * substepDtSec;
       ball.y += ball.vy * substepDtSec;
 
@@ -523,26 +543,6 @@ export function stepRoomPhysicsWorld(
       if (ball.isPocketed) {
         continue;
       }
-
-      // Surface friction (Coulomb sliding/rolling)
-      const frResult = applyBallSurfaceFriction({
-        vx: ball.vx,
-        vy: ball.vy,
-        spinX: ball.spinX,
-        spinY: ball.spinY,
-        spinZ: ball.spinZ,
-        radiusM: config.ballRadiusM,
-        dtSec: substepDtSec,
-        slidingFriction: config.slidingFriction,
-        rollingFriction: config.rollingFriction,
-        gravityMps2: config.gravityMps2,
-        swerveCoefficient: config.swerveCoefficient,
-      });
-      ball.vx = frResult.vx;
-      ball.vy = frResult.vy;
-      ball.spinX = frResult.spinX;
-      ball.spinY = frResult.spinY;
-      ball.spinZ = frResult.spinZ;
 
       maxObservedSpeedMps = Math.max(maxObservedSpeedMps, Math.hypot(ball.vx, ball.vy));
 
