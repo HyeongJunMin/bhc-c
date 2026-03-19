@@ -149,6 +149,7 @@ function resolveBallBallCollisions(
   ballBallRestitution: number,
   ballRadiusM: number,
   ballBallContactFriction: number,
+  ballMassKg: number,
   onBallCollision?: (first: PhysicsBallState, second: PhysicsBallState) => void,
 ): void {
   const minDistance = ballRadiusM * 2;
@@ -184,8 +185,8 @@ function resolveBallBallCollisions(
       normalX,
       normalY,
       restitution: ballBallRestitution,
-      mass1Kg: 1,
-      mass2Kg: 1,
+      mass1Kg: ballMassKg,
+      mass2Kg: ballMassKg,
       contactFriction: ballBallContactFriction,
       ballRadiusM: ballRadiusM,
     });
@@ -513,6 +514,7 @@ export function stepRoomPhysicsWorld(
       config.ballBallRestitution,
       config.ballRadiusM,
       config.ballBallContactFriction ?? 0,
+      config.ballMassKg,
       hooks.onBallCollision,
     );
 
