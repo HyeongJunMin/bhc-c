@@ -310,7 +310,8 @@ export function stepRoomPhysicsWorld(
     const energyBeforeStep = computeKineticEnergyJ(balls, config.ballMassKg);
     const prevPositions = balls.map((ball) => ({ x: ball.x, y: ball.y }));
 
-    for (const ball of balls) {
+    for (let bi = 0; bi < balls.length; bi += 1) {
+      const ball = balls[bi];
       if (ball.isPocketed) {
         continue;
       }
@@ -370,8 +371,77 @@ export function stepRoomPhysicsWorld(
       ball.x += ball.vx * substepDtSec;
       ball.y += ball.vy * substepDtSec;
 
+      // --- Sweep-based cushion detection (anti-tunneling) ---
+      const prevPos = prevPositions[bi];
+      const leftB = config.ballRadiusM;
+      const rightB = config.tableWidthM - config.ballRadiusM;
+      const topB = config.ballRadiusM;
+      const bottomB = config.tableHeightM - config.ballRadiusM;
+
+      let sweepHandledX = false;
+      let sweepHandledY = false;
+
+      // X축 sweep
+      let tHitX: number | null = null;
+      if (prevPos.x >= leftB && ball.x < leftB) {
+        tHitX = (leftB - prevPos.x) / (ball.x - prevPos.x);
+      } else if (prevPos.x <= rightB && ball.x > rightB) {
+        tHitX = (rightB - prevPos.x) / (ball.x - prevPos.x);
+      }
+
+      // Y축 sweep
+      let tHitY: number | null = null;
+      if (prevPos.y >= topB && ball.y < topB) {
+        tHitY = (topB - prevPos.y) / (ball.y - prevPos.y);
+      } else if (prevPos.y <= bottomB && ball.y > bottomB) {
+        tHitY = (bottomB - prevPos.y) / (ball.y - prevPos.y);
+      }
+
+      // Sweep 충돌이 감지된 경우: 되감기 → 쿠션 반사 → 남은 시간 진행
+      if (tHitX !== null || tHitY !== null) {
+        // 더 이른 축 먼저 처리 (둘 다 있으면 tHit가 작은 쪽)
+        const processXFirst = tHitY === null || (tHitX !== null && tHitX <= tHitY);
+        const tFirst = processXFirst ? tHitX! : tHitY!;
+
+        // tFirst 시점으로 되감기
+        ball.x = prevPos.x + (ball.x - prevPos.x) * tFirst;
+        ball.y = prevPos.y + (ball.y - prevPos.y) * tFirst;
+
+        // 첫 번째 축 반사
+        if (processXFirst) {
+          ball.vx = -ball.vx;
+          sweepHandledX = true;
+        } else {
+          ball.vy = -ball.vy;
+          sweepHandledY = true;
+        }
+
+        // 남은 시간 진행
+        const remainRatio = 1 - tFirst;
+        ball.x += ball.vx * substepDtSec * remainRatio;
+        ball.y += ball.vy * substepDtSec * remainRatio;
+
+        // 두 번째 축도 교차했는지 재확인
+        if (tHitX !== null && tHitY !== null) {
+          if (processXFirst) {
+            // Y축도 경계 밖이면 Y축도 반사
+            if (ball.y < topB || ball.y > bottomB) {
+              ball.vy = -ball.vy;
+              ball.y = ball.y < topB ? topB : bottomB;
+              sweepHandledY = true;
+            }
+          } else {
+            if (ball.x < leftB || ball.x > rightB) {
+              ball.vx = -ball.vx;
+              ball.x = ball.x < leftB ? leftB : rightB;
+              sweepHandledX = true;
+            }
+          }
+        }
+      }
+
       // X-axis cushion (left/right)
-      if (ball.x <= config.ballRadiusM || ball.x >= config.tableWidthM - config.ballRadiusM) {
+      if (!sweepHandledX && (ball.x <= config.ballRadiusM || ball.x >= config.tableWidthM - config.ballRadiusM)) {
         reasonCounts.BOUNDARY_X += 1;
         const isLeftCushion = ball.x <= config.ballRadiusM;
         const cushionId: CushionId = isLeftCushion ? 'left' : 'right';
@@ -437,7 +507,7 @@ export function stepRoomPhysicsWorld(
       }
 
       // Y-axis cushion (top/bottom)
-      if (ball.y <= config.ballRadiusM || ball.y >= config.tableHeightM - config.ballRadiusM) {
+      if (!sweepHandledY && (ball.y <= config.ballRadiusM || ball.y >= config.tableHeightM - config.ballRadiusM)) {
         reasonCounts.BOUNDARY_Y += 1;
         const isTopCushion = ball.y <= config.ballRadiusM;
         const cushionId: CushionId = isTopCushion ? 'top' : 'bottom';
