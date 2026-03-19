@@ -15,6 +15,7 @@ export type BallSurfaceFrictionInput = {
   stationaryLinearThresholdMps?: number;
   stationaryAngularThresholdRadps?: number;
   spinYDampingPerSec?: number;
+  spinFriction?: number;
   swerveCoefficient?: number;
 };
 
@@ -34,16 +35,8 @@ const DEFAULT_SLIP_THRESHOLD_MPS = 0.01;
 const DEFAULT_STATIONARY_LINEAR_THRESHOLD_MPS = 0.01;
 const DEFAULT_STATIONARY_ANGULAR_THRESHOLD_RADPS = 0.2;
 const DEFAULT_SWERVE_COEFFICIENT = 0.0008;
+const DEFAULT_SPIN_FRICTION = 0.02;
 
-function clamp01(value: number): number {
-  if (value <= 0) {
-    return 0;
-  }
-  if (value >= 1) {
-    return 1;
-  }
-  return value;
-}
 
 export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallSurfaceFrictionResult {
   const muS = input.slidingFriction ?? DEFAULT_SLIDING_FRICTION;
@@ -55,6 +48,7 @@ export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallS
   const dt = Math.max(0, input.dtSec);
   const radius = Math.max(1e-6, input.radiusM);
   const kSwerve = input.swerveCoefficient ?? DEFAULT_SWERVE_COEFFICIENT;
+  const muSpin = input.spinFriction ?? DEFAULT_SPIN_FRICTION;
 
   let vx = input.vx;
   let vy = input.vy;
@@ -142,9 +136,13 @@ export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallS
     spinX = vy / radius;
   }
 
-  const spinZDampingPerSec = input.spinYDampingPerSec ?? 0.15;
-  const spinZDampingFactor = clamp01(1 - spinZDampingPerSec * dt);
-  spinZ *= spinZDampingFactor;
+  const spinZDecel = (5 * muSpin * g) / (2 * radius);
+  const spinZReduction = spinZDecel * dt;
+  if (Math.abs(spinZ) <= spinZReduction) {
+    spinZ = 0;
+  } else {
+    spinZ -= Math.sign(spinZ) * spinZReduction;
+  }
 
   const linearSpeed = Math.hypot(vx, vy);
   const angularSpeed = Math.hypot(spinX, spinY, spinZ);
