@@ -38,6 +38,7 @@ export const ROOM_PHYSICS_BALL_BALL_CONTACT_FRICTION = 0.05;
 export const ROOM_PHYSICS_SLIDING_FRICTION = 0.2;
 export const ROOM_PHYSICS_ROLLING_FRICTION = 0.012;
 export const ROOM_PHYSICS_GRAVITY_MPS2 = 9.81;
+export const ROOM_PHYSICS_SWERVE_COEFFICIENT = 0.0008;
 export type RoomPhysicsProfile = 'default' | 'fahTest';
 
 export const FAH_TEST_ROOM_PHYSICS_OVERRIDES: Partial<StepRoomPhysicsConfig> = {
@@ -92,6 +93,7 @@ export function createRoomPhysicsStepConfig(
     slidingFriction: ROOM_PHYSICS_SLIDING_FRICTION,
     rollingFriction: ROOM_PHYSICS_ROLLING_FRICTION,
     gravityMps2: ROOM_PHYSICS_GRAVITY_MPS2,
+    swerveCoefficient: ROOM_PHYSICS_SWERVE_COEFFICIENT,
   };
   const profileOverrides = profile === 'fahTest' ? FAH_TEST_ROOM_PHYSICS_OVERRIDES : undefined;
   return {

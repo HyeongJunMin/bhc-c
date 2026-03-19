@@ -66,6 +66,7 @@ export type StepRoomPhysicsConfig = {
   slidingFriction: number;
   rollingFriction: number;
   gravityMps2?: number;
+  swerveCoefficient?: number;
   // Cushion contact throw geometry (optional)
   cushionHeightM?: number;
   cushionRollingSpinHeightFactor?: number;
@@ -535,6 +536,7 @@ export function stepRoomPhysicsWorld(
         slidingFriction: config.slidingFriction,
         rollingFriction: config.rollingFriction,
         gravityMps2: config.gravityMps2,
+        swerveCoefficient: config.swerveCoefficient,
       });
       ball.vx = frResult.vx;
       ball.vy = frResult.vy;
