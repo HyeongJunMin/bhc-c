@@ -19,6 +19,7 @@ export function ChatPanel({ messages, onSend, currentMemberId, initialPosition =
   const [rateLimited, setRateLimited] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const prevMessageCountRef = useRef(messages.length);
 
   const [pos, setPos] = useState(() => ({
@@ -64,6 +65,17 @@ export function ChatPanel({ messages, onSend, currentMemberId, initialPosition =
       window.removeEventListener('mouseup', onMouseUp);
     };
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      if (document.activeElement === inputRef.current) return;
+      if (collapsed) setCollapsed(false);
+      setTimeout(() => { inputRef.current?.focus(); }, 0);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => { window.removeEventListener('keydown', onKeyDown); };
+  }, [collapsed]);
 
   useEffect(() => {
     if (!collapsed) {
@@ -257,6 +269,9 @@ export function ChatPanel({ messages, onSend, currentMemberId, initialPosition =
               >
                 {msg.message}
               </div>
+              <span style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                {new Date(msg.sentAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+              </span>
             </div>
           );
         })}
@@ -274,6 +289,7 @@ export function ChatPanel({ messages, onSend, currentMemberId, initialPosition =
         }}
       >
         <input
+          ref={inputRef}
           type="text"
           value={text}
           onChange={(e) => { setText(e.target.value.slice(0, 100)); }}

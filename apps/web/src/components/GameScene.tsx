@@ -1,7 +1,8 @@
-import { useEffect, useRef, Suspense } from 'react';
+import { useEffect, useRef, Suspense, useMemo } from 'react';
 import { submitShot, requestReplay, endReplay, sendRoomChatMessage, signalVARReplayEnd, type ChatMessage } from '../lib/api-client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { SpeechBubble } from './SpeechBubble';
 import * as THREE from 'three';
 
 import { CueStick } from '../ammo/CueStick';
@@ -1184,6 +1185,12 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       dragState.current.isDragging = false;
       gameStore.setIsDragging(false);
 
+      // 턴이 넘어갔으면 샷 무효화 (버저비터 방지)
+      if (gameStore.multiplayerContext && !gameStore.isMyTurn) {
+        gameStore.setDragPower(INPUT_LIMITS.DRAG_MIN);
+        return;
+      }
+
       if (dragState.current.currentPower >= INPUT_LIMITS.DRAG_MIN + 5) {
         executeShot();
       } else {
@@ -2025,6 +2032,50 @@ function LoadingScreen() {
   );
 }
 
+type SpeechBubbles3DProps = {
+  chatMessages: ChatMessage[];
+  members: Array<{ memberId: string; displayName: string }>;
+};
+
+function seededRandom(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0) / 0xffffffff;
+}
+
+function SpeechBubbles3D({ chatMessages, members }: SpeechBubbles3DProps) {
+  const bubbles = useMemo(() => {
+    if (members.length === 0) return [];
+    const latestByMember = new Map<string, ChatMessage>();
+    for (const msg of chatMessages) {
+      latestByMember.set(msg.senderMemberId, msg);
+    }
+    const raw = members.slice(0, 2).map((member, idx) => {
+      const msg = latestByMember.get(member.memberId);
+      return msg ? { msg, idx } : null;
+    }).filter((x): x is { msg: ChatMessage; idx: number } => x !== null);
+
+    const usedSlots: number[] = [];
+    return raw.map(({ msg, idx }) => {
+      const available = [0, 1, 2, 3].filter(s => !usedSlots.includes(s));
+      const r = seededRandom(msg.sentAt);
+      const slotIndex = available[Math.floor(r * available.length)];
+      usedSlots.push(slotIndex);
+      return { msg, idx, slotIndex };
+    });
+  }, [chatMessages, members]);
+
+  return (
+    <>
+      {bubbles.map(({ msg, idx, slotIndex }) => (
+        <SpeechBubble key={`${msg.senderMemberId}-${msg.sentAt}`} message={msg} slotIndex={slotIndex} />
+      ))}
+    </>
+  );
+}
+
 type GameSceneProps = {
   roomId?: string;
   memberId?: string;
@@ -2067,6 +2118,9 @@ export function GameScene({ roomId, memberId, members, eventSource, chatMessages
         >
           <PerspectiveCamera makeDefault fov={captureParams.cam === 'side' ? 42 : 50} position={cameraPosition} />
           <GameWorld roomId={roomId} memberId={memberId} members={members} eventSource={eventSource} />
+          {!captureParams.capture && (
+            <SpeechBubbles3D chatMessages={chatMessages} members={members ?? []} />
+          )}
         </Canvas>
         {!captureParams.capture && (
           <GameUI

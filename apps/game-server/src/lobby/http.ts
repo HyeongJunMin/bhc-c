@@ -148,7 +148,7 @@ type ShotSubmitResult =
   | {
       ok: false;
       statusCode: 400 | 404 | 409;
-      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID' | 'SHOT_STATE_CONFLICT' | 'VAR_IN_PROGRESS';
+      errorCode: 'ROOM_NOT_FOUND' | 'ROOM_MEMBER_NOT_FOUND' | 'SHOT_INPUT_SCHEMA_INVALID' | 'SHOT_STATE_CONFLICT' | 'VAR_IN_PROGRESS' | 'NOT_YOUR_TURN';
       errors?: string[];
     };
 type RoomStreamOpenResult =
@@ -1376,6 +1376,13 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
   if (room.varPhase) {
     return { ok: false, statusCode: 409, errorCode: 'VAR_IN_PROGRESS' };
   }
+
+  // 턴 소유권 검증 — 버저비터 방지
+  const currentTurnMember = getCurrentTurnMemberId(room);
+  if (currentTurnMember !== actorMemberId) {
+    return { ok: false, statusCode: 409, errorCode: 'NOT_YOUR_TURN' };
+  }
+
   room.lastMissReplayData = null; // New shot expires VAR window
 
   const nextOnSubmit = transitionShotLifecycleState(room.shotState, 'SHOT_SUBMITTED');
