@@ -57,6 +57,7 @@ type LobbyRoom = {
   balls: SnapshotBallFrame[];
   activeCueBallId: 'cueBall' | 'objectBall2';
   shotEvents: PhysicsEvent[];
+  lastBroadcastedEventIndex: number;
   shotStartedAtMs: number | null;
   nextShotId: number;
   replayFrames: Array<{ balls: Array<{ id: string; x: number; y: number }> }>;
@@ -106,6 +107,7 @@ type LobbyState = {
   shotStateResetTimers: Record<string, ReturnType<typeof setTimeout> | null>;
   disconnectGraceTimers: Record<string, ReturnType<typeof setTimeout> | null>;
   turnTimers: Record<string, TurnTimer | null>;
+  roomHeartbeatTimers: Record<string, ReturnType<typeof setInterval> | null>;
   userLastChatSentAtByRoomAndMember: UserLastSentAtStore;
   lobbyChatMessages: Array<{ senderMemberId: string; senderDisplayName: string; message: string; sentAt: string }>;
   userLastLobbyChatSentAt: UserLastSentAtStore;
@@ -292,6 +294,7 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
   state.shotStateResetTimers = {};
   state.disconnectGraceTimers = {};
   state.turnTimers = {};
+  state.roomHeartbeatTimers = {};
   for (const room of state.rooms) {
     room.shotEvents = Array.isArray(room.shotEvents) ? room.shotEvents : [];
     room.shotStartedAtMs = typeof room.shotStartedAtMs === 'number' ? room.shotStartedAtMs : null;
@@ -303,6 +306,7 @@ function applyPersistedState(state: LobbyState, persisted: PersistedLobbyState):
     state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
     state.shotStateResetTimers[room.roomId] = null;
     state.turnTimers[room.roomId] = null;
+    state.roomHeartbeatTimers[room.roomId] = null;
   }
 }
 
@@ -420,6 +424,7 @@ function initializeRoomGameRuntime(room: LobbyRoom): void {
   }, {});
   room.balls = createInitialRoomBalls();
   room.shotEvents = [];
+  room.lastBroadcastedEventIndex = 0;
   room.shotStartedAtMs = null;
   room.nextShotId = Number.isInteger(room.nextShotId) ? room.nextShotId : 1;
   room.activeShotDiagnostics = null;
@@ -654,6 +659,7 @@ function finalizeShotLifecycle(
       cancelRoomTurnTimer(state, room.roomId);
       void persistLobbyState(state);
       room.shotEvents = [];
+      room.lastBroadcastedEventIndex = 0;
       room.shotStartedAtMs = null;
       room.replayFrames = [];
       if (room.activeShotDiagnostics) {
@@ -736,6 +742,7 @@ function finalizeShotLifecycle(
     }
   }
   room.shotEvents = [];
+  room.lastBroadcastedEventIndex = 0;
   room.shotStartedAtMs = null;
   room.replayFrames = [];
   if (room.activeShotDiagnostics) {
@@ -951,6 +958,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
     activeCueBallId: 'cueBall',
     balls: createInitialRoomBalls(),
     shotEvents: [],
+    lastBroadcastedEventIndex: 0,
     shotStartedAtMs: null,
     nextShotId: 1,
     replayFrames: [],
@@ -966,6 +974,7 @@ export function createRoom(state: LobbyState, input: { title: unknown }): Create
   state.roomStreamSubscribers[room.roomId] = new Set<ServerResponse>();
   state.shotStateResetTimers[room.roomId] = null;
   state.turnTimers[room.roomId] = null;
+  state.roomHeartbeatTimers[room.roomId] = null;
 
   return { ok: true, room };
 }
@@ -1376,6 +1385,7 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
   room.shotState = nextOnSubmit;
   cancelRoomTurnTimer(state, room.roomId);
   room.shotEvents = [];
+  room.lastBroadcastedEventIndex = 0;
   room.shotStartedAtMs = Date.now();
   const shotId = `${room.roomId}-shot-${room.nextShotId}`;
   room.nextShotId += 1;
@@ -1409,6 +1419,7 @@ export function submitRoomShot(state: LobbyState, roomId: string, actorMemberId:
     playerId: actorMemberId,
     shotId,
     serverTimeMs: Date.now(),
+    activeCueBallId: room.activeCueBallId,
   });
   const previousTimer = state.shotStateResetTimers[room.roomId];
   if (previousTimer) {
@@ -1570,6 +1581,10 @@ function writeSseEvent(subscriber: ServerResponse, eventName: string, payload: u
 }
 
 function buildRoomSnapshot(state: LobbyState, room: LobbyRoom) {
+  const fromIdx = room.lastBroadcastedEventIndex;
+  const newEvents = room.shotEvents.slice(fromIdx);
+  room.lastBroadcastedEventIndex = room.shotEvents.length;
+
   return serializeRoomSnapshot({
     roomId: room.roomId,
     seq: nextRoomSnapshotSeq(state, room.roomId),
@@ -1577,8 +1592,21 @@ function buildRoomSnapshot(state: LobbyState, room: LobbyRoom) {
     state: room.state,
     currentMemberId: getCurrentTurnMemberId(room),
     turnDeadlineMs: room.turnDeadlineMs,
+    activeCueBallId: room.activeCueBallId,
+    shotState: room.shotState,
     scoreBoard: room.scoreBoard,
     balls: room.balls,
+    events: newEvents.length > 0
+      ? newEvents.map((e) => {
+          if (e.type === 'BALL_COLLISION') {
+            return { type: e.type, sourceBallId: e.sourceBallId, targetBallId: e.targetBallId };
+          }
+          if (e.type === 'CUSHION_COLLISION') {
+            return { type: e.type, sourceBallId: e.sourceBallId, cushionId: e.cushionId };
+          }
+          return { type: e.type, sourceBallId: '' };
+        })
+      : undefined,
   });
 }
 
@@ -1606,6 +1634,26 @@ export function openRoomSnapshotStream(state: LobbyState, roomId: string, member
   };
 }
 
+function ensureRoomSnapshotHeartbeat(state: LobbyState, room: LobbyRoom): void {
+  if (state.roomHeartbeatTimers[room.roomId]) return;
+  state.roomHeartbeatTimers[room.roomId] = setInterval(() => {
+    const subscribers = state.roomStreamSubscribers[room.roomId];
+    if (!subscribers || subscribers.size === 0) {
+      clearInterval(state.roomHeartbeatTimers[room.roomId]!);
+      state.roomHeartbeatTimers[room.roomId] = null;
+      return;
+    }
+    const snapshot = buildRoomSnapshot(state, room);
+    for (const sub of [...subscribers]) {
+      if (sub.writableEnded || sub.destroyed) {
+        subscribers.delete(sub);
+        continue;
+      }
+      writeSseEvent(sub, 'room_snapshot', snapshot);
+    }
+  }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
+}
+
 function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, state: LobbyState): void {
   const url = new URL(req.url ?? '/lobby/rooms', 'http://localhost');
   const match = url.pathname.match(/^\/lobby\/rooms\/([^/?#]+)\/stream$/);
@@ -1630,13 +1678,8 @@ function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, sta
   state.roomStreamSubscribers[roomId].add(res);
   writeSseEvent(res, 'room_snapshot', opened.snapshot);
 
-  const snapshotTicker = setInterval(() => {
-    if (res.writableEnded) {
-      return;
-    }
-    const heartbeatSnapshot = buildRoomSnapshot(state, opened.room);
-    writeSseEvent(res, 'room_snapshot', heartbeatSnapshot);
-  }, ROOM_SNAPSHOT_BROADCAST_INTERVAL_MS);
+  ensureRoomSnapshotHeartbeat(state, opened.room);
+
   const heartbeatTicker = setInterval(() => {
     if (res.writableEnded) {
       return;
@@ -1645,7 +1688,6 @@ function handleRoomSnapshotStream(req: IncomingMessage, res: ServerResponse, sta
   }, STREAM_HEARTBEAT_INTERVAL_MS);
 
   const cleanup = () => {
-    clearInterval(snapshotTicker);
     clearInterval(heartbeatTicker);
     state.roomStreamSubscribers[roomId]?.delete(res);
     scheduleDisconnectGraceTimer(state, roomId, memberId);
@@ -1723,6 +1765,7 @@ export function createLobbyHttpServer() {
     shotStateResetTimers: {},
     disconnectGraceTimers: {},
     turnTimers: {},
+    roomHeartbeatTimers: {},
     userLastChatSentAtByRoomAndMember: new Map(),
     lobbyChatMessages: [],
     userLastLobbyChatSentAt: new Map(),

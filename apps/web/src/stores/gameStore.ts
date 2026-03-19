@@ -73,6 +73,7 @@ interface GameStore {
   setSystemMode: (mode: SystemMode) => void;
   currentPlayer: string;
   activeCueBallId: CueBallId;
+  setActiveCueBallId: (id: CueBallId) => void;
   players: string[];
   scores: Record<string, number>;
   cushionContacts: number;
@@ -421,6 +422,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // 기본 액션
   setPhase: (phase) => set({ phase }),
+  setActiveCueBallId: (id) => set({ activeCueBallId: id }),
   
   updateBall: (id, updates) => set((state) => ({
     balls: state.balls.map((b) => 

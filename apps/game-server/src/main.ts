@@ -38,6 +38,7 @@ const lobbyState = {
   shotStateResetTimers: {},
   disconnectGraceTimers: {},
   turnTimers: {},
+  roomHeartbeatTimers: {},
   userLastChatSentAtByRoomAndMember: new Map(),
   lobbyChatMessages: [],
   userLastLobbyChatSentAt: new Map(),

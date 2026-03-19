@@ -12,6 +12,13 @@ export type SnapshotBallFrame = {
   isPocketed: boolean;
 };
 
+export type SnapshotEvent = {
+  type: 'BALL_COLLISION' | 'CUSHION_COLLISION' | 'SHOT_END';
+  sourceBallId: string;
+  targetBallId?: string;
+  cushionId?: string;
+};
+
 export type SerializeRoomSnapshotInput = {
   roomId: string;
   seq: number;
@@ -19,8 +26,11 @@ export type SerializeRoomSnapshotInput = {
   state: 'WAITING' | 'IN_GAME' | 'FINISHED';
   currentMemberId: string | null;
   turnDeadlineMs: number | null;
+  activeCueBallId: 'cueBall' | 'objectBall2';
+  shotState: string;
   scoreBoard: Record<string, number>;
   balls: SnapshotBallFrame[];
+  events?: SnapshotEvent[];
 };
 
 function toFiniteNumber(value: number): number {
@@ -41,7 +51,7 @@ export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
     seq: input.seq,
     serverTimeMs: input.serverTimeMs,
     state: input.state,
-    turn: { currentMemberId: input.currentMemberId, turnDeadlineMs: input.turnDeadlineMs },
+    turn: { currentMemberId: input.currentMemberId, turnDeadlineMs: input.turnDeadlineMs, activeCueBallId: input.activeCueBallId, shotState: input.shotState },
     scoreBoard,
     balls: input.balls.map((ball) => ({
       id: ball.id,
@@ -54,5 +64,6 @@ export function serializeRoomSnapshot(input: SerializeRoomSnapshotInput) {
       spinZ: toFiniteNumber(ball.spinZ),
       isPocketed: Boolean(ball.isPocketed),
     })),
+    ...(input.events && input.events.length > 0 ? { events: input.events } : {}),
   };
 }

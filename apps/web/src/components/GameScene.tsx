@@ -739,8 +739,14 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
       try {
         const snap = JSON.parse(e.data as string) as {
           balls?: SnapshotBall[];
-          turn?: { currentMemberId: string | null; turnDeadlineMs: number | null };
+          turn?: { currentMemberId: string | null; turnDeadlineMs: number | null; activeCueBallId?: 'cueBall' | 'objectBall2'; shotState?: string };
           scoreBoard?: Record<string, number>;
+          events?: Array<{
+            type: 'BALL_COLLISION' | 'CUSHION_COLLISION' | 'SHOT_END';
+            sourceBallId: string;
+            targetBallId?: string;
+            cushionId?: string;
+          }>;
         };
         if (snap.balls) {
           serverBallsRef.current = snap.balls;
@@ -772,13 +778,35 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
           }
         }
 
+        // 상대 턴 충돌 이벤트 처리
+        if (state.multiplayerContext && snap.events && snap.events.length > 0) {
+          const isMyShot = state.isMyTurn &&
+            (state.phase === 'SHOOTING' || state.phase === 'SIMULATING');
+          if (!isMyShot) {
+            for (const evt of snap.events) {
+              if (evt.type === 'CUSHION_COLLISION' && evt.cushionId) {
+                useGameStore.getState().addCushionContact(evt.cushionId);
+              } else if (evt.type === 'BALL_COLLISION' && evt.targetBallId) {
+                useGameStore.getState().addBallCollision(evt.targetBallId);
+              }
+            }
+          }
+        }
+
         // 초기 턴 설정 (turn_changed 이벤트 전)
         if (!hasSetupTurnRef.current && snap.turn?.currentMemberId !== undefined) {
           hasSetupTurnRef.current = true;
           useGameStore.getState().applyServerTurnChanged({
             currentMemberId: snap.turn.currentMemberId,
             turnDeadlineMs: snap.turn.turnDeadlineMs ?? null,
+            activeCueBallId: snap.turn.activeCueBallId,
           });
+          // mid-shot 감지: 접속 시 상대가 이미 샷 중이면 SIMULATING 전환
+          if (snap.turn.currentMemberId !== memberId && snap.turn.shotState === 'running') {
+            opponentFiredThisTurnRef.current = true;
+            useGameStore.getState().resetTurnEvents();
+            useGameStore.getState().setPhase('SIMULATING');
+          }
         }
       } catch {
         // ignore parse errors
@@ -787,11 +815,14 @@ function GameWorld({ roomId, memberId, members, eventSource }: GameWorldProps) {
 
     const handleShotStarted = (e: MessageEvent) => {
       try {
-        const data = JSON.parse(e.data as string) as { playerId?: string };
+        const data = JSON.parse(e.data as string) as { playerId?: string; activeCueBallId?: 'cueBall' | 'objectBall2' };
         useGameStore.getState().setCanRequestVAR(false);
         // 상대방 샷이면 시뮬레이션 시작
         if (data.playerId !== memberId) {
           opponentFiredThisTurnRef.current = true;
+          if (data.activeCueBallId) {
+            useGameStore.getState().setActiveCueBallId(data.activeCueBallId);
+          }
           useGameStore.getState().setPhase('SIMULATING');
         }
       } catch {
