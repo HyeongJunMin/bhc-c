@@ -15,6 +15,7 @@ export type BallSurfaceFrictionInput = {
   stationaryLinearThresholdMps?: number;
   stationaryAngularThresholdRadps?: number;
   spinYDampingPerSec?: number;
+  swerveCoefficient?: number;
 };
 
 export type BallSurfaceFrictionResult = {
@@ -32,6 +33,7 @@ const DEFAULT_GRAVITY_MPS2 = 9.81;
 const DEFAULT_SLIP_THRESHOLD_MPS = 0.01;
 const DEFAULT_STATIONARY_LINEAR_THRESHOLD_MPS = 0.01;
 const DEFAULT_STATIONARY_ANGULAR_THRESHOLD_RADPS = 0.2;
+const DEFAULT_SWERVE_COEFFICIENT = 0.0008;
 
 function clamp01(value: number): number {
   if (value <= 0) {
@@ -52,6 +54,7 @@ export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallS
   const angularThreshold = input.stationaryAngularThresholdRadps ?? DEFAULT_STATIONARY_ANGULAR_THRESHOLD_RADPS;
   const dt = Math.max(0, input.dtSec);
   const radius = Math.max(1e-6, input.radiusM);
+  const kSwerve = input.swerveCoefficient ?? DEFAULT_SWERVE_COEFFICIENT;
 
   let vx = input.vx;
   let vy = input.vy;
@@ -82,6 +85,16 @@ export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallS
       spinY -= angularDelta * tStar * slipDirX;
       spinX += angularDelta * tStar * slipDirY;
 
+      // Swerve: tStar 구간만큼만 적용
+      const speedForSwerve = Math.hypot(vx, vy);
+      if (speedForSwerve > slipThreshold && Math.abs(spinZ) > 0.1) {
+        const dtSwerve = dt * tStar;
+        const swerveDvx = kSwerve * spinZ * (-vy / speedForSwerve) * dtSwerve;
+        const swerveDvy = kSwerve * spinZ * (vx / speedForSwerve) * dtSwerve;
+        vx += swerveDvx;
+        vy += swerveDvy;
+      }
+
       // 롤링 조건으로 스냅
       const vxRoll = (5 * vx - 2 * radius * spinY) / 7;
       const vyRoll = (5 * vy + 2 * radius * spinX) / 7;
@@ -107,6 +120,15 @@ export function applyBallSurfaceFriction(input: BallSurfaceFrictionInput): BallS
       vy -= linearDelta * slipDirY;
       spinY -= angularDelta * slipDirX;
       spinX += angularDelta * slipDirY;
+
+      // Swerve: spinZ에 의한 횡력 가속도
+      const speedForSwerve = Math.hypot(vx, vy);
+      if (speedForSwerve > slipThreshold && Math.abs(spinZ) > 0.1) {
+        const swerveDvx = kSwerve * spinZ * (-vy / speedForSwerve) * dt;
+        const swerveDvy = kSwerve * spinZ * (vx / speedForSwerve) * dt;
+        vx += swerveDvx;
+        vy += swerveDvy;
+      }
     }
   } else {
     const speed = Math.hypot(vx, vy);
