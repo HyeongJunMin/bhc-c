@@ -592,9 +592,6 @@ export function stepRoomPhysicsWorld(
         } else if (collidedBottom) {
           ball.y = Math.min(ball.y, config.tableHeightM - config.ballRadiusM - cornerReleaseMarginM);
         }
-        ball.spinX *= 0.85;
-        ball.spinY *= 0.85;
-        ball.spinZ *= 0.9;
       }
     }
 
