@@ -42,12 +42,8 @@ export const ROOM_PHYSICS_SWERVE_COEFFICIENT = 0.0008;
 export type RoomPhysicsProfile = 'default' | 'fahTest';
 
 export const FAH_TEST_ROOM_PHYSICS_OVERRIDES: Partial<StepRoomPhysicsConfig> = {
-  linearDampingPerTick: 0.983,
-  spinDampingPerTick: 0.989,
   cushionRestitution: 0.9,
   cushionContactFriction: 0.05,
-  cushionPostCollisionSpeedScale: 1.0,
-  clothLinearSpinCouplingPerSec: 1.0,
   cushionSpinMonotonicEnabled: true,
   cushionSpinMonotonicRetention: 0.92,
   cushionRestitutionLow: ROOM_PHYSICS_CUSHION_RESTITUTION_LOW,

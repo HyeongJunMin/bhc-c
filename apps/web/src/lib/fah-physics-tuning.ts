@@ -34,10 +34,6 @@ const DEFAULT_PROFILE: FahPhysicsTuningProfile = {
   overrides: {
     cushionRestitution: 0.89,
     cushionContactFriction: 0.055,
-    clothLinearSpinCouplingPerSec: 1.03,
-    spinDampingPerTick: 0.988,
-    linearDampingPerTick: 0.985,
-    cushionPostCollisionSpeedScale: 1.0,
     cushionSpinMonotonicRetention: 0.93,
   },
   stats: {
@@ -137,12 +133,8 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
   const spread = clamp(meanAbsDelta / 20, 0, 1);
 
   const speedBoost = clamp(2.0 + correction * 0.35, 1.7, 2.4);
-  const linearDampingPerTick = clamp(0.983 + correction * 0.0015 - spread * 0.0008, 0.981, 0.987);
-  const spinDampingPerTick = clamp(0.989 + correction * 0.001 - spread * 0.0006, 0.987, 0.993);
   const cushionRestitution = clamp(0.9 + correction * 0.02 - spread * 0.01, 0.86, 0.94);
   const cushionContactFriction = clamp(0.05 - correction * 0.01 + spread * 0.01, 0.03, 0.09);
-  const cushionPostCollisionSpeedScale = clamp(1.0 + correction * 0.004 - spread * 0.004, 0.985, 1.01);
-  const clothLinearSpinCouplingPerSec = clamp(1.0 - correction * 0.3 + spread * 0.5, 0.7, 1.8);
 
   return {
     schemaVersion: '1.0.0',
@@ -150,12 +142,8 @@ export function deriveFahPhysicsTuning(samples: FahPhysicsTuningSample[]): FahPh
     sampleCount: usable.length,
     speedBoost: round3(speedBoost),
     overrides: {
-      linearDampingPerTick: round3(linearDampingPerTick),
-      spinDampingPerTick: round3(spinDampingPerTick),
       cushionRestitution: round3(cushionRestitution),
       cushionContactFriction: round3(cushionContactFriction),
-      cushionPostCollisionSpeedScale: round3(cushionPostCollisionSpeedScale),
-      clothLinearSpinCouplingPerSec: round3(clothLinearSpinCouplingPerSec),
     },
     stats: {
       meanDelta: round3(meanDelta),

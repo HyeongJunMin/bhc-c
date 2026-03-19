@@ -80,13 +80,6 @@ export type StepRoomPhysicsConfig = {
   cushionRestitutionSigmoidK?: number;
   // Ball-ball friction (optional)
   ballBallContactFriction?: number;
-  // Damping per tick (optional)
-  linearDampingPerTick?: number;
-  spinDampingPerTick?: number;
-  // Cushion post-collision speed scale (optional)
-  cushionPostCollisionSpeedScale?: number;
-  // Cloth linear-spin coupling (optional)
-  clothLinearSpinCouplingPerSec?: number;
   // Cushion spin monotonic mode (optional)
   cushionSpinMonotonicEnabled?: boolean;
   cushionSpinMonotonicRetention?: number;
@@ -449,6 +442,10 @@ export function stepRoomPhysicsWorld(
         collidedRight = !isLeftCushion;
         ball.x = clampNumber(ball.x, config.ballRadiusM, config.tableWidthM - config.ballRadiusM);
 
+        // 충돌 전 스핀 저장 (monotonic guard용)
+        const preSpinYforXCushion = ball.spinY;
+        const preSpinZforXCushion = ball.spinZ;
+
         const hookInput: CushionContactThrowInput = {
           axis: 'x',
           vx: ball.vx,
@@ -494,6 +491,17 @@ export function stepRoomPhysicsWorld(
           ball.spinZ = internalResult.spinZ;
         }
 
+        // Cushion spin monotonic guard
+        if (config.cushionSpinMonotonicEnabled) {
+          const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+          if (preSpinYforXCushion !== 0 && Math.sign(ball.spinY) !== Math.sign(preSpinYforXCushion)) {
+            ball.spinY = preSpinYforXCushion * retention;
+          }
+          if (preSpinZforXCushion !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZforXCushion)) {
+            ball.spinZ = preSpinZforXCushion * retention;
+          }
+        }
+
         const releaseSign = isLeftCushion ? 1 : -1;
         if (releaseSign * ball.vx < minCushionReleaseNormalSpeedMps) {
           ball.vx = releaseSign * minCushionReleaseNormalSpeedMps;
@@ -514,6 +522,10 @@ export function stepRoomPhysicsWorld(
         collidedTop = isTopCushion;
         collidedBottom = !isTopCushion;
         ball.y = clampNumber(ball.y, config.ballRadiusM, config.tableHeightM - config.ballRadiusM);
+
+        // 충돌 전 스핀 저장 (monotonic guard용)
+        const preSpinXforYCushion = ball.spinX;
+        const preSpinZforYCushion = ball.spinZ;
 
         const hookInput: CushionContactThrowInput = {
           axis: 'y',
@@ -558,6 +570,17 @@ export function stepRoomPhysicsWorld(
           ball.spinX = internalResult.spinX;
           ball.spinY = internalResult.spinY;
           ball.spinZ = internalResult.spinZ;
+        }
+
+        // Cushion spin monotonic guard
+        if (config.cushionSpinMonotonicEnabled) {
+          const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+          if (preSpinXforYCushion !== 0 && Math.sign(ball.spinX) !== Math.sign(preSpinXforYCushion)) {
+            ball.spinX = preSpinXforYCushion * retention;
+          }
+          if (preSpinZforYCushion !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZforYCushion)) {
+            ball.spinZ = preSpinZforYCushion * retention;
+          }
         }
 
         const releaseSign = isTopCushion ? 1 : -1;
