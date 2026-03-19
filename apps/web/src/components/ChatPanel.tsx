@@ -67,8 +67,9 @@ export function ChatPanel({ messages, onSend, currentMemberId, initialPosition =
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter') return;
+    const onKeyDown = (e: Event) => {
+      const ke = e as globalThis.KeyboardEvent;
+      if (ke.key !== 'Enter') return;
       if (document.activeElement === inputRef.current) return;
       if (collapsed) setCollapsed(false);
       setTimeout(() => { inputRef.current?.focus(); }, 0);
