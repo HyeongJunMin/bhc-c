@@ -20,7 +20,7 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
 };
 
-const API_PREFIXES = ['/health', '/auth/', '/api/', '/v1/', '/simulate'];
+const API_PREFIXES = ['/health', '/auth/', '/api/', '/v1/', '/simulate', '/djemals'];
 
 function isApiRequest(url: string): boolean {
   return API_PREFIXES.some((prefix) => url === prefix.trimEnd() || url.startsWith(prefix));

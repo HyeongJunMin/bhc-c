@@ -21,6 +21,7 @@ export default defineConfig({
       '/api/lobby': 'http://localhost:9900',
       '/simulate': 'http://localhost:9900',
       '/v1/systems': 'http://localhost:9900',
+      '/djemals': 'http://localhost:9900',
     },
   },
   optimizeDeps: {

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 
+import { createAdminRequestHandler } from './admin/http.ts';
 import { createAuthRequestHandler } from './auth/http.ts';
 import { createDeployRequestHandler } from './deploy/http.ts';
 import { createLobbyRequestHandler } from './lobby/http.ts';
@@ -44,6 +45,7 @@ const lobbyState = {
   userLastLobbyChatSentAt: new Map(),
 };
 
+const adminHandler = createAdminRequestHandler(lobbyState);
 const authHandler = createAuthRequestHandler(authState);
 const deployHandler = createDeployRequestHandler();
 const lobbyHandler = createLobbyRequestHandler(lobbyState);
@@ -75,6 +77,10 @@ const server = createServer(async (req, res) => {
   }
   if (req.url?.startsWith('/v1/systems/five-and-half/')) {
     void fiveAndHalfHandler(req, res);
+    return;
+  }
+  if (req.url?.startsWith('/djemals')) {
+    void adminHandler(req, res);
     return;
   }
   if (staticDir) {
