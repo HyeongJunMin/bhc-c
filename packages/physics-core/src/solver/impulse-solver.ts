@@ -1,6 +1,8 @@
 export type ImpulseBody2D = {
   vx: number;
   vy: number;
+  spinX?: number;  // top/backspin (Y-axis rolling)
+  spinY?: number;  // X-axis rolling
   // bhc2 convention: spinZ = vertical-axis spin (side english), used for tangential contact velocity
   spinZ?: number;
 };
@@ -19,6 +21,8 @@ export type BallBallImpulseResult = {
   collided: boolean;
   impulseN: number;
   tangentialImpulse: number;
+  spinXDelta: number;
+  spinYDelta: number;
 };
 
 export type CushionAxis = 'x' | 'y';
@@ -92,11 +96,11 @@ export function solveBallBallImpulse(
   input: BallBallImpulseInput,
 ): BallBallImpulseResult {
   if (!Number.isFinite(input.normalX) || !Number.isFinite(input.normalY)) {
-    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0, spinXDelta: 0, spinYDelta: 0 };
   }
   const normalLen = Math.hypot(input.normalX, input.normalY);
   if (normalLen <= 1e-9) {
-    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0, spinXDelta: 0, spinYDelta: 0 };
   }
   const nx = input.normalX / normalLen;
   const ny = input.normalY / normalLen;
@@ -106,14 +110,14 @@ export function solveBallBallImpulse(
   const invMass2 = mass2 > 0 ? 1 / mass2 : 0;
   const invMassSum = invMass1 + invMass2;
   if (invMassSum <= 0) {
-    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0, spinXDelta: 0, spinYDelta: 0 };
   }
 
   const relativeVx = second.vx - first.vx;
   const relativeVy = second.vy - first.vy;
   const velocityAlongNormal = relativeVx * nx + relativeVy * ny;
   if (velocityAlongNormal >= 0) {
-    return { collided: false, impulseN: 0, tangentialImpulse: 0 };
+    return { collided: false, impulseN: 0, tangentialImpulse: 0, spinXDelta: 0, spinYDelta: 0 };
   }
   const impulseN = -((1 + input.restitution) * velocityAlongNormal) / invMassSum;
 
@@ -123,10 +127,18 @@ export function solveBallBallImpulse(
   const mu = input.contactFriction ?? 0;
   const radius = input.ballRadiusM ?? 0;
   let tangentialImpulse = 0;
+  let spinXDelta = 0;
+  let spinYDelta = 0;
   if (mu > 0 && radius > 0 && impulseN > 0) {
     const mass = invMass1 > 0 ? 1 / invMass1 : 1;
     const firstSpinZ = first.spinZ ?? 0;
     const secondSpinZ = second.spinZ ?? 0;
+    const firstSpinX = first.spinX ?? 0;
+    const firstSpinY = first.spinY ?? 0;
+    const secondSpinX = second.spinX ?? 0;
+    const secondSpinY = second.spinY ?? 0;
+
+    // --- XY plane tangential impulse (existing, spinZ contribution) ---
     const tangentRelVel = (relativeVx * tx + relativeVy * ty) + radius * (firstSpinZ + secondSpinZ);
     const inertia = (2 / 5) * mass * radius * radius;
     const tangentEffMass = invMassSum + (2 * radius * radius) / inertia;
@@ -139,6 +151,28 @@ export function solveBallBallImpulse(
     if (second.spinZ !== undefined) {
       second.spinZ += spinDelta;
     }
+
+    // --- Z-axis (vertical) slip impulse from spinX/spinY ---
+    const zRelVel = radius * ((firstSpinX * ny - firstSpinY * nx) - (secondSpinX * ny - secondSpinY * nx));
+    const zEffCompliance = 2 * (5 / mass);
+    const zUncapped = -zRelVel / Math.max(1e-9, zEffCompliance);
+    const zImpulse = clampNumber(zUncapped, -mu * impulseN, mu * impulseN);
+
+    spinXDelta = (5 * ny * zImpulse) / (2 * mass * radius);
+    spinYDelta = (-5 * nx * zImpulse) / (2 * mass * radius);
+
+    if (first.spinX !== undefined) {
+      first.spinX += spinXDelta;
+    }
+    if (first.spinY !== undefined) {
+      first.spinY += spinYDelta;
+    }
+    if (second.spinX !== undefined) {
+      second.spinX -= spinXDelta;
+    }
+    if (second.spinY !== undefined) {
+      second.spinY -= spinYDelta;
+    }
   }
 
   const impulseX = impulseN * nx + tangentialImpulse * tx;
@@ -149,7 +183,7 @@ export function solveBallBallImpulse(
   second.vx += impulseX * invMass2;
   second.vy += impulseY * invMass2;
 
-  return { collided: true, impulseN, tangentialImpulse };
+  return { collided: true, impulseN, tangentialImpulse, spinXDelta, spinYDelta };
 }
 
 export function solveBallCushionImpulse(input: BallCushionImpulseInput): BallCushionImpulseResult {
