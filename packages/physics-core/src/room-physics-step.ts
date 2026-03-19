@@ -302,7 +302,7 @@ export function stepRoomPhysicsWorld(
     NAN_GUARD: 0,
   };
   const cushionSeparationEpsilonM = Math.max(1e-4, config.ballRadiusM * 0.005);
-  const minCushionReleaseNormalSpeedMps = Math.max(config.shotEndLinearSpeedThresholdMps * 2, 0.06);
+  const minCushionReleaseNormalSpeedMps = 0.001;
   const cornerReleaseMarginM = cushionSeparationEpsilonM * 2;
 
   for (let step = 0; step < config.substeps; step += 1) {
