@@ -349,6 +349,62 @@ t_hit = (boundary - prev_x) / (curr_x - prev_x)
 
 ---
 
+## MEDIUM 6: Config 파라미터 4개 미사용
+
+### 현상
+`StepRoomPhysicsConfig`에 선언되어 있고 FAH 프로파일에 값이 설정되어 있지만, `stepRoomPhysicsWorld` 루프에서 전혀 참조되지 않는 파라미터:
+- `linearDampingPerTick` — 선속도 감쇠
+- `spinDampingPerTick` — 스핀 감쇠
+- `cushionPostCollisionSpeedScale` — 쿠션 충돌 후 속도 스케일
+- `clothLinearSpinCouplingPerSec` — 천-스핀 결합 계수
+
+### 원인
+
+**파일:** `packages/physics-core/src/room-physics-step.ts`
+
+해당 필드들이 config 타입과 FAH 프로파일에는 존재하지만, 실제 물리 루프(`stepRoomPhysicsWorld`)에서 사용되지 않음. 설정값이 게임에 반영되지 않으므로 튜닝 효과가 없음.
+
+### 수정 방법
+
+1. `room-physics-step.ts` 내 각 파라미터 사용 위치를 확인하고, 해당 로직(감쇠 적용, 쿠션 후처리 등)에 config 값을 참조하도록 수정.
+2. 또는 의도적으로 제거할 파라미터라면 `StepRoomPhysicsConfig` 타입 및 FAH 프로파일에서도 삭제하여 혼선 방지.
+
+---
+
+## MEDIUM 7: 저속 쿠션 충돌 에너지 주입
+
+### 현상
+공이 매우 느린 속도(예: 0.02 m/s)로 쿠션에 접근할 때, 반발 후 속도가 오히려 **증가**하는 에너지 생성 버그. 예:
+- 접근 속도: 0.02 m/s → 반발 후: **0.06 m/s** (3배 증가)
+
+공이 쿠션 근처에서 멈추지 않고 이상하게 튕겨 나오거나 진동하는 현상 발생 가능.
+
+### 원인
+
+**파일:** `packages/physics-core/src/room-physics-step.ts` L304, L406~413
+
+```typescript
+const minCushionReleaseNormalSpeedMps = 0.06;
+// ...
+if (normalSpeedOut < minCushionReleaseNormalSpeedMps) {
+  normalSpeedOut = minCushionReleaseNormalSpeedMps;  // 저속일 때 최솟값으로 강제 상향
+}
+```
+
+`minCushionReleaseNormalSpeedMps = 0.06`으로 인해, 반발 후 법선 속도가 0.06 m/s보다 작으면 0.06 m/s로 강제 올림. 이는 에너지 보존 원칙을 위반함.
+
+### 수정 방법
+
+1. **단순 수정:** `minCushionReleaseNormalSpeedMps`를 0 또는 매우 작은 값(예: 0.001)으로 변경.
+2. **물리적 수정:** 최솟값 클램프 대신, 쿠션 restitution이 너무 낮을 때 자연스럽게 멈추도록 허용. 반발 계수(`cushionRestitution`)만으로 속도를 결정:
+   ```typescript
+   // normalSpeedOut = normalSpeedIn * cushionRestitution (이미 위에서 계산됨)
+   // minCushionReleaseNormalSpeedMps 클램프 제거
+   ```
+3. 변경 후 **에너지 단조감소** 검증 (아래 검증 방법 4번 항목) 필수.
+
+---
+
 ## LOW (지연 가능)
 
 | 항목 | 설명 |
@@ -367,11 +423,13 @@ t_hit = (boundary - prev_x) / (curr_x - prev_x)
 | 1 | **C1** 팔로우/드로우 | 높 | `impulse-solver.ts`, `room-physics-step.ts` |
 | 2 | **C3** 샷 종료 각속도 | 낮 | `shot-end.ts`, `standalone-simulator.ts`, `http.ts` |
 | 3 | **C4** 쿠션 throw 25도 | 낮 | `room-physics-config.ts` |
-| 4 | **C5** 백스핀 반전 | 중 | `ball-surface-friction.ts` |
-| 5 | **C2** 스워브 | 높 | `ball-surface-friction.ts`, `room-physics-config.ts` |
-| 6 | **M1** 적분 순서 | 낮 | `room-physics-step.ts` |
-| 7 | **M2** SpinZ 감쇠 | 낮 | `ball-surface-friction.ts` |
-| 8 | **M3** 쿠션 sweep | 중 | `room-physics-step.ts` |
+| 4 | **M7** 저속 쿠션 에너지 주입 | 낮 | `room-physics-step.ts` |
+| 5 | **C5** 백스핀 반전 | 중 | `ball-surface-friction.ts` |
+| 6 | **C2** 스워브 | 높 | `ball-surface-friction.ts`, `room-physics-config.ts` |
+| 7 | **M1** 적분 순서 | 낮 | `room-physics-step.ts` |
+| 8 | **M2** SpinZ 감쇠 | 낮 | `ball-surface-friction.ts` |
+| 9 | **M3** 쿠션 sweep | 중 | `room-physics-step.ts` |
+| 10 | **M6** Config 파라미터 미사용 | 낮 | `room-physics-step.ts` |
 
 ---
 
