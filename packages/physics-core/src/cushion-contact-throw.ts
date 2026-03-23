@@ -146,6 +146,26 @@ export function applyCushionContactThrow(input: CushionContactThrowInput): Cushi
     spinX += contactTorqueSpinDelta * normalDirection;
   }
 
+  // Spin depletion from throw: angular momentum reaction to the tangential friction impulse.
+  // throwVt adds linear KE from spin energy; without depleting spin here, total KE increases.
+  // r_contact × J_tangential gives the angular impulse that reduces the causative spin.
+  //
+  // x-axis cushion: r = (normalDir·d, 0, h), J_tang in y
+  //   ΔspinX = -(h/I)·J_t    (rotation about table-x)
+  //   ΔspinZ = (normalDir·d/I)·J_t  (rotation about vertical z, side english)
+  //
+  // y-axis cushion: r = (0, normalDir·d, h), J_tang in x
+  //   ΔspinY =  (h/I)·J_t    (rotation about table-y)
+  //   ΔspinZ = -(normalDir·d/I)·J_t  (rotation about vertical z, side english)
+  const throwAngularImpulse = ballMassKg * throwVt;
+  if (input.axis === 'x') {
+    spinX -= (h * throwAngularImpulse) / inertia;
+    spinZ += (normalDirection * d * throwAngularImpulse) / inertia;
+  } else {
+    spinY += (h * throwAngularImpulse) / inertia;
+    spinZ -= (normalDirection * d * throwAngularImpulse) / inertia;
+  }
+
   // Partial conversion between side english and rolling spin.
   // (bhc had: 0.08 * spinY; bhc2 side english is spinZ)
   const conversion = input.contactFriction * 0.08 * spinZ;
