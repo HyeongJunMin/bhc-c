@@ -149,7 +149,7 @@ export function solveBallBallImpulse(
       first.spinZ += spinDelta;
     }
     if (second.spinZ !== undefined) {
-      second.spinZ += spinDelta;
+      second.spinZ -= spinDelta;
     }
 
     // --- Z-axis (vertical) slip impulse from spinX/spinY ---
