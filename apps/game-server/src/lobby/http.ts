@@ -569,7 +569,6 @@ function stepRoomPhysics(room: LobbyRoom): void {
 }
 
 function areRoomBallsSettled(room: LobbyRoom): boolean {
-  const ANGULAR_THRESHOLD = 0.2;
   for (const ball of room.balls) {
     if (ball.isPocketed) {
       continue;
@@ -577,9 +576,7 @@ function areRoomBallsSettled(room: LobbyRoom): boolean {
     if (Math.hypot(ball.vx, ball.vy) >= ROOM_PHYSICS_STEP_CONFIG.shotEndLinearSpeedThresholdMps) {
       return false;
     }
-    if (Math.hypot(ball.spinX, ball.spinY, ball.spinZ) >= ANGULAR_THRESHOLD) {
-      return false;
-    }
+    // 스핀 체크 제거 — 이동 속도만으로 턴 종료 판단
   }
   return true;
 }

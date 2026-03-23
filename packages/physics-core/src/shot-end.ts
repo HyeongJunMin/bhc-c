@@ -8,8 +8,8 @@ export type ShotMotionSample = {
 };
 
 export function isBelowShotEndThreshold(sample: ShotMotionSample): boolean {
-  return sample.linearSpeedMps <= SHOT_END_LINEAR_SPEED_THRESHOLD_MPS
-      && sample.angularSpeedRadps <= SHOT_END_ANGULAR_SPEED_THRESHOLD_RADPS;
+  return sample.linearSpeedMps <= SHOT_END_LINEAR_SPEED_THRESHOLD_MPS;
+  // angularSpeedRadps 체크 제거 — 이동 속도만으로 턴 종료 판단
 }
 
 export type ShotEndTracker = {
