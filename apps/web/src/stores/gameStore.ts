@@ -80,6 +80,7 @@ interface GameStore {
   objectBallsHit: Set<string>;
   turnMessage: string;
   turnStartedAtMs: number;
+  gameStartedAtMs: number;
   turnEvents: TurnEvent[];
   
   // 액션
@@ -224,6 +225,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   objectBallsHit: new Set(),
   turnMessage: '',
   turnStartedAtMs: Date.now(),
+  gameStartedAtMs: Date.now(),
   turnEvents: [],
   showBallTrail: false,
   toggleBallTrail: () => set((state) => ({ showBallTrail: !state.showBallTrail })),
@@ -318,7 +320,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       acc[m.displayName] = 0;
       return acc;
     }, {});
-    set({ multiplayerContext: ctx, players, scores, isMyTurn: false });
+    set({ multiplayerContext: ctx, players, scores, isMyTurn: false, gameStartedAtMs: Date.now() });
   },
   isMyTurn: false,
   setIsMyTurn: (v) => set({ isMyTurn: v }),
@@ -506,6 +508,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     systemMode: 'half',
     turnMessage: '',
     turnStartedAtMs: Date.now(),
+    gameStartedAtMs: Date.now(),
     isDragging: false,
     turnEvents: [],
     cushionContacts: 0,

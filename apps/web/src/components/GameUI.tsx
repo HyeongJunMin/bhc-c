@@ -40,13 +40,30 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
     isMyTurn,
     canRequestVAR,
     varPhase,
+    gameStartedAtMs,
   } = gameStore;
 
   const [turnRemainMs, setTurnRemainMs] = useState(TURN_DURATION_MS);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [menuOpen, setMenuOpen] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
 
   const myDisplayName = members?.find((m) => m.memberId === currentMemberId)?.displayName;
+
+  function formatElapsed(sec: number): string {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - gameStartedAtMs) / 1000));
+    }, 1000);
+    setElapsedSec(Math.floor((Date.now() - gameStartedAtMs) / 1000));
+    return () => window.clearInterval(timer);
+  }, [gameStartedAtMs]);
 
   const powerPercent = Math.round(
     ((shotInput.dragPx - INPUT_LIMITS.DRAG_MIN) /
@@ -151,9 +168,12 @@ export function GameUI({ chatMessages = [], onSendChat, currentMemberId, members
           pointerEvents: 'auto',
         }}
       >
-        <h2 style={{ margin: '0 0 15px 0', fontSize: 20, color: '#00ff88' }}>
+        <h2 style={{ margin: '0 0 4px 0', fontSize: 20, color: '#00ff88' }}>
           3-Cushion Billiards
         </h2>
+        <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
+          {formatElapsed(elapsedSec)}
+        </div>
 
         <div style={{ marginBottom: 15 }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
