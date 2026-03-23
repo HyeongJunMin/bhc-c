@@ -400,12 +400,84 @@ export function stepRoomPhysicsWorld(
         ball.x = prevPos.x + (ball.x - prevPos.x) * tFirst;
         ball.y = prevPos.y + (ball.y - prevPos.y) * tFirst;
 
-        // 첫 번째 축 반사
+        // 첫 번째 축 반사 (applyCushionContactThrow 적용)
         if (processXFirst) {
-          ball.vx = -ball.vx;
+          const isLeftCushion = ball.vx < 0;
+          const preSpinY = ball.spinY;
+          const preSpinZ = ball.spinZ;
+          const result = applyCushionContactThrow({
+            axis: 'x',
+            vx: ball.vx, vy: ball.vy,
+            spinX: ball.spinX, spinY: ball.spinY, spinZ: ball.spinZ,
+            restitution: config.cushionRestitution,
+            contactFriction: config.cushionContactFriction,
+            referenceNormalSpeedMps: config.cushionReferenceSpeedMps,
+            contactTimeExponent: config.cushionContactTimeExponent,
+            maxSpinMagnitude: config.cushionMaxSpinMagnitude,
+            maxThrowAngleDeg: config.cushionMaxThrowAngleDeg,
+            ballMassKg: config.ballMassKg,
+            ballRadiusM: config.ballRadiusM,
+            cushionHeightM: config.cushionHeightM,
+            rollingSpinHeightFactor: config.cushionRollingSpinHeightFactor,
+            cushionTorqueDamping: config.cushionTorqueDamping,
+            maxSpeedScale: config.cushionMaxSpeedScale,
+            frictionSpinDamping: config.cushionFrictionSpinDamping,
+            restitutionLow: config.cushionRestitutionLow,
+            restitutionHigh: config.cushionRestitutionHigh,
+            restitutionMidSpeedMps: config.cushionRestitutionMidSpeedMps,
+            restitutionSigmoidK: config.cushionRestitutionSigmoidK,
+          });
+          ball.vx = result.vx; ball.vy = result.vy;
+          ball.spinX = result.spinX; ball.spinY = result.spinY; ball.spinZ = result.spinZ;
+          if (config.cushionSpinMonotonicEnabled) {
+            const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+            if (preSpinY !== 0 && Math.sign(ball.spinY) !== Math.sign(preSpinY)) ball.spinY = preSpinY * retention;
+            if (preSpinZ !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZ)) ball.spinZ = preSpinZ * retention;
+          }
+          const releaseSignX = isLeftCushion ? 1 : -1;
+          if (releaseSignX * ball.vx < minCushionReleaseNormalSpeedMps) ball.vx = releaseSignX * minCushionReleaseNormalSpeedMps;
+          if (isLeftCushion) ball.x = Math.max(ball.x, config.ballRadiusM + cushionSeparationEpsilonM);
+          else ball.x = Math.min(ball.x, config.tableWidthM - config.ballRadiusM - cushionSeparationEpsilonM);
+          hooks.onCushionCollision?.(ball, isLeftCushion ? 'left' : 'right');
           sweepHandledX = true;
         } else {
-          ball.vy = -ball.vy;
+          const isTopCushion = ball.vy < 0;
+          const preSpinX = ball.spinX;
+          const preSpinZ = ball.spinZ;
+          const result = applyCushionContactThrow({
+            axis: 'y',
+            vx: ball.vx, vy: ball.vy,
+            spinX: ball.spinX, spinY: ball.spinY, spinZ: ball.spinZ,
+            restitution: config.cushionRestitution,
+            contactFriction: config.cushionContactFriction,
+            referenceNormalSpeedMps: config.cushionReferenceSpeedMps,
+            contactTimeExponent: config.cushionContactTimeExponent,
+            maxSpinMagnitude: config.cushionMaxSpinMagnitude,
+            maxThrowAngleDeg: config.cushionMaxThrowAngleDeg,
+            ballMassKg: config.ballMassKg,
+            ballRadiusM: config.ballRadiusM,
+            cushionHeightM: config.cushionHeightM,
+            rollingSpinHeightFactor: config.cushionRollingSpinHeightFactor,
+            cushionTorqueDamping: config.cushionTorqueDamping,
+            maxSpeedScale: config.cushionMaxSpeedScale,
+            frictionSpinDamping: config.cushionFrictionSpinDamping,
+            restitutionLow: config.cushionRestitutionLow,
+            restitutionHigh: config.cushionRestitutionHigh,
+            restitutionMidSpeedMps: config.cushionRestitutionMidSpeedMps,
+            restitutionSigmoidK: config.cushionRestitutionSigmoidK,
+          });
+          ball.vx = result.vx; ball.vy = result.vy;
+          ball.spinX = result.spinX; ball.spinY = result.spinY; ball.spinZ = result.spinZ;
+          if (config.cushionSpinMonotonicEnabled) {
+            const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+            if (preSpinX !== 0 && Math.sign(ball.spinX) !== Math.sign(preSpinX)) ball.spinX = preSpinX * retention;
+            if (preSpinZ !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZ)) ball.spinZ = preSpinZ * retention;
+          }
+          const releaseSignY = isTopCushion ? 1 : -1;
+          if (releaseSignY * ball.vy < minCushionReleaseNormalSpeedMps) ball.vy = releaseSignY * minCushionReleaseNormalSpeedMps;
+          if (isTopCushion) ball.y = Math.max(ball.y, config.ballRadiusM + cushionSeparationEpsilonM);
+          else ball.y = Math.min(ball.y, config.tableHeightM - config.ballRadiusM - cushionSeparationEpsilonM);
+          hooks.onCushionCollision?.(ball, isTopCushion ? 'top' : 'bottom');
           sweepHandledY = true;
         }
 
@@ -417,16 +489,86 @@ export function stepRoomPhysicsWorld(
         // 두 번째 축도 교차했는지 재확인
         if (tHitX !== null && tHitY !== null) {
           if (processXFirst) {
-            // Y축도 경계 밖이면 Y축도 반사
+            // Y축도 경계 밖이면 Y축도 applyCushionContactThrow
             if (ball.y < topB || ball.y > bottomB) {
-              ball.vy = -ball.vy;
-              ball.y = ball.y < topB ? topB : bottomB;
+              const isTopCushion = ball.y < topB;
+              const preSpinX = ball.spinX;
+              const preSpinZ = ball.spinZ;
+              const result = applyCushionContactThrow({
+                axis: 'y',
+                vx: ball.vx, vy: ball.vy,
+                spinX: ball.spinX, spinY: ball.spinY, spinZ: ball.spinZ,
+                restitution: config.cushionRestitution,
+                contactFriction: config.cushionContactFriction,
+                referenceNormalSpeedMps: config.cushionReferenceSpeedMps,
+                contactTimeExponent: config.cushionContactTimeExponent,
+                maxSpinMagnitude: config.cushionMaxSpinMagnitude,
+                maxThrowAngleDeg: config.cushionMaxThrowAngleDeg,
+                ballMassKg: config.ballMassKg,
+                ballRadiusM: config.ballRadiusM,
+                cushionHeightM: config.cushionHeightM,
+                rollingSpinHeightFactor: config.cushionRollingSpinHeightFactor,
+                cushionTorqueDamping: config.cushionTorqueDamping,
+                maxSpeedScale: config.cushionMaxSpeedScale,
+                frictionSpinDamping: config.cushionFrictionSpinDamping,
+                restitutionLow: config.cushionRestitutionLow,
+                restitutionHigh: config.cushionRestitutionHigh,
+                restitutionMidSpeedMps: config.cushionRestitutionMidSpeedMps,
+                restitutionSigmoidK: config.cushionRestitutionSigmoidK,
+              });
+              ball.vx = result.vx; ball.vy = result.vy;
+              ball.spinX = result.spinX; ball.spinY = result.spinY; ball.spinZ = result.spinZ;
+              if (config.cushionSpinMonotonicEnabled) {
+                const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+                if (preSpinX !== 0 && Math.sign(ball.spinX) !== Math.sign(preSpinX)) ball.spinX = preSpinX * retention;
+                if (preSpinZ !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZ)) ball.spinZ = preSpinZ * retention;
+              }
+              const releaseSignY2 = isTopCushion ? 1 : -1;
+              if (releaseSignY2 * ball.vy < minCushionReleaseNormalSpeedMps) ball.vy = releaseSignY2 * minCushionReleaseNormalSpeedMps;
+              if (isTopCushion) ball.y = Math.max(ball.y < topB ? topB : ball.y, config.ballRadiusM + cushionSeparationEpsilonM);
+              else ball.y = Math.min(ball.y > bottomB ? bottomB : ball.y, config.tableHeightM - config.ballRadiusM - cushionSeparationEpsilonM);
+              hooks.onCushionCollision?.(ball, isTopCushion ? 'top' : 'bottom');
               sweepHandledY = true;
             }
           } else {
             if (ball.x < leftB || ball.x > rightB) {
-              ball.vx = -ball.vx;
-              ball.x = ball.x < leftB ? leftB : rightB;
+              const isLeftCushion = ball.x < leftB;
+              const preSpinY = ball.spinY;
+              const preSpinZ = ball.spinZ;
+              const result = applyCushionContactThrow({
+                axis: 'x',
+                vx: ball.vx, vy: ball.vy,
+                spinX: ball.spinX, spinY: ball.spinY, spinZ: ball.spinZ,
+                restitution: config.cushionRestitution,
+                contactFriction: config.cushionContactFriction,
+                referenceNormalSpeedMps: config.cushionReferenceSpeedMps,
+                contactTimeExponent: config.cushionContactTimeExponent,
+                maxSpinMagnitude: config.cushionMaxSpinMagnitude,
+                maxThrowAngleDeg: config.cushionMaxThrowAngleDeg,
+                ballMassKg: config.ballMassKg,
+                ballRadiusM: config.ballRadiusM,
+                cushionHeightM: config.cushionHeightM,
+                rollingSpinHeightFactor: config.cushionRollingSpinHeightFactor,
+                cushionTorqueDamping: config.cushionTorqueDamping,
+                maxSpeedScale: config.cushionMaxSpeedScale,
+                frictionSpinDamping: config.cushionFrictionSpinDamping,
+                restitutionLow: config.cushionRestitutionLow,
+                restitutionHigh: config.cushionRestitutionHigh,
+                restitutionMidSpeedMps: config.cushionRestitutionMidSpeedMps,
+                restitutionSigmoidK: config.cushionRestitutionSigmoidK,
+              });
+              ball.vx = result.vx; ball.vy = result.vy;
+              ball.spinX = result.spinX; ball.spinY = result.spinY; ball.spinZ = result.spinZ;
+              if (config.cushionSpinMonotonicEnabled) {
+                const retention = config.cushionSpinMonotonicRetention ?? 1.0;
+                if (preSpinY !== 0 && Math.sign(ball.spinY) !== Math.sign(preSpinY)) ball.spinY = preSpinY * retention;
+                if (preSpinZ !== 0 && Math.sign(ball.spinZ) !== Math.sign(preSpinZ)) ball.spinZ = preSpinZ * retention;
+              }
+              const releaseSignX2 = isLeftCushion ? 1 : -1;
+              if (releaseSignX2 * ball.vx < minCushionReleaseNormalSpeedMps) ball.vx = releaseSignX2 * minCushionReleaseNormalSpeedMps;
+              if (isLeftCushion) ball.x = Math.max(ball.x < leftB ? leftB : ball.x, config.ballRadiusM + cushionSeparationEpsilonM);
+              else ball.x = Math.min(ball.x > rightB ? rightB : ball.x, config.tableWidthM - config.ballRadiusM - cushionSeparationEpsilonM);
+              hooks.onCushionCollision?.(ball, isLeftCushion ? 'left' : 'right');
               sweepHandledX = true;
             }
           }
